@@ -9,8 +9,16 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="I just stumbled across Octopress and wanted to give it a try.
-Octopress looks very promising: it is a blogging framework for developers, and it can &hellip;">
+  <meta name="description" content="Today I stumbled across an issue when compiling C code with unused functions. Some simple test program demonstrates the issue: 1
+2
+3
+4
+5
+6
+7
+8
+9
+10 &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -65,6 +73,117 @@ Octopress looks very promising: it is a blogging framework for developers, and i
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2012/12/22/unused-function-mysteries/">Unused Function C Compiler Mysteries</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-12-22T03:51:00+01:00" pubdate data-updated="true">Dec 22<span>nd</span>, 2012</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>Today I stumbled across an issue when compiling C code with unused functions.</p>
+
+<p>Some simple test program demonstrates the issue:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="c1">// this function is not used</span>
+</span><span class='line'><span class="k">static</span> <span class="kr">inline</span> <span class="kt">void</span> <span class="nf">NotUsedInline</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">return</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// this function is not used either</span>
+</span><span class='line'><span class="k">static</span> <span class="kt">void</span> <span class="nf">NotUsed</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">return</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">int</span> <span class="nf">main</span> <span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span><span class="o">*</span> <span class="n">argv</span><span class="p">[])</span> <span class="p">{</span>
+</span><span class='line'>  <span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="n">argc</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="n">argv</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>When compiling the above code with gcc (4.6.3), it warns about the function <em>NotUsed</em> being defined, but not unused:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="n">gcc</span> <span class="o">-</span><span class="n">Wall</span> <span class="o">-</span><span class="n">Wextra</span> <span class="n">test</span><span class="p">.</span><span class="n">c</span>
+</span><span class='line'><span class="n">test</span><span class="p">.</span><span class="n">c</span><span class="o">:</span><span class="mi">6</span><span class="o">:</span><span class="mi">13</span><span class="o">:</span> <span class="n">Warnung</span><span class="o">:</span> <span class="err">»</span><span class="n">NotUsed</span><span class="err">«</span> <span class="n">definiert</span><span class="p">,</span> <span class="n">aber</span> <span class="n">nicht</span> <span class="n">verwendet</span> <span class="p">[</span><span class="o">-</span><span class="n">Wunused</span><span class="o">-</span><span class="n">function</span><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This is fine, however, the compiler does not warn about the function <em>NotUsedInline</em> not being used either.
+This warning is simply ommitted.</p>
+
+<p>When compiling with clang (3.0.6), the result is the same. The compiler will only complain about the non-static
+function being unused:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="n">clang</span> <span class="o">-</span><span class="n">Wall</span> <span class="o">-</span><span class="n">Wextra</span> <span class="n">test</span><span class="p">.</span><span class="n">c</span>
+</span><span class='line'><span class="n">test</span><span class="p">.</span><span class="n">c</span><span class="o">:</span><span class="mi">6</span><span class="o">:</span><span class="mi">13</span><span class="o">:</span> <span class="n">warning</span><span class="o">:</span> <span class="n">unused</span> <span class="n">function</span> <span class="err">&#39;</span><span class="n">NotUsed</span><span class="err">&#39;</span> <span class="p">[</span><span class="o">-</span><span class="n">Wunused</span><span class="o">-</span><span class="n">function</span><span class="p">]</span>
+</span><span class='line'><span class="k">static</span> <span class="kt">void</span> <span class="n">NotUsed</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>            <span class="o">^</span>
+</span><span class='line'><span class="mi">1</span> <span class="n">warning</span> <span class="n">generated</span><span class="p">.</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Both compilers do not generate code for <em>NotUsedInline</em>. So they must have detected the function is unused.</p>
+
+<p>It would be nice to get a warning from the compiler for every static function that is unused, no matter if declared inline or not.
+I don&#8217;t like maintaining functions that are never called.</p>
+
+<p>When looking at the assembly output I noticed that clang also avoids code generation for the other unused function.
+gcc generates the code for it though it is unnecessary.</p>
+
+<p>+1 for clang.</p>
+</div>
+  
+  
+
+
+    </article>
   
   
     <article>
@@ -134,12 +253,32 @@ In summary, Octopress allowed to set up a blog in around 30 minutes. It will be 
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2012/12/22/unused-function-mysteries/">Unused function C compiler mysteries</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2012/12/19/setting-up-octopress/">Setting up Octopress</a>
       </li>
     
   </ul>
 </section>
 
+
+<section>
+  <h1>Latest Tweets</h1>
+  <ul id="tweets">
+    <li class="loading">Status updating&#8230;</li>
+  </ul>
+  <script type="text/javascript">
+    $.domReady(function(){
+      getTwitterFeed("jsteemann", 4, false);
+    });
+  </script>
+  <script src="/javascripts/twitter.js" type="text/javascript"> </script>
+  
+    <a href="http://twitter.com/jsteemann" class="twitter-follow-button" data-show-count="false">Follow @jsteemann</a>
+  
+</section>
 
 
 

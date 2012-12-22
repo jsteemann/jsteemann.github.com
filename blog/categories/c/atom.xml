@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: c | blog4j]]></title>
+  <link href="http://jsteemann.github.com/blog/categories/c/atom.xml" rel="self"/>
+  <link href="http://jsteemann.github.com/"/>
+  <updated>2012-12-22T04:18:08+01:00</updated>
+  <id>http://jsteemann.github.com/</id>
+  <author>
+    <name><![CDATA[jsteemann]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Unused function C compiler mysteries]]></title>
+    <link href="http://jsteemann.github.com/blog/2012/12/22/unused-function-mysteries/"/>
+    <updated>2012-12-22T03:51:00+01:00</updated>
+    <id>http://jsteemann.github.com/blog/2012/12/22/unused-function-mysteries</id>
+    <content type="html"><![CDATA[<p>Today I stumbled across an issue when compiling C code with unused functions.</p>
+
+<p>Some simple test program demonstrates the issue:
+``` c
+// this function is not used
+static inline void NotUsedInline (void) {
+  return;
+}</p>
+
+<p>// this function is not used either
+static void NotUsed (void) {
+  return;
+}</p>
+
+<p>int main (int argc, char* argv[]) {
+  (void) argc;
+  (void) argv;</p>
+
+<p>  return 0;
+}
+```</p>
+
+<p>When compiling the above code with gcc (4.6.3), it warns about the function <em>NotUsed</em> being defined, but not unused:
+<code>
+gcc -Wall -Wextra test.c
+test.c:6:13: Warnung: »NotUsed« definiert, aber nicht verwendet [-Wunused-function]
+</code>
+This is fine, however, the compiler does not warn about the function <em>NotUsedInline</em> not being used either.
+This warning is simply ommitted.</p>
+
+<p>When compiling with clang (3.0.6), the result is the same. The compiler will only complain about the non-static
+function being unused:
+```
+clang -Wall -Wextra test.c
+test.c:6:13: warning: unused function 'NotUsed' [-Wunused-function]
+static void NotUsed (void) {</p>
+
+<pre><code>        ^
+</code></pre>
+
+<p>1 warning generated.
+```</p>
+
+<p>Both compilers do not generate code for <em>NotUsedInline</em>. So they must have detected the function is unused.</p>
+
+<p>It would be nice to get a warning from the compiler for every static function that is unused, no matter if declared inline or not.
+I don't like maintaining functions that are never called.</p>
+
+<p>When looking at the assembly output I noticed that clang also avoids code generation for the other unused function.
+gcc generates the code for it though it is unnecessary.</p>
+
+<p>+1 for clang.</p>
+]]></content>
+  </entry>
+  
+</feed>
