@@ -166,15 +166,17 @@ function being unused:</p>
 </span></code></pre></td></tr></table></div></figure>
 
 
+<p>This is the same for all optimisation levels, at least O0 to O3.</p>
+
 <p>Both compilers do not generate code for <em>NotUsedInline</em>. So they must have detected the function is unused.</p>
 
 <p>It would be nice to get a warning from the compiler for every static function that is unused, no matter if declared inline or not.
 I don&#8217;t like maintaining functions that are never called.</p>
 
-<p>When looking at the assembly output I noticed that clang also avoids code generation for the other unused function.
-gcc generates the code for it though it is unnecessary.</p>
+<p>When looking at the assembly output I noticed that clang also avoids code generation for the other unused function, even with optimisation level O0.
+gcc generates the code for it on O0 though it is fully unnecessary. gcc will not emit the code for the unused function on higher optimisation levels.</p>
 
-<p>+1 for clang.</p>
+<p>Still +1 for clang.</p>
 </div>
 
 
@@ -202,7 +204,7 @@ gcc generates the code for it though it is unnecessary.</p>
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/c/'>c</a>
+    <a class='category' href='/blog/categories/c/'>c</a>, <a class='category' href='/blog/categories/compilers/'>compilers</a>, <a class='category' href='/blog/categories/gcc/'>gcc</a>
   
 </span>
 
@@ -223,6 +225,8 @@ gcc generates the code for it though it is unnecessary.</p>
         <a class="basic-alignment left" href="/blog/2012/12/19/setting-up-octopress/" title="Previous Post: Setting up Octopress">&laquo; Setting up Octopress</a>
       
       
+        <a class="basic-alignment right" href="/blog/2012/12/25/using-callgrind-control-on-ubuntu/" title="Next Post: Using callgrind_control on Ubuntu">Using callgrind_control on Ubuntu &raquo;</a>
+      
     </p>
   </footer>
 </article>
@@ -234,6 +238,10 @@ gcc generates the code for it though it is unnecessary.</p>
     <section>
   <h1>Recent Posts</h1>
   <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2012/12/25/using-callgrind-control-on-ubuntu/">Using callgrind_control on Ubuntu</a>
+      </li>
     
       <li class="post">
         <a href="/blog/2012/12/22/unused-function-mysteries/">Unused function C compiler mysteries</a>

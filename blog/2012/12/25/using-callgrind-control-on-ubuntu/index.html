@@ -5,7 +5,7 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>blog4j</title>
+  <title>Using callgrind_control on Ubuntu - blog4j</title>
   <meta name="author" content="jsteemann">
 
   
@@ -18,7 +18,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://jsteemann.github.com/">
+  <link rel="canonical" href="http://jsteemann.github.com/blog/2012/12/25/using-callgrind-control-on-ubuntu/">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <script src="/javascripts/modernizr-2.0.js"></script>
@@ -62,15 +62,12 @@
 </nav>
   <div id="main">
     <div id="content">
-      <div class="blog-index">
+      <div>
+<article class="hentry" role="article">
   
-  
-  
-    <article>
-      
   <header>
     
-      <h1 class="entry-title"><a href="/blog/2012/12/25/using-callgrind-control-on-ubuntu/">Using Callgrind_control on Ubuntu</a></h1>
+      <h1 class="entry-title">Using Callgrind_control on Ubuntu</h1>
     
     
       <p class="meta">
@@ -93,7 +90,7 @@
   </header>
 
 
-  <div class="entry-content"><p>Profiling a process with callgrind is very helpful as it provides valuable insights into how often certain functions are called and how long the program spends executing them. This helps identifying bottlenecks and potential optimisations.</p>
+<div class="entry-content"><p>Profiling a process with callgrind is very helpful as it provides valuable insights into how often certain functions are called and how long the program spends executing them. This helps identifying bottlenecks and potential optimisations.</p>
 
 <p>Callgrind is contained in the Valgrind toolset, and it is easy to invoke by just prefxing the actual program command with <code>valgrind --tool=callgrind</code>, e.g.:</p>
 
@@ -183,135 +180,16 @@ Then, in another terminal session, all event counters of callgrind should be cle
 
 <p>or something similar.</p>
 </div>
-  
-  
 
 
-    </article>
-  
-  
-    <article>
+  <footer>
+    <p class="meta">
       
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2012/12/22/unused-function-mysteries/">Unused Function C Compiler Mysteries</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
   
 
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
 
-<time datetime="2012-12-22T03:51:00+01:00" pubdate data-updated="true">Dec 22<span>nd</span>, 2012</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>Today I stumbled across an issue when compiling C code with unused functions.</p>
-
-<p>Some simple test program demonstrates the issue:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="c1">// this function is not used</span>
-</span><span class='line'><span class="k">static</span> <span class="kr">inline</span> <span class="kt">void</span> <span class="nf">NotUsedInline</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">return</span><span class="p">;</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// this function is not used either</span>
-</span><span class='line'><span class="k">static</span> <span class="kt">void</span> <span class="nf">NotUsed</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">return</span><span class="p">;</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="kt">int</span> <span class="nf">main</span> <span class="p">(</span><span class="kt">int</span> <span class="n">argc</span><span class="p">,</span> <span class="kt">char</span><span class="o">*</span> <span class="n">argv</span><span class="p">[])</span> <span class="p">{</span>
-</span><span class='line'>  <span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="n">argc</span><span class="p">;</span>
-</span><span class='line'>  <span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="n">argv</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>When compiling the above code with gcc (4.6.3), it warns about the function <em>NotUsed</em> being defined, but not unused:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="n">gcc</span> <span class="o">-</span><span class="n">Wall</span> <span class="o">-</span><span class="n">Wextra</span> <span class="n">test</span><span class="p">.</span><span class="n">c</span>
-</span><span class='line'><span class="n">test</span><span class="p">.</span><span class="n">c</span><span class="o">:</span><span class="mi">6</span><span class="o">:</span><span class="mi">13</span><span class="o">:</span> <span class="n">Warnung</span><span class="o">:</span> <span class="err">»</span><span class="n">NotUsed</span><span class="err">«</span> <span class="n">definiert</span><span class="p">,</span> <span class="n">aber</span> <span class="n">nicht</span> <span class="n">verwendet</span> <span class="p">[</span><span class="o">-</span><span class="n">Wunused</span><span class="o">-</span><span class="n">function</span><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This is fine, however, the compiler does not warn about the function <em>NotUsedInline</em> not being used either.
-This warning is simply ommitted.</p>
-
-<p>When compiling with clang (3.0.6), the result is the same. The compiler will only complain about the non-static
-function being unused:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='c'><span class='line'><span class="n">clang</span> <span class="o">-</span><span class="n">Wall</span> <span class="o">-</span><span class="n">Wextra</span> <span class="n">test</span><span class="p">.</span><span class="n">c</span>
-</span><span class='line'><span class="n">test</span><span class="p">.</span><span class="n">c</span><span class="o">:</span><span class="mi">6</span><span class="o">:</span><span class="mi">13</span><span class="o">:</span> <span class="n">warning</span><span class="o">:</span> <span class="n">unused</span> <span class="n">function</span> <span class="err">&#39;</span><span class="n">NotUsed</span><span class="err">&#39;</span> <span class="p">[</span><span class="o">-</span><span class="n">Wunused</span><span class="o">-</span><span class="n">function</span><span class="p">]</span>
-</span><span class='line'><span class="k">static</span> <span class="kt">void</span> <span class="n">NotUsed</span> <span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>            <span class="o">^</span>
-</span><span class='line'><span class="mi">1</span> <span class="n">warning</span> <span class="n">generated</span><span class="p">.</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This is the same for all optimisation levels, at least O0 to O3.</p>
-
-<p>Both compilers do not generate code for <em>NotUsedInline</em>. So they must have detected the function is unused.</p>
-
-<p>It would be nice to get a warning from the compiler for every static function that is unused, no matter if declared inline or not.
-I don&#8217;t like maintaining functions that are never called.</p>
-
-<p>When looking at the assembly output I noticed that clang also avoids code generation for the other unused function, even with optimisation level O0.
-gcc generates the code for it on O0 though it is fully unnecessary. gcc will not emit the code for the unused function on higher optimisation levels.</p>
-
-<p>Still +1 for clang.</p>
-</div>
-  
-  
-
-
-    </article>
-  
-  
-    <article>
       
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2012/12/19/setting-up-octopress/">Setting Up Octopress</a></h1>
-    
-    
-      <p class="meta">
-        
 
 
 
@@ -323,46 +201,38 @@ gcc generates the code for it on O0 though it is fully unnecessary. gcc will not
   
 
 
-<time datetime="2012-12-19T22:35:00+01:00" pubdate data-updated="true">Dec 19<span>th</span>, 2012</time>
-        
-      </p>
+<time datetime="2012-12-25T21:30:00+01:00" pubdate data-updated="true">Dec 25<span>th</span>, 2012</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/ubuntu/'>Ubuntu</a>, <a class='category' href='/blog/categories/callgrind/'>callgrind</a>, <a class='category' href='/blog/categories/profiling/'>profiling</a>, <a class='category' href='/blog/categories/valgrind/'>valgrind</a>
+  
+</span>
+
+
+    </p>
     
-  </header>
-
-
-  <div class="entry-content"><p>I just stumbled across <a href="http://octopress.org">Octopress</a> and wanted to give it a try.
-Octopress looks very promising: it is a blogging framework for developers, and it can be used from the command line.
-Posting becomes as easy as</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>rake new_post[...]              # create file for new post
-</span><span class='line'>vim source/_posts/post-file     # edit post
-</span><span class='line'>rake generate && rake deploy    # deploy</span></code></pre></td></tr></table></div></figure>
-
-
-<p>I&#8217;d rather use that than UI-based posting a la Wordpress.
-Additionally, it provides easy integration with git and Github pages. The blog posts are stored in a git repository, and the static blog content can be pushed to Github pages easily.</p>
-
-<p>The Octopress site mentions it requires Ruby version 1.9.3, so I tried installing that with rvm. However, making that Ruby version failed due to some openssl libraries not being found though they&#8217;re definitely available on the system.
-I thus installed the prebuilt Ruby package for Ubuntu and could go on.</p>
-
-<p>The following Octopress setup was easy as described on its webpage.
-In summary, Octopress allowed to set up a blog in around 30 minutes. It will be even less if the correct Ruby version is already installed and Github pages are already set up for your Github account.</p>
+      <div class="sharing">
+  
+  <a href="http://twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.com/blog/2012/12/25/using-callgrind-control-on-ubuntu/" data-via="steemann" data-counturl="http://jsteemann.github.com/blog/2012/12/25/using-callgrind-control-on-ubuntu/" >Tweet</a>
+  
+  
+  
 </div>
-  
-  
 
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2012/12/22/unused-function-mysteries/" title="Previous Post: Unused function C compiler mysteries">&laquo; Unused function C compiler mysteries</a>
+      
+      
+    </p>
+  </footer>
+</article>
 
-    </article>
-  
-  <div class="pagination">
-    
-    <a href="/blog/archives">Blog Archives</a>
-    
-  </div>
 </div>
+
 <aside class="sidebar">
   
     <section>
@@ -388,7 +258,7 @@ In summary, Octopress allowed to set up a blog in around 30 minutes. It will be 
 <section>
   <h1>Latest Tweets</h1>
   <ul id="tweets">
-    <li class="loading">Status updating&#8230;</li>
+    <li class="loading">Status updating...</li>
   </ul>
   <script type="text/javascript">
     $.domReady(function(){
@@ -407,6 +277,7 @@ In summary, Octopress allowed to set up a blog in around 30 minutes. It will be 
 
   
 </aside>
+
 
     </div>
   </div>

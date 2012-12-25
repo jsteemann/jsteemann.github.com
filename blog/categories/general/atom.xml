@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: general | blog4j]]></title>
+  <link href="http://jsteemann.github.com/blog/categories/general/atom.xml" rel="self"/>
+  <link href="http://jsteemann.github.com/"/>
+  <updated>2012-12-25T22:12:37+01:00</updated>
+  <id>http://jsteemann.github.com/</id>
+  <author>
+    <name><![CDATA[jsteemann]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Setting up Octopress]]></title>
+    <link href="http://jsteemann.github.com/blog/2012/12/19/setting-up-octopress/"/>
+    <updated>2012-12-19T22:35:00+01:00</updated>
+    <id>http://jsteemann.github.com/blog/2012/12/19/setting-up-octopress</id>
+    <content type="html"><![CDATA[<p>I just stumbled across <a href="http://octopress.org">Octopress</a> and wanted to give it a try.
+Octopress looks very promising: it is a blogging framework for developers, and it can be used from the command line.
+Posting becomes as easy as
+<code>
+rake new_post[...]              # create file for new post
+vim source/_posts/post-file     # edit post
+rake generate &amp;&amp; rake deploy    # deploy
+</code>
+I'd rather use that than UI-based posting a la Wordpress.
+Additionally, it provides easy integration with git and Github pages. The blog posts are stored in a git repository, and the static blog content can be pushed to Github pages easily.</p>
+
+<p>The Octopress site mentions it requires Ruby version 1.9.3, so I tried installing that with rvm. However, making that Ruby version failed due to some openssl libraries not being found though they're definitely available on the system.
+I thus installed the prebuilt Ruby package for Ubuntu and could go on.</p>
+
+<p>The following Octopress setup was easy as described on its webpage.
+In summary, Octopress allowed to set up a blog in around 30 minutes. It will be even less if the correct Ruby version is already installed and Github pages are already set up for your Github account.</p>
+]]></content>
+  </entry>
+  
+</feed>
