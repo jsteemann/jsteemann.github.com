@@ -1,265 +1,84 @@
 <html>
 <head>
-<title>game</title>
-<meta http-equiv="content-type" content="text/html; charset=utf-8" />
-<meta charset="utf-8" />
-<style type="text/css">
-body {
-  background-color: #eeeeee;
-}
-#seconds {
-  position: absolute; 
-  visibility: hidden;
-  right: 0px;            
-  font-weight: bold;
-  font-size: 100px;
-}
-#results {
-  visibility: hidden;
-}
-#sought {
-  font-weight: bold;
-  font-size: 30px;
-  padding-top: 30px;
-  padding-bottom: 30px;
-}
-#solution {
-  font-weight: bold;
-  font-size: 20px;
-  padding-top: 20px;
-  padding-bottom: 20px;
-  visibility: hidden;
-}
-#results-head {
-  font-weight: bold;
-  font-size: 20px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
-#results-correct {
-  color: green;
-  font-weight: bold;
-}
-#results-wrong {
-  color: red;
-  font-weight: bold;
-}
-#results-timeout {
-  color: navy;
-  font-weight: bold;
-}
-.results-line {
-  color: gray;
-}
-.selection {
-  cursor: pointer;
-}
-.div {
-  clear: both;
+  <title>converter</title>
+  <script type="text/javascript">
+function wrapIt (value) {
+  if (value) {
+    document.getElementById('value').wrap = 'on';
+  }
+  else {
+    document.getElementById('value').wrap = 'off';
+  }
 }
 
-</style>
-<script type="text/javascript">
-var game = {
-  countries: {
-    "Deutschland" : "Berlin",
-    "Luxemburg" : "Luxemburg",
-    "Niederlande" : "Amsterdam",
-    "Belgien" : "Brüssel",
-    "Malta" : "Valetta",
-    "Zypern" : "Nikosia",
-    "Norwegen" : "Oslo",
-    "Island" : "Reykjavik",
-    "Bulgarien" : "Sofia",
-    "Rumänien" : "Bukarest",
-    "Tschechien" : "Prag",
-    "Schweiz" : "Bern",
-    "Österreich" : "Wien",
-    "Albanien" : "Tirana",
-    "Mazedonien" : "Skopje",
-    "Montenegro" : "Podgorica",
-    "Serbien" : "Belgrad",
-    "Slowakei" : "Bratislava",
-    "Slowenien" : "Ljubljana",
-    "Bosnien-Herzegowina" : "Sarajevo",
-    "Türkei" : "Ankara",
-    "Weißrussland" : "Minsk",
-    "Litauen" : "Wilnius",
-    "Lettland" : "Riga",
-    "Estland" : "Tallinn",
-    "Frankreich" : "Paris",
-    "Spanien" : "Madrid",
-    "Dänemark" : "Kopenhagen",
-    "Schweden" : "Stockholm",
-    "Finnland" : "Helsinki",
-    "Russland" : "Moskau",
-    "Kroatien" : "Zagreb",
-    "Ungarn" : "Budapest",
-    "Polen" : "Warschau",
-    "Italien" : "Rom",
-    "Griechenland" : "Athen"
-  },
-  seconds: 0,
-  timer: null,
-  countdown: null,
-  sought: null,
-  results: { },
-  randomizer : {
-    keys: [ ],
+function convert () {
+  var src = document.getElementById('value').value;
+  var delim = { "\t" : 0, ";" : 0 };
+  var isEmpty = true;
+  var lines = 0;
+  var isWindows = false;
 
-    init: function (game) {
-      for (var c in game.countries) {
-        if (game.countries.hasOwnProperty(c)) {
-          this.keys.push(c);
-        }
-      }
-    },
+  for (var i = 0; i < src.length; ++i) {
+    var c = src.charAt(i);
 
-    get: function () {
-      return this.keys[Math.floor(this.keys.length * Math.random())];
+    if (c == "\t" || c == ";") {
+      delim[c]++;
     }
-  },
-  init: function () {
-    this.randomizer.init(this);
-    this.reset();
-  },
-  reset: function () {
-    this.results = { correct: 0, wrong: 0, timeout: 0 };
-    this.updateStats();
-    document.getElementById('solution').style.visibility = 'hidden';
-
-  },
-  start: function () {
-    this.init();    
-    document.getElementById('start-button').value = 'Nochmal';
-    document.getElementById('results').style.visibility = 'visible';
-    document.getElementById('seconds').style.visibility = 'visible';
-
-    this.createSelection();
-  },
-  select: function (value) {
-    window.clearTimeout(this.timer);
-    if (value) {
-      this.results.correct++;
-      document.getElementById('solution').innerHTML = 'Richtig!';
-      document.getElementById('solution').style.color = 'green';
-      document.getElementById('solution').style.visibility = 'visible';
-    } 
-    else {    
-      this.results.wrong++;
-      document.getElementById('solution').innerHTML = 'Falsch! Die richtige Hauptstadt war ' + this.countries[this.sought];
-      document.getElementById('solution').style.color = 'red';
-      document.getElementById('solution').style.visibility = 'visible';
+    else if (c == "\r") {
+      isWindows = true;
     }
-    this.timer = window.setTimeout(this.hideResult, 5000);
-    this.updateStats();
-    this.createSelection();
-  },
-  stress: function () {
-    if (game.seconds-- <= 0) {
-      game.lose();
+    else if (c == "\n") {
+      lines++;
     }
-    else {
-      document.getElementById('seconds').innerHTML = game.seconds;
-      var n = 100 * (game.seconds / 10);
-      var color = {
-        r: (255 * (100 - n)) / 100,
-        g: (255 * n) / 100,
-        b: 0,
-
-        value: function (val) {
-          var s = Number(val).toString(16); 
-          if (s.length == 1) {
-            s = '0' + s;
-          }
-          return s;
-        },
-
-        toString: function () {
-          return '#' + this.value(this.r) + this.value(this.g) + this.value(this.b);
-        }
-      };
-      
-      document.getElementById('seconds').style.color = color.toString();
+    else if (c != " ") {
+      isEmpty = false;
     }
-  },
-  lose: function (value) {
-    window.clearTimeout(game.countdown);
-    window.clearTimeout(game.timer);
-    this.results.timeout++;
-    document.getElementById('solution').innerHTML = 'Zeit ist abgelaufen';
-    document.getElementById('solution').style.color = 'red';
-    document.getElementById('solution').style.visibility = 'visible';
-    this.timer = window.setTimeout(this.hideResult, 4000);
-    this.updateStats();
-    this.createSelection();
-  },
-  hideResult: function () {
-    document.getElementById('solution').style.visibility = 'hidden';
-  },
-  updateStats: function () {
-    document.getElementById('results-correct').innerHTML = this.results.correct;
-    document.getElementById('results-wrong').innerHTML = this.results.wrong;
-    document.getElementById('results-timeout').innerHTML = this.results.timeout;
-  },       
-  createSelection: function () {
-    window.clearTimeout(this.countdown);
-    var max = Math.floor(5 * Math.random()) + 4;
-                     
-    var picks = [ ];
-    while (picks.length < max) {
-      var found = false;
-      var picked = this.randomizer.get();
-      for (var i = 0; i < picks.length; ++i) {
-        if (picked === picks[i]) {
-          found = true;
-          break;
-        }
-      }
+  }
 
-      if (! found) {
-        picks.push(picked);
-      }
+  if (isEmpty) {
+    returm;
+  }
+
+  src = src.replace(/^\s+/, "");
+  src = src.replace(/s+$/, "");
+
+  var nl = (isWindows ? "\r\n" : "\n");
+  var delimiter = ((delim["\t"] > delim[";"]) ? "\t" : ";");
+  var lines = src.split(nl);
+  var columns = lines[0].split(delimiter);
+  
+  var index = -1;
+  for (var i = 0; i < columns.length; ++i) {
+    var column = columns[i].toLowerCase().replace(/"/g, "");
+    if (column == "abweichungstyp") {
+      index = i;
     }
+  }
 
-    this.sought = picks[Math.floor(picks.length * Math.random())];
-    document.getElementById('sought').innerHTML = this.sought;
-
-    var html = '';
-    for (var i = 0; i < picks.length; ++i) {
-      if (i > 0) {
-        html += '<br />';
-      }
-      var country = picks[i];
-      var isCorrect = (country == this.sought);
-      html += '<input type="radio" name="pick" onclick="game.select(' + (isCorrect ? "true" : "false") + ');"> ' +
-              '<span class="selection" onclick="game.select(' + (isCorrect ? "true" : "false") + ');">' + this.countries[country] + '</span>';
+  var result = ""; 
+  for (var i = 0; i < lines.length; ++i) {
+    var values = lines[i].split(delimiter);
+    if (i > 0 && index >= 0 && values[index] == "") {
+      values[index] = "manuell";
     }
-    
-    document.getElementById('selection').innerHTML = html;
-    this.seconds = 11;
-    this.stress();
-    this.countdown = window.setInterval(this.stress, 1000);
-  } 
-};
+    result += values.join("\t") + nl; 
+  }
 
-</script>
+  document.getElementById('value').value = result;
+}
+  </script>
 </head>
 <body>
-<form onsubmit="return false;">
-<input type="submit" id="start-button" value="Anfangen" onclick="game.start();" />
-<hr class="div" />
-<div id="seconds"></div>
-<div id="sought"></div>
-<div id="selection"></div>
-<br />
-<div id="solution">stub</div>
-<div id="results">
-  <div id="results-head">Ergebnis</div>
-  <div><span id="results-correct" class="results-line"></span> richtig</div>
-  <div><span id="results-wrong" class="results-line"></span> falsch</div>
-  <div><span id="results-timeout" class="results-line"></span> abgelaufen</div>
-</div>
-</form>
+  <form onsubmit="return false;">
+    <textarea id="value" style="width:100%; height:400px;" onclick="if (this.value == 'Paste values here...') { this.value = ''; }">Paste values here...</textarea>
+    <br /><br />
+    Wrap lines: 
+    <br />
+    <input type="radio" name="wrap" value="no" onclick="wrapIt(false);" /> No
+    <br />
+    <input type="radio" name="wrap" value="yes" onclick="wrapIt(true);" /> Yes
+    <br /><br />
+    <input type="submit" value="convert" onclick="convert();return false;" />
+  </form>
 </body>
 </html>
