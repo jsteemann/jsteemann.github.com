@@ -1,101 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
 
-<!DOCTYPE html>
-<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
-<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
-<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
-<head>
-  <meta charset="utf-8">
-  <title>J@ArangoDB</title>
-  <meta name="author" content="jsteemann">
-
-  
-  <meta name="description" content="Motivation One of the major changes in ArangoDB 2.2 was the introduction of the
-write-ahead log (abbreviated WAL). The introduction of the WAL &hellip;">
-  
-
-  <!-- http://t.co/dKP3o1e -->
-  <meta name="HandheldFriendly" content="True">
-  <meta name="MobileOptimized" content="320">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  
-  <link rel="canonical" href="http://jsteemann.github.com">
-  <link href="/favicon.png" rel="icon">
-  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
-  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
-  <script src="/javascripts/modernizr-2.0.js"></script>
-  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
-  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
-  <script src="/javascripts/octopress.js" type="text/javascript"></script>
-  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
-<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
-<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
-
-  
-
-</head>
-
-<body   >
-  <header role="banner"><hgroup>
-  <h1><a href="/">J@ArangoDB</a></h1>
-  
-    <h2>Notes on ArangoDB development</h2>
-  
-</hgroup>
-
-</header>
-  <nav role="navigation"><ul class="subscription" data-subscription="rss">
-  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
-  
-</ul>
-  
-<form action="https://www.google.com/search" method="get">
-  <fieldset role="search">
-    <input type="hidden" name="q" value="site:jsteemann.github.com" />
-    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
-  </fieldset>
-</form>
-  
-<ul class="main-navigation">
-  <li><a href="/">Blog</a></li>
-  <li><a href="/blog/archives">Archives</a></li>
-</ul>
-
-</nav>
-  <div id="main">
-    <div id="content">
-      <div class="blog-index">
-  
-  
-  
-    <article>
-      
-  <header>
+  <title><![CDATA[J@ArangoDB]]></title>
+  <link href="http://jsteemann.github.com/atom.xml" rel="self"/>
+  <link href="http://jsteemann.github.com/"/>
+  <updated>2014-08-07T01:37:33+02:00</updated>
+  <id>http://jsteemann.github.com/</id>
+  <author>
+    <name><![CDATA[jsteemann]]></name>
     
-      <h1 class="entry-title"><a href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Benchmarking ArangoDB&#8217;s Write-ahead Log</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
 
   
-
-
-<time datetime="2014-08-07T01:27:04+02:00" pubdate data-updated="true">Aug 7<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><h2>Motivation</h2>
+  <entry>
+    <title type="html"><![CDATA[Benchmarking ArangoDB's Write-ahead Log]]></title>
+    <link href="http://jsteemann.github.com/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/"/>
+    <updated>2014-08-07T01:27:04+02:00</updated>
+    <id>http://jsteemann.github.com/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log</id>
+    <content type="html"><![CDATA[<h2>Motivation</h2>
 
 <p>One of the major changes in ArangoDB 2.2 was the introduction of the
 <em>write-ahead log</em> (abbreviated <em>WAL</em>).</p>
@@ -464,42 +387,15 @@ as a replication master, but should work in cases when replication is not used.<
 <p>The option should not have a big effect if documents are greatly or at least
 somewhat homogenous. For these cases, ArangoDB 2.2 with its WAL should already
 be as fast as 2.1 (or even faster).</p>
-</div>
+]]></content>
+  </entry>
   
-  
-
-
-    </article>
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/08/06/how-arangodbs-write-ahead-log-works/">How ArangoDB&#8217;s Write-ahead Log Works</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-08-06T21:14:00+02:00" pubdate data-updated="true">Aug 6<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>Since version 2.2, ArangoDB stores all data-modification operations in its
+  <entry>
+    <title type="html"><![CDATA[How ArangoDB's Write-ahead Log Works]]></title>
+    <link href="http://jsteemann.github.com/blog/2014/08/06/how-arangodbs-write-ahead-log-works/"/>
+    <updated>2014-08-06T21:14:00+02:00</updated>
+    <id>http://jsteemann.github.com/blog/2014/08/06/how-arangodbs-write-ahead-log-works</id>
+    <content type="html"><![CDATA[<p>Since version 2.2, ArangoDB stores all data-modification operations in its
 <em>write-ahead log</em> (abbreviated <em>WAL</em>). The introduction of the WAL massively
 changed how data are stored in ArangoDB.</p>
 
@@ -720,42 +616,15 @@ logfiles will be created when the first document is inserted. So there will be
 collections with documents but without any logfiles, at least temporarily until
 the WAL garbage collection kicks in and will transfer data from the WAL to the
 collection logfiles.</p>
-</div>
+]]></content>
+  </entry>
   
-  
-
-
-    </article>
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/06/03/schema-handling-in-arangodb/">Schema Handling in ArangoDB</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-06-03T22:57:58+02:00" pubdate data-updated="true">Jun 3<span>rd</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><h2>Schemas vs. schema-free</h2>
+  <entry>
+    <title type="html"><![CDATA[Schema Handling in ArangoDB]]></title>
+    <link href="http://jsteemann.github.com/blog/2014/06/03/schema-handling-in-arangodb/"/>
+    <updated>2014-06-03T22:57:58+02:00</updated>
+    <id>http://jsteemann.github.com/blog/2014/06/03/schema-handling-in-arangodb</id>
+    <content type="html"><![CDATA[<h2>Schemas vs. schema-free</h2>
 
 <p>In a relational database, all rows in a table have the same structure.
 The structure is saved once for the table, and the invidiual rows only
@@ -899,76 +768,7 @@ space reduction like it is in other schema-free databases:</p>
 
 
 
-</div>
+]]></content>
+  </entry>
   
-  
-
-
-    </article>
-  
-  <div class="pagination">
-    
-    <a href="/blog/archives">Blog Archives</a>
-    
-  </div>
-</div>
-<aside class="sidebar">
-  
-    <section>
-  <h1>Recent Posts</h1>
-  <ul id="recent_posts">
-    
-      <li class="post">
-        <a href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Benchmarking ArangoDB&#8217;s Write-ahead Log</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2014/08/06/how-arangodbs-write-ahead-log-works/">How ArangoDB&#8217;s Write-ahead Log Works</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2014/06/03/schema-handling-in-arangodb/">Schema Handling in ArangoDB</a>
-      </li>
-    
-  </ul>
-</section>
-
-
-
-
-
-  
-</aside>
-
-    </div>
-  </div>
-  <footer role="contentinfo"><p>
-  Copyright &copy; 2014 - jsteemann -
-  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
-</p>
-
-</footer>
-  
-
-
-
-
-
-
-
-  <script type="text/javascript">
-    (function(){
-      var twitterWidgets = document.createElement('script');
-      twitterWidgets.type = 'text/javascript';
-      twitterWidgets.async = true;
-      twitterWidgets.src = '//platform.twitter.com/widgets.js';
-      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
-    })();
-  </script>
-
-
-
-
-
-</body>
-</html>
+</feed>

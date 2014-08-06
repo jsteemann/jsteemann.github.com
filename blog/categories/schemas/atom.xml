@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Schemas | J@ArangoDB]]></title>
+  <link href="http://jsteemann.github.com/blog/categories/schemas/atom.xml" rel="self"/>
+  <link href="http://jsteemann.github.com/"/>
+  <updated>2014-08-07T01:37:33+02:00</updated>
+  <id>http://jsteemann.github.com/</id>
+  <author>
+    <name><![CDATA[jsteemann]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Schema Handling in ArangoDB]]></title>
+    <link href="http://jsteemann.github.com/blog/2014/06/03/schema-handling-in-arangodb/"/>
+    <updated>2014-06-03T22:57:58+02:00</updated>
+    <id>http://jsteemann.github.com/blog/2014/06/03/schema-handling-in-arangodb</id>
+    <content type="html"><![CDATA[<h2>Schemas vs. schema-free</h2>
+
+<p>In a relational database, all rows in a table have the same structure.
+The structure is saved once for the table, and the invidiual rows only
+contain the row&rsquo;s values. This is an efficient approach if all records
+have the exact same structure, i.e. the same attributes (same names and
+same data types):</p>
+
+<p><code>
+firstName (varchar)  |  lastName (varchar)  |  status (varchar)
+---------------------+----------------------+------------------
+"fred"               |  "foxx"              |  "active"
+"john"               |  "doe"               |  "inactive"
+</code></p>
+
+<p>This is not a good fit if the data structure changes. In this case, an
+<code>ALTER TABLE</code> command would need to be issued in the relational database,
+converting all existing rows into the new structure. This is an expensive
+operation because it normally requires rewriting all existing rows.</p>
+
+<p>The situation becomes really difficult when there is no definite structure
+for a table &ndash; if rows shall have a dynamic or variable structure, then
+it can be quite hard to define a sensible relational table schema!</p>
+
+<p>This is where NoSQL databases enter the game &ndash; mostly they don&rsquo;t require
+defining a schema for a &ldquo;table&rdquo; at all. Instead, each individual record
+will not only contain its data values, but also its own schema. This means
+much higher flexibility as every record can its completely own data
+structure.</p>
+
+<p>This flexibility has a disadvantage though: storing schemas in individual
+records requires more storage space than storing the schema only once for
+the complete table. This is especially true if most (or even all) records
+in the table do have the same structure. A lot of storage space can be
+wasted while storing the same structure information again and again and again&hellip;</p>
+
+<h2>Schemas in ArangoDB</h2>
+
+<p>ArangoDB tries to be different in this respect: on the one hand it is a
+schema-free database and thus allows <em>flexible storage</em>. All documents in a
+collection (the ArangoDB lingo for <em>record</em> and <em>table</em>) can have the same
+or totally different structures. We leave this choice up to the user.</p>
+
+<p>On the other hand, ArangoDB will exploit the similarities in document
+structures to <em>save storage space</em>. It will detect identical document
+schemas, and only save each unique schema once.
+We optimized ArangoDB for this use case because we found that in reality, the
+documents in a collection will either have absolutely the same schema, or
+there will only be a few different schemas in use.</p>
+
+<p>From the user perspective there are no schemas in ArangoDB: there is no way
+to create or alter the schema of a collection at all. Instead, ArangoDB
+will use the attribute names and data types contained in the JSON data of
+each document. All of this happens automatically.</p>
+
+<p>For each new document in a collection, ArangoDB will first figure out the
+schema. It will then check if it has already processed a document with the
+same schema. If yes, then there is no need to save the schema information
+again. Instead, the new document will only contain a pointer to an already
+existing schema. This does not require much storage space.</p>
+
+<p>If ArangoDB figures out that it has not yet processed a document with the
+same schema, it will store the document schema once, and store a pointer
+to the schema in the new document. This is a slightly more expensive
+operation, but it pays out when there are multiple documents in a
+collection with the same structure.</p>
+
+<p>When ArangoDB looks at document schemas, it takes into account the attribute
+names and the attribute value data types contained in a document. All
+attribute names and data types in a document make the so-called <em>shape</em>.</p>
+
+<p>Each shape is only stored once for each collection. Any attribute name used
+in a collection is also stored only once, and then reused from any shape that
+contains the attribute name.</p>
+
+<h2>Examples</h2>
+
+<p>The following documents do have different values but still their schemas are
+identical:</p>
+
+<p><code>json
+{ "name" : { "first" : "fred", "last" : "foxx" }, "status" : "active" }
+{ "name" : { "first" : "john", "last" : "doe" }, "status" : "inactive" }
+</code></p>
+
+<p>Both documents contain attributes named <code>name</code> and <code>status</code>. <code>name</code> is an
+array with two sub-attributes <code>first</code> and <code>last</code>, which are strings.
+<code>status</code> is also a string in both documents.</p>
+
+<p>ArangoDB will save this schema only once in a so-called <em>shape</em>. The documents
+will store their own data values plus a pointer to this (same) shape.</p>
+
+<p>The next two documents have different, yet unknown schemas. ArangoDB will
+therefore store these two schemas in two new shapes:</p>
+
+<p><code>json
+{ "firstName" : "jack", "lastName" : "black", "status" : "inactive" }
+{ "name" : "username", "status" : "unknown" }
+</code></p>
+
+<p>We would end up with three diferent <em>shapes</em> for the four documents. This
+might not sound impressive, but if more documents are saved with one of the
+existing shapes, then storing each shape just once might really pay out.</p>
+
+<h2>A note on attribute names</h2>
+
+<p>Even though the latter two example documents had unique schemas, we saw in
+the examples that attribute names were already repeating. For example, all
+documents shown so far had an attribute named <code>status</code>, and some also
+had a <code>name</code> attribute.</p>
+
+<p>ArangoDB figures out when attribute names repeat, and it will not store the
+same attribute name more than once in a collection. Given that many
+documents in a collection use a fixed set of repeating attribute names,
+this approach can lead to considerable storage space reductions.</p>
+
+<p>As an aside, reusing attribute name information allows using descriptive
+(read: long) attribute names in ArangoDB with very low storage overhead.</p>
+
+<p>For example, in ArangoDB it will not cost much extra space to use long
+attribute names like these in lots of documents:
+<code>json
+{ "firstNameOfTheUser" : "jack", "lastNameOfTheUser" : "black" }
+</code></p>
+
+<p>As each unique attribute name is only stored once per collection, there
+is no need to <em>artifically</em> shorten the attribute names just for storage
+space reduction like it is in other schema-free databases:
+<code>json
+{ "fn" : "jack", "ln" : "black" }
+</code></p>
+]]></content>
+  </entry>
+  
+</feed>

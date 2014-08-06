@@ -1,0 +1,353 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Schema Handling in ArangoDB - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="Schemas vs. schema-free In a relational database, all rows in a table have the same structure.
+The structure is saved once for the table, and the &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.com/blog/2014/06/03/schema-handling-in-arangodb">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>Notes on ArangoDB development</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.com" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Schema Handling in ArangoDB</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-06-03T22:57:58+02:00" pubdate data-updated="true">Jun 3<span>rd</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><h2>Schemas vs. schema-free</h2>
+
+<p>In a relational database, all rows in a table have the same structure.
+The structure is saved once for the table, and the invidiual rows only
+contain the row&rsquo;s values. This is an efficient approach if all records
+have the exact same structure, i.e. the same attributes (same names and
+same data types):</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>firstName (varchar)  |  lastName (varchar)  |  status (varchar)
+</span><span class='line'>---------------------+----------------------+------------------
+</span><span class='line'>"fred"               |  "foxx"              |  "active"
+</span><span class='line'>"john"               |  "doe"               |  "inactive"</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This is not a good fit if the data structure changes. In this case, an
+<code>ALTER TABLE</code> command would need to be issued in the relational database,
+converting all existing rows into the new structure. This is an expensive
+operation because it normally requires rewriting all existing rows.</p>
+
+<p>The situation becomes really difficult when there is no definite structure
+for a table &ndash; if rows shall have a dynamic or variable structure, then
+it can be quite hard to define a sensible relational table schema!</p>
+
+<p>This is where NoSQL databases enter the game &ndash; mostly they don&rsquo;t require
+defining a schema for a &ldquo;table&rdquo; at all. Instead, each individual record
+will not only contain its data values, but also its own schema. This means
+much higher flexibility as every record can its completely own data
+structure.</p>
+
+<p>This flexibility has a disadvantage though: storing schemas in individual
+records requires more storage space than storing the schema only once for
+the complete table. This is especially true if most (or even all) records
+in the table do have the same structure. A lot of storage space can be
+wasted while storing the same structure information again and again and again&hellip;</p>
+
+<h2>Schemas in ArangoDB</h2>
+
+<p>ArangoDB tries to be different in this respect: on the one hand it is a
+schema-free database and thus allows <em>flexible storage</em>. All documents in a
+collection (the ArangoDB lingo for <em>record</em> and <em>table</em>) can have the same
+or totally different structures. We leave this choice up to the user.</p>
+
+<p>On the other hand, ArangoDB will exploit the similarities in document
+structures to <em>save storage space</em>. It will detect identical document
+schemas, and only save each unique schema once.
+We optimized ArangoDB for this use case because we found that in reality, the
+documents in a collection will either have absolutely the same schema, or
+there will only be a few different schemas in use.</p>
+
+<p>From the user perspective there are no schemas in ArangoDB: there is no way
+to create or alter the schema of a collection at all. Instead, ArangoDB
+will use the attribute names and data types contained in the JSON data of
+each document. All of this happens automatically.</p>
+
+<p>For each new document in a collection, ArangoDB will first figure out the
+schema. It will then check if it has already processed a document with the
+same schema. If yes, then there is no need to save the schema information
+again. Instead, the new document will only contain a pointer to an already
+existing schema. This does not require much storage space.</p>
+
+<p>If ArangoDB figures out that it has not yet processed a document with the
+same schema, it will store the document schema once, and store a pointer
+to the schema in the new document. This is a slightly more expensive
+operation, but it pays out when there are multiple documents in a
+collection with the same structure.</p>
+
+<p>When ArangoDB looks at document schemas, it takes into account the attribute
+names and the attribute value data types contained in a document. All
+attribute names and data types in a document make the so-called <em>shape</em>.</p>
+
+<p>Each shape is only stored once for each collection. Any attribute name used
+in a collection is also stored only once, and then reused from any shape that
+contains the attribute name.</p>
+
+<h2>Examples</h2>
+
+<p>The following documents do have different values but still their schemas are
+identical:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="p">{</span> <span class="nt">&quot;first&quot;</span> <span class="p">:</span> <span class="s2">&quot;fred&quot;</span><span class="p">,</span> <span class="nt">&quot;last&quot;</span> <span class="p">:</span> <span class="s2">&quot;foxx&quot;</span> <span class="p">},</span> <span class="nt">&quot;status&quot;</span> <span class="p">:</span> <span class="s2">&quot;active&quot;</span> <span class="p">}</span>
+</span><span class='line'><span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="p">{</span> <span class="nt">&quot;first&quot;</span> <span class="p">:</span> <span class="s2">&quot;john&quot;</span><span class="p">,</span> <span class="nt">&quot;last&quot;</span> <span class="p">:</span> <span class="s2">&quot;doe&quot;</span> <span class="p">},</span> <span class="nt">&quot;status&quot;</span> <span class="p">:</span> <span class="s2">&quot;inactive&quot;</span> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Both documents contain attributes named <code>name</code> and <code>status</code>. <code>name</code> is an
+array with two sub-attributes <code>first</code> and <code>last</code>, which are strings.
+<code>status</code> is also a string in both documents.</p>
+
+<p>ArangoDB will save this schema only once in a so-called <em>shape</em>. The documents
+will store their own data values plus a pointer to this (same) shape.</p>
+
+<p>The next two documents have different, yet unknown schemas. ArangoDB will
+therefore store these two schemas in two new shapes:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;firstName&quot;</span> <span class="p">:</span> <span class="s2">&quot;jack&quot;</span><span class="p">,</span> <span class="nt">&quot;lastName&quot;</span> <span class="p">:</span> <span class="s2">&quot;black&quot;</span><span class="p">,</span> <span class="nt">&quot;status&quot;</span> <span class="p">:</span> <span class="s2">&quot;inactive&quot;</span> <span class="p">}</span>
+</span><span class='line'><span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;username&quot;</span><span class="p">,</span> <span class="nt">&quot;status&quot;</span> <span class="p">:</span> <span class="s2">&quot;unknown&quot;</span> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>We would end up with three diferent <em>shapes</em> for the four documents. This
+might not sound impressive, but if more documents are saved with one of the
+existing shapes, then storing each shape just once might really pay out.</p>
+
+<h2>A note on attribute names</h2>
+
+<p>Even though the latter two example documents had unique schemas, we saw in
+the examples that attribute names were already repeating. For example, all
+documents shown so far had an attribute named <code>status</code>, and some also
+had a <code>name</code> attribute.</p>
+
+<p>ArangoDB figures out when attribute names repeat, and it will not store the
+same attribute name more than once in a collection. Given that many
+documents in a collection use a fixed set of repeating attribute names,
+this approach can lead to considerable storage space reductions.</p>
+
+<p>As an aside, reusing attribute name information allows using descriptive
+(read: long) attribute names in ArangoDB with very low storage overhead.</p>
+
+<p>For example, in ArangoDB it will not cost much extra space to use long
+attribute names like these in lots of documents:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;firstNameOfTheUser&quot;</span> <span class="p">:</span> <span class="s2">&quot;jack&quot;</span><span class="p">,</span> <span class="nt">&quot;lastNameOfTheUser&quot;</span> <span class="p">:</span> <span class="s2">&quot;black&quot;</span> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As each unique attribute name is only stored once per collection, there
+is no need to <em>artifically</em> shorten the attribute names just for storage
+space reduction like it is in other schema-free databases:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;fn&quot;</span> <span class="p">:</span> <span class="s2">&quot;jack&quot;</span><span class="p">,</span> <span class="nt">&quot;ln&quot;</span> <span class="p">:</span> <span class="s2">&quot;black&quot;</span> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-06-03T22:57:58+02:00" pubdate data-updated="true">Jun 3<span>rd</span>, 2014</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/concepts/'>concepts</a>, <a class='category' href='/blog/categories/schemas/'>schemas</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.com/blog/2014/06/03/schema-handling-in-arangodb/" data-via="steemann" data-counturl="http://jsteemann.github.com/blog/2014/06/03/schema-handling-in-arangodb/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+      
+        <a class="basic-alignment right" href="/blog/2014/08/06/how-arangodbs-write-ahead-log-works/" title="Next Post: How ArangoDB's write-ahead log works">How ArangoDB's write-ahead log works &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Benchmarking ArangoDB's Write-ahead Log</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/08/06/how-arangodbs-write-ahead-log-works/">How ArangoDB's Write-ahead Log Works</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/06/03/schema-handling-in-arangodb/">Schema Handling in ArangoDB</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
