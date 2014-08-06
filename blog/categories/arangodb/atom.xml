@@ -2,10 +2,10 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
 
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
-  <link href="http://jsteemann.github.com/blog/categories/arangodb/atom.xml" rel="self"/>
-  <link href="http://jsteemann.github.com/"/>
-  <updated>2014-08-07T01:37:33+02:00</updated>
-  <id>http://jsteemann.github.com/</id>
+  <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
+  <link href="http://jsteemann.github.io/"/>
+  <updated>2014-08-07T01:43:46+02:00</updated>
+  <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
     
@@ -15,9 +15,9 @@
   
   <entry>
     <title type="html"><![CDATA[Benchmarking ArangoDB's Write-ahead Log]]></title>
-    <link href="http://jsteemann.github.com/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/"/>
+    <link href="http://jsteemann.github.io/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/"/>
     <updated>2014-08-07T01:27:04+02:00</updated>
-    <id>http://jsteemann.github.com/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log</id>
+    <id>http://jsteemann.github.io/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log</id>
     <content type="html"><![CDATA[<h2>Motivation</h2>
 
 <p>One of the major changes in ArangoDB 2.2 was the introduction of the
@@ -355,9 +355,9 @@ be as fast as 2.1 (or even faster).</p>
   
   <entry>
     <title type="html"><![CDATA[How ArangoDB's Write-ahead Log Works]]></title>
-    <link href="http://jsteemann.github.com/blog/2014/08/06/how-arangodbs-write-ahead-log-works/"/>
+    <link href="http://jsteemann.github.io/blog/2014/08/06/how-arangodbs-write-ahead-log-works/"/>
     <updated>2014-08-06T21:14:00+02:00</updated>
-    <id>http://jsteemann.github.com/blog/2014/08/06/how-arangodbs-write-ahead-log-works</id>
+    <id>http://jsteemann.github.io/blog/2014/08/06/how-arangodbs-write-ahead-log-works</id>
     <content type="html"><![CDATA[<p>Since version 2.2, ArangoDB stores all data-modification operations in its
 <em>write-ahead log</em> (abbreviated <em>WAL</em>). The introduction of the WAL massively
 changed how data are stored in ArangoDB.</p>
@@ -564,9 +564,9 @@ collection logfiles.</p>
   
   <entry>
     <title type="html"><![CDATA[Schema Handling in ArangoDB]]></title>
-    <link href="http://jsteemann.github.com/blog/2014/06/03/schema-handling-in-arangodb/"/>
+    <link href="http://jsteemann.github.io/blog/2014/06/03/schema-handling-in-arangodb/"/>
     <updated>2014-06-03T22:57:58+02:00</updated>
-    <id>http://jsteemann.github.com/blog/2014/06/03/schema-handling-in-arangodb</id>
+    <id>http://jsteemann.github.io/blog/2014/06/03/schema-handling-in-arangodb</id>
     <content type="html"><![CDATA[<h2>Schemas vs. schema-free</h2>
 
 <p>In a relational database, all rows in a table have the same structure.

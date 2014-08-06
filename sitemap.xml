@@ -1,31 +1,29 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>
     <url>
-        <loc>http://jsteemann.github.com/blog/2014/06/03/schema-handling-in-arangodb/</loc>
+        <loc>http://jsteemann.github.io/blog/2014/06/03/schema-handling-in-arangodb/</loc>
         <lastmod>2014-07-25T23:48:13+02:00</lastmod>
     </url>
     <url>
-        <loc>
-            http://jsteemann.github.com/blog/2014/08/06/how-arangodbs-write-ahead-log-works/
-        </loc>
+        <loc>http://jsteemann.github.io/blog/2014/08/06/how-arangodbs-write-ahead-log-works/</loc>
         <lastmod>2014-08-07T00:57:56+02:00</lastmod>
     </url>
     <url>
         <loc>
-            http://jsteemann.github.com/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/
+            http://jsteemann.github.io/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/
         </loc>
         <lastmod>2014-08-07T01:27:36+02:00</lastmod>
     </url>
     <url>
-        <loc>http://jsteemann.github.com/blog/archives/</loc>
+        <loc>http://jsteemann.github.io/blog/archives/</loc>
         <lastmod>2014-08-07T01:27:36+02:00</lastmod>
     </url>
     <url>
-        <loc>http://jsteemann.github.com/robots.txt</loc>
+        <loc>http://jsteemann.github.io/robots.txt</loc>
         <lastmod>2014-06-03T22:19:45+02:00</lastmod>
     </url>
     <url>
-        <loc>http://jsteemann.github.com/</loc>
+        <loc>http://jsteemann.github.io/</loc>
         <lastmod>2014-08-07T01:27:36+02:00</lastmod>
     </url>
 </urlset>
