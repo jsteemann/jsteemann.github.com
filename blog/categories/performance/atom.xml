@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-08-07T01:51:18+02:00</updated>
+  <updated>2014-08-15T02:15:51+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -18,7 +18,7 @@
     <link href="http://jsteemann.github.io/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/"/>
     <updated>2014-08-07T01:27:04+02:00</updated>
     <id>http://jsteemann.github.io/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log</id>
-    <content type="html"><![CDATA[<h2>Motivation</h2>
+    <content type="html"><![CDATA[<h1>Motivation</h1>
 
 <p>One of the major changes in ArangoDB 2.2 was the introduction of the
 <em>write-ahead log</em> (abbreviated <em>WAL</em>).</p>
@@ -34,9 +34,12 @@ saved in the write-ahead log, there may also be some negative effect.</p>
 
 <p>We developers were of course very interested in seeing the net effects, so
 we ran some tests for a few use cases. We compared ArangoDB 2.1.2 (still without
-the WAL) with ArangoDB 2.2.1 (with the WAL).</p>
+the WAL) with ArangoDB 2.2.1 (with the WAL). The results are interesting.</p>
 
-<h2>Test setup</h2>
+<!-- more -->
+
+
+<h1>Test setup</h1>
 
 <p>To get a broad overview of performance changes, we ran a few different test cases:</p>
 
@@ -64,7 +67,7 @@ arangob                         \
 ArangoDB server was active during each test run, and the other was shut down so
 it didn&rsquo;t compete for system resources.</p>
 
-<h2>Test results</h2>
+<h1>Test results</h1>
 
 <p>Following are the results for the different test cases.</p>
 
@@ -91,7 +94,7 @@ results shown here. We haven&rsquo;t used the most powerful server on earth for 
 these tests. We were most interested in how ArangoDB 2.2 compared to
 ArangoDB 2.1.</p>
 
-<h3>Inserting documents</h3>
+<h2>Inserting documents</h2>
 
 <p>The <code>document</code> test appends new documents (with an identical structure) to a
 collection. Here are the results for inserting a million documents with 100
@@ -136,7 +139,7 @@ all tested configurations. The difference is negligible if the test client is
 single-threaded (one insert thread), but ArangoDB 2.2 is considerably faster than
 ArangoDB 2.1 with more concurrent clients.</p>
 
-<h3>CRUD operations (I)</h3>
+<h2>CRUD operations (I)</h2>
 
 <p>The <code>crud</code> test case inserts a document, fetches it, updates it, fetches it again
 and finally deletes it. Executing 1 million crud operations on documents with 100
@@ -183,7 +186,7 @@ not affect the performance of read and delete operations much: reading a documen
 does not require writing to the WAL at all, and removing a document only requires
 writing a very small remove marker to the WAL.</p>
 
-<h3>CRUD operations (II)</h3>
+<h2>CRUD operations (II)</h2>
 
 <p>The <code>crud-append</code> test case inserts a document, fetches it, updates it, and fetches
 it again. Executing 1 million crud operations on documents with 100 attributes each
@@ -226,7 +229,7 @@ results in the following execution times:
 
 <p>Again, ArangoDB 2.1 and 2.2 are pretty much the same speed for the tested operations.</p>
 
-<h3>Multi-collection write transactions</h3>
+<h2>Multi-collection write transactions</h2>
 
 <p>The <code>multi-collection</code> test stores two documents in two different collections
 transactionally. Here are the results for executing 100,000 transactions for
@@ -275,7 +278,7 @@ far less calls to <code>msync</code> than in ArangoDB 2.1. ArangoDB 2.2 can sync
 of multiple transactions together in one call to <code>msync</code>. ArangoDB 2.1 needed to
 synchronize each transaction separately.</p>
 
-<h3>(Fully) heterogenous documents</h3>
+<h2>(Fully) heterogenous documents</h2>
 
 <p>The <code>random-shapes</code> test inserts documents that have different structures each.
 For each inserted document a new shape will need to be stored. Inserting one million
@@ -334,7 +337,7 @@ operations much faster in case all documents have heterogenous structures.</p>
 shouldn&rsquo;t matter too much already, or ArangoDB 2.2 should already be faster than 2.1
 (as shown in the results above).</p>
 
-<h2>Summary</h2>
+<h1>Summary</h1>
 
 <p>The tests revealed that the overhead of the WAL in ArangoDB 2.2 seems to be
 negligible for most of the tested workloads. In many cases, ArangoDB 2.2 with

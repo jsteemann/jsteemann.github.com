@@ -9,8 +9,9 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="Motivation One of the major changes in ArangoDB 2.2 was the introduction of the
-write-ahead log (abbreviated WAL). The introduction of the WAL &hellip;">
+  <meta name="description" content="To JSON or not? We&rsquo;re often asked why ArangoDB uses JSON as its
+data-interchange format for transferring documents from clients to
+the database &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -32,6 +33,18 @@ write-ahead log (abbreviated WAL). The introduction of the WAL &hellip;">
 <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
 
   
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
 
 </head>
 
@@ -72,6 +85,63 @@ write-ahead log (abbreviated WAL). The introduction of the WAL &hellip;">
       
   <header>
     
+      <h1 class="entry-title"><a href="/blog/2014/08/14/why-json/">Why JSON?</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-08-14T22:27:27+02:00" pubdate data-updated="true">Aug 14<span>th</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><h1>To JSON or not?</h1>
+
+<p>We&rsquo;re often asked why ArangoDB uses <a href="http://json.org">JSON</a> as its
+data-interchange format for transferring documents from clients to
+the database server and back. This is often accompanied by the
+question if we could use <code>&lt;insert fancy format here&gt;</code> instead.</p>
+
+<p>In the following article, I&rsquo;ll try to outline the reasons for why
+we picked JSON as the interchange format, and why we still use it.</p>
+
+<p>I&rsquo;ll start with a discussion of the pros and cons of JSON, look at
+some alternative formats and present my personal opinion on why
+using a different format may not provide too much benefit for us,
+at least at the moment.</p>
+
+<p>This does not intend to say that any of these formats are better or
+worse.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2014/08/14/why-json/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
       <h1 class="entry-title"><a href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Benchmarking ArangoDB&#8217;s Write-ahead Log</a></h1>
     
     
@@ -95,7 +165,7 @@ write-ahead log (abbreviated WAL). The introduction of the WAL &hellip;">
   </header>
 
 
-  <div class="entry-content"><h2>Motivation</h2>
+  <div class="entry-content"><h1>Motivation</h1>
 
 <p>One of the major changes in ArangoDB 2.2 was the introduction of the
 <em>write-ahead log</em> (abbreviated <em>WAL</em>).</p>
@@ -111,361 +181,14 @@ saved in the write-ahead log, there may also be some negative effect.</p>
 
 <p>We developers were of course very interested in seeing the net effects, so
 we ran some tests for a few use cases. We compared ArangoDB 2.1.2 (still without
-the WAL) with ArangoDB 2.2.1 (with the WAL).</p>
+the WAL) with ArangoDB 2.2.1 (with the WAL). The results are interesting.</p>
 
-<h2>Test setup</h2>
-
-<p>To get a broad overview of performance changes, we ran a few different test cases:</p>
-
-<ul>
-<li><strong>document</strong>: inserts a document</li>
-<li><strong>crud</strong>: inserts a document, fetches it, updates it, and deletes it</li>
-<li><strong>crud-append</strong>: inserts a document, fetches it, updates it, and fetches it again</li>
-<li><strong>multi-collection</strong>: transactionally save two documents in two collections</li>
-<li><strong>random-shapes</strong>: save documents with completely different structures/shapes</li>
-</ul>
-
-
-<p>All tests were run with the <code>arangob</code> benchmark tool, with various concurrency levels,
-complexity settings and repeated several times. <code>arangob</code> was invoked like this:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>arangob                         \
-</span><span class='line'>  --test-case $case             \
-</span><span class='line'>  --request $requests           \
-</span><span class='line'>  --concurrency $concurrency    \
-</span><span class='line'>  --complexity $complexity</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Both ArangoDB servers and <code>arangob</code> were located on the same server. Only one
-ArangoDB server was active during each test run, and the other was shut down so
-it didn&rsquo;t compete for system resources.</p>
-
-<h2>Test results</h2>
-
-<p>Following are the results for the different test cases.</p>
-
-<p>In the result tables, the columns have the following meanings:</p>
-
-<ul>
-<li><strong>Complexity</strong>: the number of attributes for the test documents, used as parameter
-<code>--complexity</code> for <code>arangob</code></li>
-<li><strong>Requests</strong>: the number of operations executed, used as parameter <code>--requests</code>
-for <code>arangob</code></li>
-<li><strong>Concurrency</strong>: the number of client threads started by <code>arangob</code>, used a parameter
-<code>concurrency</code> for <code>arangob</code></li>
-<li><strong>Time 2.1</strong>: test execution time (in seconds) for ArangoDB 2.1</li>
-<li><strong>Time 2.2</strong>: test execution time (in seconds) for ArangoDB 2.2</li>
-<li><strong>T2.1/T2.2</strong>: relative performance of ArangoDB 2.1 compared to ArangoDB 2.2. Values
-less than one indicate that ArangoDB 2.1 was faster than ArangoDB 2.2. Values
-greater than one indicate that ArangoDB 2.1 was slower than ArangoDB 2.2. A
-value of one means that both versions had equal speed.</li>
-</ul>
-
-
-<p>Please note that the absolute execution times aren&rsquo;t too interesting in the
-results shown here. We haven&rsquo;t used the most powerful server on earth for running
-these tests. We were most interested in how ArangoDB 2.2 compared to
-ArangoDB 2.1.</p>
-
-<h3>Inserting documents</h3>
-
-<p>The <code>document</code> test appends new documents (with an identical structure) to a
-collection. Here are the results for inserting a million documents with 100
-attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>       100       1000000               1       97.452       94.839         1.02    
-</span><span class='line'>       100       1000000               2       61.146       53.928         1.13   
-</span><span class='line'>       100       1000000               4       54.368       31.379         1.73  </span></code></pre></td></tr></table></div></figure>
-
-
-<p>Following are the results for 100,000 documents with 1,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>      1000        100000               1       86.883       80.669         1.07 
-</span><span class='line'>      1000        100000               2       59.381       48.599         1.22 
-</span><span class='line'>      1000        100000               4       53.784       27.494         1.95 </span></code></pre></td></tr></table></div></figure>
-
-
-<p>The results for 5,000 documents with 10,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>     10000          5000               1       43.991       40.577         1.08 
-</span><span class='line'>     10000          5000               2       31.403       26.117         1.20 
-</span><span class='line'>     10000          5000               4       28.713       20.044         1.43 </span></code></pre></td></tr></table></div></figure>
-
-
-<p>As we can see in the results above, ArangoDB 2.2 is faster than ArangoDB 2.1 for
-all tested configurations. The difference is negligible if the test client is
-single-threaded (one insert thread), but ArangoDB 2.2 is considerably faster than
-ArangoDB 2.1 with more concurrent clients.</p>
-
-<h3>CRUD operations (I)</h3>
-
-<p>The <code>crud</code> test case inserts a document, fetches it, updates it, fetches it again
-and finally deletes it. Executing 1 million crud operations on documents with 100
-attributes each results in the following execution times:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>       100       1000000               1       66.856       67.072         0.99       
-</span><span class='line'>       100       1000000               2       47.907       47.043         1.01        
-</span><span class='line'>       100       1000000               4       42.089       42.047         1.00         </span></code></pre></td></tr></table></div></figure>
-
-
-<p>Running 100,000 crud operations on documents with 1,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>      1000        100000               1      160.228      158.312         1.01 
-</span><span class='line'>      1000        100000               2      147.413      147.990         0.99  
-</span><span class='line'>      1000        100000               4      143.575      143.233         1.00   </span></code></pre></td></tr></table></div></figure>
-
-
-<p>And here are the test results for running 5,000 crud operations on documents with
-10,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>     10000          5000               1      645.859      643.924         1.00        
-</span><span class='line'>     10000          5000               2      640.414      640.767         0.99       
-</span><span class='line'>     10000          5000               4      637.438      637.132         1.00      </span></code></pre></td></tr></table></div></figure>
-
-
-<p>The results of all these tests show that performance for the tested workload hasn&rsquo;t
-changed between ArangoDB 2.1 and 2.2. This is somewhat expected, as the WAL should
-not affect the performance of read and delete operations much: reading a document
-does not require writing to the WAL at all, and removing a document only requires
-writing a very small remove marker to the WAL.</p>
-
-<h3>CRUD operations (II)</h3>
-
-<p>The <code>crud-append</code> test case inserts a document, fetches it, updates it, and fetches
-it again. Executing 1 million crud operations on documents with 100 attributes each
-results in the following execution times:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>       100       1000000               1       81.187       79.079         1.02 
-</span><span class='line'>       100       1000000               2       59.544       56.934         1.04  
-</span><span class='line'>       100       1000000               4       53.845       52.098         1.03   </span></code></pre></td></tr></table></div></figure>
-
-
-<p>Running 100,000 crud operations on documents with 1,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>      1000        100000               1      200.057      196.722         1.01 
-</span><span class='line'>      1000        100000               2      182.436      181.633         1.00 
-</span><span class='line'>      1000        100000               4      181.233      180.631         1.00 </span></code></pre></td></tr></table></div></figure>
-
-
-<p>And here are the test results for running 5,000 crud operations on documents with
-10,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>     10000          5000               1      804.781      801.903         1.00 
-</span><span class='line'>     10000          5000               2      796.589      797.693         0.99  
-</span><span class='line'>     10000          5000               4      796.664      795.823         1.00  </span></code></pre></td></tr></table></div></figure>
-
-
-<p>Again, ArangoDB 2.1 and 2.2 are pretty much the same speed for the tested operations.</p>
-
-<h3>Multi-collection write transactions</h3>
-
-<p>The <code>multi-collection</code> test stores two documents in two different collections
-transactionally. Here are the results for executing 100,000 transactions for
-documents with 100 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>       100        100000               1     6936.895       30.736       225.69   
-</span><span class='line'>       100        100000               2     6946.524       25.577       271.59    
-</span><span class='line'>       100        100000               4     7720.682       24.334       317.27     </span></code></pre></td></tr></table></div></figure>
-
-
-<p>Executing 10,000 transactions on documents with 1,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>      1000         10000               1      949.974       21.368        44.45     
-</span><span class='line'>      1000         10000               2      953.672       19.322        49.35    
-</span><span class='line'>      1000         10000               4      941.645       20.486        45.96   </span></code></pre></td></tr></table></div></figure>
-
-
-<p>And finally, the results for executing 500 transactions on documents with 10,000
-attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>     10000           500               1       46.776       10.413         4.49 
-</span><span class='line'>     10000           500               2       45.102       10.173         4.43 
-</span><span class='line'>     10000           500               4       44.172        9.192         4.80  </span></code></pre></td></tr></table></div></figure>
-
-
-<p>The above results show that ArangoDB 2.2 is much faster than ArangoDB 2.1 for
-executing transactions that write to two collections.</p>
-
-<p>We expected that! Multi-collection (write) transactions in ArangoDB 2.2 require
-far less calls to <code>msync</code> than in ArangoDB 2.1. ArangoDB 2.2 can sync operations
-of multiple transactions together in one call to <code>msync</code>. ArangoDB 2.1 needed to
-synchronize each transaction separately.</p>
-
-<h3>(Fully) heterogenous documents</h3>
-
-<p>The <code>random-shapes</code> test inserts documents that have different structures each.
-For each inserted document a new shape will need to be stored. Inserting one million
-documents with 100 attributes each results in the following figures:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>       100       1000000               1      664.006       87.181         7.61        
-</span><span class='line'>       100       1000000               2      433.570       60.613         7.15       
-</span><span class='line'>       100       1000000               4      313.666       45.327         6.92      </span></code></pre></td></tr></table></div></figure>
-
-
-<p>
-The results show that ArangoDB 2.2 is considerably faster than ArangoDB 2.1 for
-these cases &ndash; even with the storage overhead of writing the shapes to the WAL.</p>
-
-<p>Now we inserted 100,000 documents with 1,000 document attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>      1000        100000              1        61.709       66.954         0.92    
-</span><span class='line'>      1000        100000              2        39.294       46.458         0.84   
-</span><span class='line'>      1000        100000              4        36.866       40.910         0.90  </span></code></pre></td></tr></table></div></figure>
-
-
-<p>In these cases, the storage overhead of writing all shapes to the WAL seems to
-start to matter, and ArangoDB 2.2 gets slower than ArangoDB 2.1 in this test
-case.</p>
-
-<p>The same was true when we inserted 5,000 documents with 10,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>     10000          5000               1       25.337       30.412         0.83    
-</span><span class='line'>     10000          5000               2       20.021       22.128         0.90     
-</span><span class='line'>     10000          5000               4       14.800       18.872         0.78      </span></code></pre></td></tr></table></div></figure>
-
-
-<p>Note that the <code>random-shapes</code> test case is an extreme test case. We do not
-consider it realistic that all documents in a collection have completely different
-attribute names. Still we included it in our tests because we were sure that this
-would be a case in which the overhead of the WAL would be clearly measurable.</p>
-
-<p>Note that there is a way to make ArangoDB 2.2 faster than ArangoDB 2.1 even for
-this test case: setting the option <code>--wal.suppress-shape-information</code> to <code>true</code>
-will make ArangoDB not write shape information to the WAL, making document write
-operations much faster in case all documents have heterogenous structures.</p>
-
-<p>The option won&rsquo;t help much if a shapes repeat a lot. In this case, the WAL overhead
-shouldn&rsquo;t matter too much already, or ArangoDB 2.2 should already be faster than 2.1
-(as shown in the results above).</p>
-
-<h2>Summary</h2>
-
-<p>The tests revealed that the overhead of the WAL in ArangoDB 2.2 seems to be
-negligible for most of the tested workloads. In many cases, ArangoDB 2.2 with
-the WAL is even faster than ArangoDB 2.1 that did not have a WAL at all.</p>
-
-<p>There is one notable exception: when documents have fully heterogenous structures,
-the overhead of the WAL is measurable and significant. Though we consider this
-to be a rather hypothetical case, we have added the configurtion option
-<code>--wal.suppress-shape-information</code>. This can be used to turn off storing
-shape information in the WAL. This is not safe when the server is to be used
-as a replication master, but should work in cases when replication is not used.</p>
-
-<p>The option should not have a big effect if documents are greatly or at least
-somewhat homogenous. For these cases, ArangoDB 2.2 with its WAL should already
-be as fast as 2.1 (or even faster).</p>
 </div>
   
+  
+    <footer>
+      <a rel="full-article" href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Read on &rarr;</a>
+    </footer>
   
 
 
@@ -503,225 +226,12 @@ be as fast as 2.1 (or even faster).</p>
 <em>write-ahead log</em> (abbreviated <em>WAL</em>). The introduction of the WAL massively
 changed how data are stored in ArangoDB.</p>
 
-<h2>What&rsquo;s in the WAL?</h2>
-
-<p>The WAL contains data of all data-modification operations that were executed in
-the ArangoDB server instance. Operations are written to the WAL in the order of
-execution. The following types of operations are logged to the WAL:</p>
-
-<ul>
-<li>creating, updating, replacing or removing documents</li>
-<li>creating, modifying or dropping collections and their indexes</li>
-<li>creating or dropping databases</li>
-</ul>
-
-
-<p>The WAL is used for all databases of an ArangoDB server. Database ids are stored
-in the WAL in order to tell data from different databases apart.</p>
-
-<h2>Recovery using the WAL</h2>
-
-<p>Should the ArangoDB server crash, it will replay its write-ahead
-logs at restart. Replaying the logs will make the server recover the same
-state of data as before the crash.</p>
-
-<p>Any document-modification operations might belong to a transaction. Transaction
-data are also stored in the write-ahead log, allowing the recovery of committed
-transactions and preventing the recovery of aborted or unfinished transactions.</p>
-
-<p>Let&rsquo;s assume the following operations are executed in an ArangoDB server in this
-order&hellip;</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Seq#  |  Operation type       |  Transaction#  |  Context
-</span><span class='line'>------+-----------------------+----------------+---------------------------------------
-</span><span class='line'>   1  |  start transaction    |           773  |  database "_system"
-</span><span class='line'>   2  |  insert document      |           773  |  collection "test", key "foo"
-</span><span class='line'>   3  |  start transaction    |           774  |  database "_system"
-</span><span class='line'>   4  |  insert document      |           774  |  collection "mycollection", key "bar"
-</span><span class='line'>   5  |  start transaction    |           775  |  database "_system"
-</span><span class='line'>   6  |  update document      |           775  |  collection "boom", key "test"
-</span><span class='line'>   7  |  abort transaction    |           774  |  -                
-</span><span class='line'>   8  |  remove document      |           773  |  collection "test", key "baz"
-</span><span class='line'>   9  |  commit transaction   |           773  |  -     </span></code></pre></td></tr></table></div></figure>
-
-
-<p>&hellip;and then the server goes down due to a power outage.</p>
-
-<p>On server restart, the WAL contents will be replayed, so the server will redo the
-above operations. It will find out that operations #2 and #8 belong to transaction #773.
-Transaction #773 was already committed, so all of its operations must and will be
-recovered.</p>
-
-<p>Further it will find out that operation #4 belongs to transaction #774, which was
-aborted by the user. Therefore, this operation will not be replayed but ignored.</p>
-
-<p>Finally, it will find operation #6 belongs to transaction #775. For this transaction,
-there is neither an abort nor a commit operation in the log. Because the transaction
-was never committed, all of its operations are not replayed at restart and the server
-will behave as if the transaction never happened.</p>
-
-<h2>WAL and replication</h2>
-
-<p>A side-effect of having a write-ahead log is that it can also be used for replication.
-When a slave server fetches the latest changes from the master, the master can simply
-read the operations from its WAL. Data in the WAL are self-contained, meaning the
-master can efficiently compile the list of changes using only the WAL and without
-performing lookups elsewhere.</p>
-
-<p>The WAL is there and will be used anyway, enabling any ArangoDB server to be used as
-a replication master without any configuration. Previous versions of ArangoDB (without
-the WAL) required setting up an extra component for replication logging. This
-requirement is now gone.</p>
-
-<h2>Organization of the WAL</h2>
-
-<p>The WAL is actually a collection of logfiles. Logfiles are named <code>logfile-xxxx.db</code>
-(with xxxx being the logfile&rsquo;s id). Logfiles with lower ids are older than logfiles
-with higher ids. By default, the logfiles reside in the <em>journals</em> sub-directory of
-ArangoDB&rsquo;s database directory.</p>
-
-<p>At any point in time, one of the logfiles will be the <em>active</em> logfile. ArangoDB will
-write all data-modifications to the active logfile. Writing is append-only, meaning
-ArangoDB will never overwrite existing logfile data. To ensure logfile integrity,
-a CRC32 checksum is calculated for each logfile entry. This checksum is validated when
-a logfile is replayed. When there is a checksum mismatch, this indicates a disk error
-or an incompletely written operation &ndash; in both cases it won&rsquo;t be safe to recover and
-replay the operation.</p>
-
-<p>If an operation can&rsquo;t be written into the active logfile due to lack of space, the
-active logfile will be closed and a new logfile will become the active logfile.</p>
-
-<p>A background thread will open new logfiles before the current active one is fully
-filled up. This is done to ensure that no waiting is required when there is a switch
-of the active logfile.</p>
-
-<p>By default, each logfile has a size of 32 MB, allowing lots of operations to be stored
-in it. If you want to adjust the default size, the option <code>--wal.logfile-size</code> is for you.</p>
-
-<h2>Logfile synchronization</h2>
-
-<p>Writes to logfiles are synchronized to disk automatically in a configurable interval
-(the option to look for is <code>--wal.sync-interval</code>). To get immediate synchronization
-of operations, operations can be run with the <code>waitForSync</code> attribute set to <code>true</code>,
-or on collections with the <code>waitForSync</code> attribute being set.</p>
-
-<p>For example, the following operations will have been synchronized to disk when the
-operations return:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="c1">// operation will be synchronized because the `waitForSync` attribute </span>
-</span><span class='line'><span class="c1">// is set on operation level</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">test</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">foo</span><span class="o">:</span> <span class="s2">&quot;bar&quot;</span> <span class="p">},</span> <span class="p">{</span> <span class="nx">waitForSync</span><span class="o">:</span> <span class="kc">true</span> <span class="p">});</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// operation will be synchronized because the `waitForSync` attribute </span>
-</span><span class='line'><span class="c1">// is set on collection level</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">mycollection</span><span class="p">.</span><span class="nx">properties</span><span class="p">({</span> <span class="nx">waitForSync</span><span class="o">:</span> <span class="kc">true</span> <span class="p">});</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">mycollection</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">foo</span><span class="o">:</span> <span class="s2">&quot;bar&quot;</span> <span class="p">});</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>When no immediate synchronization has been requested, ArangoDB will have a background
-thread periodically call <code>msync</code> for not-yet synchronized logfile regions. Multiple
-operations are synchronized together because they reside in adjacent memory regions.
-That means automatic synchronization can get away with far less calls to <code>msync</code> than
-there are operations.</p>
-
-<h2>Storage overhead</h2>
-
-<p>Documents stored in the WAL (as part of an insert, update or replace operation) are
-stored in a format that contains the document values plus the document&rsquo;s shape.
-This allows reading a document fully from a WAL entry without looking up shape
-information elsewhere, making it faster and also more reliable.</p>
-
-<p>Storing shape information in the WAL has a storage space overhead though. The overhead
-should not matter much if a logfile contains a lot of documents with identical shapes.
-ArangoDB will make sure each shape is only stored once per WAL logfile. This has
-turned out to be a rather good solution: it reduces WAL storage space requirements
-greatly, and still is reliable and fast, as shape lookups are local to the current
-WAL logfile only.</p>
-
-<p>The overhead of storing shape information in the WAL will matter most when documents
-have completely different shapes. In this case, no shape information will ever be
-re-used. While this may happen in benchmarks with synthetic data, we found that in
-reality there are often lots of identically-structured documents and thus a lot of
-potential for re-using shapes.</p>
-
-<p>Note that storing shape information in the WAL can be turned off to reduce overhead.
-ArangoDB provides the option <code>--wal.suppress-shape-information</code> for this purpose.
-When set to <code>true</code>, no shape information will be written to the WAL. Note that by
-default, the option is set to <code>false</code> and that the option shouldn&rsquo;t be changed if
-the server is to be used as a replication master. If documents aren&rsquo;t too heterogenous,
-setting the option to <code>true</code> won&rsquo;t help much. It will help a lot if all documents
-that are stored have different shapes (which we consider unrealistic, but we still
-provide the option to reduce overhead in this case).</p>
-
-<h2>WAL cleanup</h2>
-
-<p>WAL logfiles that are completely filled are subject to garbage collection. WAL
-garbage collection is performed by a separate garbage collector thread. The thread
-will copy over the still-relevant operations into the collection datafiles.
-After that, indexes will be adjusted to point to the new storage locations.
-Documents that have become obsolete due to later changes will not be copied from
-the WAL into the collection datafiles at all.</p>
-
-<p>Garbage-collected logfiles are deleted by ArangoDB automatically if there exist
-more of these &ldquo;historic&rdquo; logfiles than configured. The number of historic logfiles
-to keep before deletion is configured using the option <code>--wal.historic-logfiles</code>.</p>
-
-<p>If no replication is to be used, there is no need to keep any historic logfiles.
-They have no purpose but to provide a history of recent changes. The more history
-there is on a master server, the longer is the period for which slave servers can
-request changes for.
-How much history is needed depends on how reliable the network connection between
-a replication slave and the master is. If the network connection is known to fail
-periodically, it may be wise to keep a few historic logfiles on the master, so the
-slave can catch up from the point it stopped when the network connection is
-re-established.</p>
-
-<p>If network connections are reliable or no replication is to be used at all, the
-number of historic logfiles can be set to a low value to save disk space.</p>
-
-<h2>Side-effects of the WAL</h2>
-
-<p>The WAL can be used for replication, removing the requirement to explicitly turn
-on the separate logging of operations for replication purposes. This is a clear
-improvement over previous versions of ArangoDB.</p>
-
-<p>The introduction of the WAL also caused a few other minor changes:</p>
-
-<p>While documents are stored in a WAL logfile, their sizes won&rsquo;t be included in
-the output of the <code>figures</code> method of the collection. When a WAL logfile gets
-garbage-collected, documents will physically be moved into the collection logfiles
-and the figures will be updated.</p>
-
-<p>Note that the output of the <code>count</code> method is not affected by whether a document
-is stored in the WAL or in a collection logfile.</p>
-
-<p>Another side-effect of storing operations in the WAL first is that no collection
-logfiles will be created when the first document is inserted. So there will be
-collections with documents but without any logfiles, at least temporarily until
-the WAL garbage collection kicks in and will transfer data from the WAL to the
-collection logfiles.</p>
 </div>
   
+  
+    <footer>
+      <a rel="full-article" href="/blog/2014/08/06/how-arangodbs-write-ahead-log-works/">Read on &rarr;</a>
+    </footer>
   
 
 
@@ -755,152 +265,20 @@ collection logfiles.</p>
   </header>
 
 
-  <div class="entry-content"><h2>Schemas vs. schema-free</h2>
+  <div class="entry-content"><h1>Schemas vs. schema-free</h1>
 
 <p>In a relational database, all rows in a table have the same structure.
 The structure is saved once for the table, and the invidiual rows only
 contain the row&rsquo;s values. This is an efficient approach if all records
 have the exact same structure, i.e. the same attributes (same names and
-same data types):</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>firstName (varchar)  |  lastName (varchar)  |  status (varchar)
-</span><span class='line'>---------------------+----------------------+------------------
-</span><span class='line'>"fred"               |  "foxx"              |  "active"
-</span><span class='line'>"john"               |  "doe"               |  "inactive"</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This is not a good fit if the data structure changes. In this case, an
-<code>ALTER TABLE</code> command would need to be issued in the relational database,
-converting all existing rows into the new structure. This is an expensive
-operation because it normally requires rewriting all existing rows.</p>
-
-<p>The situation becomes really difficult when there is no definite structure
-for a table &ndash; if rows shall have a dynamic or variable structure, then
-it can be quite hard to define a sensible relational table schema!</p>
-
-<p>This is where NoSQL databases enter the game &ndash; mostly they don&rsquo;t require
-defining a schema for a &ldquo;table&rdquo; at all. Instead, each individual record
-will not only contain its data values, but also its own schema. This means
-much higher flexibility as every record can its completely own data
-structure.</p>
-
-<p>This flexibility has a disadvantage though: storing schemas in individual
-records requires more storage space than storing the schema only once for
-the complete table. This is especially true if most (or even all) records
-in the table do have the same structure. A lot of storage space can be
-wasted while storing the same structure information again and again and again&hellip;</p>
-
-<h2>Schemas in ArangoDB</h2>
-
-<p>ArangoDB tries to be different in this respect: on the one hand it is a
-schema-free database and thus allows <em>flexible storage</em>. All documents in a
-collection (the ArangoDB lingo for <em>record</em> and <em>table</em>) can have the same
-or totally different structures. We leave this choice up to the user.</p>
-
-<p>On the other hand, ArangoDB will exploit the similarities in document
-structures to <em>save storage space</em>. It will detect identical document
-schemas, and only save each unique schema once.
-We optimized ArangoDB for this use case because we found that in reality, the
-documents in a collection will either have absolutely the same schema, or
-there will only be a few different schemas in use.</p>
-
-<p>From the user perspective there are no schemas in ArangoDB: there is no way
-to create or alter the schema of a collection at all. Instead, ArangoDB
-will use the attribute names and data types contained in the JSON data of
-each document. All of this happens automatically.</p>
-
-<p>For each new document in a collection, ArangoDB will first figure out the
-schema. It will then check if it has already processed a document with the
-same schema. If yes, then there is no need to save the schema information
-again. Instead, the new document will only contain a pointer to an already
-existing schema. This does not require much storage space.</p>
-
-<p>If ArangoDB figures out that it has not yet processed a document with the
-same schema, it will store the document schema once, and store a pointer
-to the schema in the new document. This is a slightly more expensive
-operation, but it pays out when there are multiple documents in a
-collection with the same structure.</p>
-
-<p>When ArangoDB looks at document schemas, it takes into account the attribute
-names and the attribute value data types contained in a document. All
-attribute names and data types in a document make the so-called <em>shape</em>.</p>
-
-<p>Each shape is only stored once for each collection. Any attribute name used
-in a collection is also stored only once, and then reused from any shape that
-contains the attribute name.</p>
-
-<h2>Examples</h2>
-
-<p>The following documents do have different values but still their schemas are
-identical:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="p">{</span> <span class="nt">&quot;first&quot;</span> <span class="p">:</span> <span class="s2">&quot;fred&quot;</span><span class="p">,</span> <span class="nt">&quot;last&quot;</span> <span class="p">:</span> <span class="s2">&quot;foxx&quot;</span> <span class="p">},</span> <span class="nt">&quot;status&quot;</span> <span class="p">:</span> <span class="s2">&quot;active&quot;</span> <span class="p">}</span>
-</span><span class='line'><span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="p">{</span> <span class="nt">&quot;first&quot;</span> <span class="p">:</span> <span class="s2">&quot;john&quot;</span><span class="p">,</span> <span class="nt">&quot;last&quot;</span> <span class="p">:</span> <span class="s2">&quot;doe&quot;</span> <span class="p">},</span> <span class="nt">&quot;status&quot;</span> <span class="p">:</span> <span class="s2">&quot;inactive&quot;</span> <span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Both documents contain attributes named <code>name</code> and <code>status</code>. <code>name</code> is an
-array with two sub-attributes <code>first</code> and <code>last</code>, which are strings.
-<code>status</code> is also a string in both documents.</p>
-
-<p>ArangoDB will save this schema only once in a so-called <em>shape</em>. The documents
-will store their own data values plus a pointer to this (same) shape.</p>
-
-<p>The next two documents have different, yet unknown schemas. ArangoDB will
-therefore store these two schemas in two new shapes:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;firstName&quot;</span> <span class="p">:</span> <span class="s2">&quot;jack&quot;</span><span class="p">,</span> <span class="nt">&quot;lastName&quot;</span> <span class="p">:</span> <span class="s2">&quot;black&quot;</span><span class="p">,</span> <span class="nt">&quot;status&quot;</span> <span class="p">:</span> <span class="s2">&quot;inactive&quot;</span> <span class="p">}</span>
-</span><span class='line'><span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;username&quot;</span><span class="p">,</span> <span class="nt">&quot;status&quot;</span> <span class="p">:</span> <span class="s2">&quot;unknown&quot;</span> <span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>We would end up with three diferent <em>shapes</em> for the four documents. This
-might not sound impressive, but if more documents are saved with one of the
-existing shapes, then storing each shape just once might really pay out.</p>
-
-<h2>A note on attribute names</h2>
-
-<p>Even though the latter two example documents had unique schemas, we saw in
-the examples that attribute names were already repeating. For example, all
-documents shown so far had an attribute named <code>status</code>, and some also
-had a <code>name</code> attribute.</p>
-
-<p>ArangoDB figures out when attribute names repeat, and it will not store the
-same attribute name more than once in a collection. Given that many
-documents in a collection use a fixed set of repeating attribute names,
-this approach can lead to considerable storage space reductions.</p>
-
-<p>As an aside, reusing attribute name information allows using descriptive
-(read: long) attribute names in ArangoDB with very low storage overhead.</p>
-
-<p>For example, in ArangoDB it will not cost much extra space to use long
-attribute names like these in lots of documents:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;firstNameOfTheUser&quot;</span> <span class="p">:</span> <span class="s2">&quot;jack&quot;</span><span class="p">,</span> <span class="nt">&quot;lastNameOfTheUser&quot;</span> <span class="p">:</span> <span class="s2">&quot;black&quot;</span> <span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>As each unique attribute name is only stored once per collection, there
-is no need to <em>artifically</em> shorten the attribute names just for storage
-space reduction like it is in other schema-free databases:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;fn&quot;</span> <span class="p">:</span> <span class="s2">&quot;jack&quot;</span><span class="p">,</span> <span class="nt">&quot;ln&quot;</span> <span class="p">:</span> <span class="s2">&quot;black&quot;</span> <span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
+same data types).</p>
 
 </div>
   
+  
+    <footer>
+      <a rel="full-article" href="/blog/2014/06/03/schema-handling-in-arangodb/">Read on &rarr;</a>
+    </footer>
   
 
 
@@ -914,9 +292,19 @@ space reduction like it is in other schema-free databases:</p>
 </div>
 <aside class="sidebar">
   
-    <section>
+    
+<section>
+	<span>
+		<img src="http://www.gravatar.com/avatar/ecea2672d02faabcfdcc3400ce7e713a" alt="Gravatar of jsteemann " title="Gravatar of jsteemann" />
+	</span>
+</section>
+<section>
   <h1>Recent Posts</h1>
   <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2014/08/14/why-json/">Why JSON?</a>
+      </li>
     
       <li class="post">
         <a href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Benchmarking ArangoDB&#8217;s Write-ahead Log</a>
@@ -936,6 +324,10 @@ space reduction like it is in other schema-free databases:</p>
 
 
 
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/performance/'>Performance (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
 
   
 </aside>

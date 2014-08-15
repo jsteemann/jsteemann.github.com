@@ -4,7 +4,7 @@
   <title><![CDATA[Category: WAL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/wal/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-08-07T01:51:18+02:00</updated>
+  <updated>2014-08-15T02:15:51+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -18,7 +18,7 @@
     <link href="http://jsteemann.github.io/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/"/>
     <updated>2014-08-07T01:27:04+02:00</updated>
     <id>http://jsteemann.github.io/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log</id>
-    <content type="html"><![CDATA[<h2>Motivation</h2>
+    <content type="html"><![CDATA[<h1>Motivation</h1>
 
 <p>One of the major changes in ArangoDB 2.2 was the introduction of the
 <em>write-ahead log</em> (abbreviated <em>WAL</em>).</p>
@@ -34,9 +34,12 @@ saved in the write-ahead log, there may also be some negative effect.</p>
 
 <p>We developers were of course very interested in seeing the net effects, so
 we ran some tests for a few use cases. We compared ArangoDB 2.1.2 (still without
-the WAL) with ArangoDB 2.2.1 (with the WAL).</p>
+the WAL) with ArangoDB 2.2.1 (with the WAL). The results are interesting.</p>
 
-<h2>Test setup</h2>
+<!-- more -->
+
+
+<h1>Test setup</h1>
 
 <p>To get a broad overview of performance changes, we ran a few different test cases:</p>
 
@@ -64,7 +67,7 @@ arangob                         \
 ArangoDB server was active during each test run, and the other was shut down so
 it didn&rsquo;t compete for system resources.</p>
 
-<h2>Test results</h2>
+<h1>Test results</h1>
 
 <p>Following are the results for the different test cases.</p>
 
@@ -91,7 +94,7 @@ results shown here. We haven&rsquo;t used the most powerful server on earth for 
 these tests. We were most interested in how ArangoDB 2.2 compared to
 ArangoDB 2.1.</p>
 
-<h3>Inserting documents</h3>
+<h2>Inserting documents</h2>
 
 <p>The <code>document</code> test appends new documents (with an identical structure) to a
 collection. Here are the results for inserting a million documents with 100
@@ -136,7 +139,7 @@ all tested configurations. The difference is negligible if the test client is
 single-threaded (one insert thread), but ArangoDB 2.2 is considerably faster than
 ArangoDB 2.1 with more concurrent clients.</p>
 
-<h3>CRUD operations (I)</h3>
+<h2>CRUD operations (I)</h2>
 
 <p>The <code>crud</code> test case inserts a document, fetches it, updates it, fetches it again
 and finally deletes it. Executing 1 million crud operations on documents with 100
@@ -183,7 +186,7 @@ not affect the performance of read and delete operations much: reading a documen
 does not require writing to the WAL at all, and removing a document only requires
 writing a very small remove marker to the WAL.</p>
 
-<h3>CRUD operations (II)</h3>
+<h2>CRUD operations (II)</h2>
 
 <p>The <code>crud-append</code> test case inserts a document, fetches it, updates it, and fetches
 it again. Executing 1 million crud operations on documents with 100 attributes each
@@ -226,7 +229,7 @@ results in the following execution times:
 
 <p>Again, ArangoDB 2.1 and 2.2 are pretty much the same speed for the tested operations.</p>
 
-<h3>Multi-collection write transactions</h3>
+<h2>Multi-collection write transactions</h2>
 
 <p>The <code>multi-collection</code> test stores two documents in two different collections
 transactionally. Here are the results for executing 100,000 transactions for
@@ -275,7 +278,7 @@ far less calls to <code>msync</code> than in ArangoDB 2.1. ArangoDB 2.2 can sync
 of multiple transactions together in one call to <code>msync</code>. ArangoDB 2.1 needed to
 synchronize each transaction separately.</p>
 
-<h3>(Fully) heterogenous documents</h3>
+<h2>(Fully) heterogenous documents</h2>
 
 <p>The <code>random-shapes</code> test inserts documents that have different structures each.
 For each inserted document a new shape will need to be stored. Inserting one million
@@ -334,7 +337,7 @@ operations much faster in case all documents have heterogenous structures.</p>
 shouldn&rsquo;t matter too much already, or ArangoDB 2.2 should already be faster than 2.1
 (as shown in the results above).</p>
 
-<h2>Summary</h2>
+<h1>Summary</h1>
 
 <p>The tests revealed that the overhead of the WAL in ArangoDB 2.2 seems to be
 negligible for most of the tested workloads. In many cases, ArangoDB 2.2 with
@@ -362,7 +365,10 @@ be as fast as 2.1 (or even faster).</p>
 <em>write-ahead log</em> (abbreviated <em>WAL</em>). The introduction of the WAL massively
 changed how data are stored in ArangoDB.</p>
 
-<h2>What&rsquo;s in the WAL?</h2>
+<!-- more -->
+
+
+<h1>What&rsquo;s in the WAL?</h1>
 
 <p>The WAL contains data of all data-modification operations that were executed in
 the ArangoDB server instance. Operations are written to the WAL in the order of
@@ -378,7 +384,7 @@ execution. The following types of operations are logged to the WAL:</p>
 <p>The WAL is used for all databases of an ArangoDB server. Database ids are stored
 in the WAL in order to tell data from different databases apart.</p>
 
-<h2>Recovery using the WAL</h2>
+<h1>Recovery using the WAL</h1>
 
 <p>Should the ArangoDB server crash, it will replay its write-ahead
 logs at restart. Replaying the logs will make the server recover the same
@@ -418,7 +424,7 @@ there is neither an abort nor a commit operation in the log. Because the transac
 was never committed, all of its operations are not replayed at restart and the server
 will behave as if the transaction never happened.</p>
 
-<h2>WAL and replication</h2>
+<h1>WAL and replication</h1>
 
 <p>A side-effect of having a write-ahead log is that it can also be used for replication.
 When a slave server fetches the latest changes from the master, the master can simply
@@ -431,7 +437,7 @@ a replication master without any configuration. Previous versions of ArangoDB (w
 the WAL) required setting up an extra component for replication logging. This
 requirement is now gone.</p>
 
-<h2>Organization of the WAL</h2>
+<h1>Organization of the WAL</h1>
 
 <p>The WAL is actually a collection of logfiles. Logfiles are named <code>logfile-xxxx.db</code>
 (with xxxx being the logfile&rsquo;s id). Logfiles with lower ids are older than logfiles
@@ -456,7 +462,7 @@ of the active logfile.</p>
 <p>By default, each logfile has a size of 32 MB, allowing lots of operations to be stored
 in it. If you want to adjust the default size, the option <code>--wal.logfile-size</code> is for you.</p>
 
-<h2>Logfile synchronization</h2>
+<h1>Logfile synchronization</h1>
 
 <p>Writes to logfiles are synchronized to disk automatically in a configurable interval
 (the option to look for is <code>--wal.sync-interval</code>). To get immediate synchronization
@@ -483,7 +489,7 @@ operations are synchronized together because they reside in adjacent memory regi
 That means automatic synchronization can get away with far less calls to <code>msync</code> than
 there are operations.</p>
 
-<h2>Storage overhead</h2>
+<h1>Storage overhead</h1>
 
 <p>Documents stored in the WAL (as part of an insert, update or replace operation) are
 stored in a format that contains the document values plus the document&rsquo;s shape.
@@ -512,7 +518,7 @@ setting the option to <code>true</code> won&rsquo;t help much. It will help a lo
 that are stored have different shapes (which we consider unrealistic, but we still
 provide the option to reduce overhead in this case).</p>
 
-<h2>WAL cleanup</h2>
+<h1>WAL cleanup</h1>
 
 <p>WAL logfiles that are completely filled are subject to garbage collection. WAL
 garbage collection is performed by a separate garbage collector thread. The thread
@@ -538,7 +544,7 @@ re-established.</p>
 <p>If network connections are reliable or no replication is to be used at all, the
 number of historic logfiles can be set to a low value to save disk space.</p>
 
-<h2>Side-effects of the WAL</h2>
+<h1>Side-effects of the WAL</h1>
 
 <p>The WAL can be used for replication, removing the requirement to explicitly turn
 on the separate logging of operations for replication purposes. This is a clear

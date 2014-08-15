@@ -32,6 +32,18 @@ The structure is saved once for the table, and the &hellip;">
 <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
 
   
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
 
 </head>
 
@@ -92,15 +104,20 @@ The structure is saved once for the table, and the &hellip;">
   </header>
 
 
-<div class="entry-content"><h2>Schemas vs. schema-free</h2>
+<div class="entry-content"><h1>Schemas vs. schema-free</h1>
 
 <p>In a relational database, all rows in a table have the same structure.
 The structure is saved once for the table, and the invidiual rows only
 contain the row&rsquo;s values. This is an efficient approach if all records
 have the exact same structure, i.e. the same attributes (same names and
-same data types):</p>
+same data types).</p>
 
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<!-- more -->
+
+
+
+
+<figure class='code'><figcaption><span>Example records </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
@@ -131,7 +148,7 @@ the complete table. This is especially true if most (or even all) records
 in the table do have the same structure. A lot of storage space can be
 wasted while storing the same structure information again and again and again&hellip;</p>
 
-<h2>Schemas in ArangoDB</h2>
+<h1>Schemas in ArangoDB</h1>
 
 <p>ArangoDB tries to be different in this respect: on the one hand it is a
 schema-free database and thus allows <em>flexible storage</em>. All documents in a
@@ -140,8 +157,12 @@ or totally different structures. We leave this choice up to the user.</p>
 
 <p>On the other hand, ArangoDB will exploit the similarities in document
 structures to <em>save storage space</em>. It will detect identical document
-schemas, and only save each unique schema once.
-We optimized ArangoDB for this use case because we found that in reality, the
+schemas, and only save each unique schema once. This process is called
+<strong>shaping</strong> in ArangoDB.</p>
+
+<h2>Shaping</h2>
+
+<p>We optimized ArangoDB for this use case because we found that in reality, the
 documents in a collection will either have absolutely the same schema, or
 there will only be a few different schemas in use.</p>
 
@@ -183,8 +204,8 @@ identical:</p>
 
 
 <p>Both documents contain attributes named <code>name</code> and <code>status</code>. <code>name</code> is an
-array with two sub-attributes <code>first</code> and <code>last</code>, which are strings.
-<code>status</code> is also a string in both documents.</p>
+array with two sub-attributes <code>first</code> and <code>last</code>, which are both strings.
+<code>status</code> also has string values in both documents.</p>
 
 <p>ArangoDB will save this schema only once in a so-called <em>shape</em>. The documents
 will store their own data values plus a pointer to this (same) shape.</p>
@@ -226,16 +247,21 @@ attribute names like these in lots of documents:</p>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>As each unique attribute name is only stored once per collection, there
-is no need to <em>artifically</em> shorten the attribute names just for storage
-space reduction like it is in other schema-free databases:</p>
+<p>Each unique attribute name is only stored once per collection. In ArangoDB
+there is thus no need to <em>artifically</em> shorten the attribute names in data
+like it sometimes is done in other schema-free databases to save storage
+space:</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 </pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;fn&quot;</span> <span class="p">:</span> <span class="s2">&quot;jack&quot;</span><span class="p">,</span> <span class="nt">&quot;ln&quot;</span> <span class="p">:</span> <span class="s2">&quot;black&quot;</span> <span class="p">}</span>
 </span></code></pre></td></tr></table></div></figure>
 
 
-
+<p>This artifical crippling of the attribute names makes the meaning of the
+attributes quite unclear and should be avoided. As mentioned, it is not
+necessary to do this in ArangoDB as it will save attribute names separate
+from attribute values, and repeating attribute names are not stored
+repeatedly.</p>
 </div>
 
 
@@ -263,7 +289,7 @@ space reduction like it is in other schema-free databases:</p>
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/concepts/'>concepts</a>, <a class='category' href='/blog/categories/schemas/'>schemas</a>
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/concepts/'>Concepts</a>, <a class='category' href='/blog/categories/schemas/'>Schemas</a>
   
 </span>
 
@@ -292,9 +318,19 @@ space reduction like it is in other schema-free databases:</p>
 
 <aside class="sidebar">
   
-    <section>
+    
+<section>
+	<span>
+		<img src="http://www.gravatar.com/avatar/ecea2672d02faabcfdcc3400ce7e713a" alt="Gravatar of jsteemann " title="Gravatar of jsteemann" />
+	</span>
+</section>
+<section>
   <h1>Recent Posts</h1>
   <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2014/08/14/why-json/">Why JSON?</a>
+      </li>
     
       <li class="post">
         <a href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Benchmarking ArangoDB's Write-ahead Log</a>
@@ -314,6 +350,10 @@ space reduction like it is in other schema-free databases:</p>
 
 
 
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/performance/'>Performance (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
 
   
 </aside>

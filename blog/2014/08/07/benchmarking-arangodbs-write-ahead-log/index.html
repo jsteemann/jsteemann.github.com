@@ -32,6 +32,18 @@ write-ahead log (abbreviated WAL). The introduction of the WAL &hellip;">
 <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
 
   
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
 
 </head>
 
@@ -92,7 +104,7 @@ write-ahead log (abbreviated WAL). The introduction of the WAL &hellip;">
   </header>
 
 
-<div class="entry-content"><h2>Motivation</h2>
+<div class="entry-content"><h1>Motivation</h1>
 
 <p>One of the major changes in ArangoDB 2.2 was the introduction of the
 <em>write-ahead log</em> (abbreviated <em>WAL</em>).</p>
@@ -108,9 +120,12 @@ saved in the write-ahead log, there may also be some negative effect.</p>
 
 <p>We developers were of course very interested in seeing the net effects, so
 we ran some tests for a few use cases. We compared ArangoDB 2.1.2 (still without
-the WAL) with ArangoDB 2.2.1 (with the WAL).</p>
+the WAL) with ArangoDB 2.2.1 (with the WAL). The results are interesting.</p>
 
-<h2>Test setup</h2>
+<!-- more -->
+
+
+<h1>Test setup</h1>
 
 <p>To get a broad overview of performance changes, we ran a few different test cases:</p>
 
@@ -142,7 +157,7 @@ complexity settings and repeated several times. <code>arangob</code> was invoked
 ArangoDB server was active during each test run, and the other was shut down so
 it didn&rsquo;t compete for system resources.</p>
 
-<h2>Test results</h2>
+<h1>Test results</h1>
 
 <p>Following are the results for the different test cases.</p>
 
@@ -169,7 +184,7 @@ results shown here. We haven&rsquo;t used the most powerful server on earth for 
 these tests. We were most interested in how ArangoDB 2.2 compared to
 ArangoDB 2.1.</p>
 
-<h3>Inserting documents</h3>
+<h2>Inserting documents</h2>
 
 <p>The <code>document</code> test appends new documents (with an identical structure) to a
 collection. Here are the results for inserting a million documents with 100
@@ -220,7 +235,7 @@ all tested configurations. The difference is negligible if the test client is
 single-threaded (one insert thread), but ArangoDB 2.2 is considerably faster than
 ArangoDB 2.1 with more concurrent clients.</p>
 
-<h3>CRUD operations (I)</h3>
+<h2>CRUD operations (I)</h2>
 
 <p>The <code>crud</code> test case inserts a document, fetches it, updates it, fetches it again
 and finally deletes it. Executing 1 million crud operations on documents with 100
@@ -273,7 +288,7 @@ not affect the performance of read and delete operations much: reading a documen
 does not require writing to the WAL at all, and removing a document only requires
 writing a very small remove marker to the WAL.</p>
 
-<h3>CRUD operations (II)</h3>
+<h2>CRUD operations (II)</h2>
 
 <p>The <code>crud-append</code> test case inserts a document, fetches it, updates it, and fetches
 it again. Executing 1 million crud operations on documents with 100 attributes each
@@ -322,7 +337,7 @@ results in the following execution times:</p>
 
 <p>Again, ArangoDB 2.1 and 2.2 are pretty much the same speed for the tested operations.</p>
 
-<h3>Multi-collection write transactions</h3>
+<h2>Multi-collection write transactions</h2>
 
 <p>The <code>multi-collection</code> test stores two documents in two different collections
 transactionally. Here are the results for executing 100,000 transactions for
@@ -377,7 +392,7 @@ far less calls to <code>msync</code> than in ArangoDB 2.1. ArangoDB 2.2 can sync
 of multiple transactions together in one call to <code>msync</code>. ArangoDB 2.1 needed to
 synchronize each transaction separately.</p>
 
-<h3>(Fully) heterogenous documents</h3>
+<h2>(Fully) heterogenous documents</h2>
 
 <p>The <code>random-shapes</code> test inserts documents that have different structures each.
 For each inserted document a new shape will need to be stored. Inserting one million
@@ -445,7 +460,7 @@ operations much faster in case all documents have heterogenous structures.</p>
 shouldn&rsquo;t matter too much already, or ArangoDB 2.2 should already be faster than 2.1
 (as shown in the results above).</p>
 
-<h2>Summary</h2>
+<h1>Summary</h1>
 
 <p>The tests revealed that the overhead of the WAL in ArangoDB 2.2 seems to be
 negligible for most of the tested workloads. In many cases, ArangoDB 2.2 with
@@ -488,7 +503,7 @@ be as fast as 2.1 (or even faster).</p>
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/wal/'>WAL</a>, <a class='category' href='/blog/categories/performance/'>performance</a>
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/performance/'>Performance</a>, <a class='category' href='/blog/categories/wal/'>WAL</a>
   
 </span>
 
@@ -509,6 +524,8 @@ be as fast as 2.1 (or even faster).</p>
         <a class="basic-alignment left" href="/blog/2014/08/06/how-arangodbs-write-ahead-log-works/" title="Previous Post: How ArangoDB's write-ahead log works">&laquo; How ArangoDB's write-ahead log works</a>
       
       
+        <a class="basic-alignment right" href="/blog/2014/08/14/why-json/" title="Next Post: Why JSON?">Why JSON? &raquo;</a>
+      
     </p>
   </footer>
 </article>
@@ -517,9 +534,19 @@ be as fast as 2.1 (or even faster).</p>
 
 <aside class="sidebar">
   
-    <section>
+    
+<section>
+	<span>
+		<img src="http://www.gravatar.com/avatar/ecea2672d02faabcfdcc3400ce7e713a" alt="Gravatar of jsteemann " title="Gravatar of jsteemann" />
+	</span>
+</section>
+<section>
   <h1>Recent Posts</h1>
   <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2014/08/14/why-json/">Why JSON?</a>
+      </li>
     
       <li class="post">
         <a href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Benchmarking ArangoDB's Write-ahead Log</a>
@@ -539,6 +566,10 @@ be as fast as 2.1 (or even faster).</p>
 
 
 
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/performance/'>Performance (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
 
   
 </aside>
