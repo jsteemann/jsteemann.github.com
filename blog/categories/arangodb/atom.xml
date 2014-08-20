@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-08-15T02:15:51+02:00</updated>
+  <updated>2014-08-21T00:18:21+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,171 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Speeding Up Server-side Operations]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/08/20/speeding-up-server-side-operations/"/>
+    <updated>2014-08-20T22:02:09+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/08/20/speeding-up-server-side-operations</id>
+    <content type="html"><![CDATA[<p>Sometimes it is easier to make server-side operations run a bit faster.
+In the following post I&rsquo;ll show a few low-level optimizations that can
+be applied to user-defined JavaScript code that is executed inside the
+ArangoDB server.</p>
+
+<!-- more -->
+
+
+<h1>Scope</h1>
+
+<p>Some data-access operations can be sped up by using the appropriate indexes,
+but that&rsquo;s not what I am going to show here.
+Instead, I want to demo a few easy optimizations that don&rsquo;t require any
+changes to the data. Only JavaScript code needs to be minimally adjusted
+to use them.</p>
+
+<p>Note that I am not talking about code that is executed in the ArangoShell
+here. I will only be looking at code that is executed inside the arangod
+server instance. The natural places for using custom JavaScript code in
+the ArangoDB server are for example:</p>
+
+<ul>
+<li><a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a> controllers</li>
+<li><a href="http://docs.arangodb.org/Transactions/TransactionInvocation.html">transactions</a></li>
+<li><a href="http://docs.arangodb.org/ModuleTasks/README.html">tasks</a></li>
+</ul>
+
+
+<p>Of course it does not make much sense to optimize operations that are not
+called very often. The code changes I show will only be useful for server-side
+operations that are called very often, for example, from within loops or
+from batch processing actions.</p>
+
+<p>Before starting to change any code, please make sure that the code is executed
+often and that it accounts for a significant part of the total execution time.</p>
+
+<h2>Baseline</h2>
+
+<p>Imagine the following custom JavaScript code running somewhere inside ArangoDB:
+<code>js baseline
+for (var i = 0; i &lt; 100000; ++i) {
+  db.test.save({ value: 1 });
+}
+</code>
+This code inserts 100,000 documents into a collection <code>test</code>. Each document has
+one attribute only. These numbers are arbitrary, but good enough for a demo.</p>
+
+<p>What can we do to improve the runtime of the above code?</p>
+
+<h2>Non-optimizations</h2>
+
+<p>The <code>for</code> statement itself is not worth optimizing. It won&rsquo;t matter much if we used
+pre-increment or post-increment for the loop induction variable <code>i</code> or if we
+turned the <code>for</code> loop into a <code>while</code> loop. Any changes here might only save us a
+few nanoseconds in total, but are likely to make the code more unreadable.</p>
+
+<p>Let&rsquo;s not do that!</p>
+
+<h2>Avoiding accessors</h2>
+
+<p>Clearly, we should be looking at the <code>save</code> operation.</p>
+
+<p><code>db.test.save()</code> looks like a function call, and we learned that function are
+expensive. In this case, we cannot avoid the function call to <code>save()</code>, but we
+can avoid another <em>hidden function call</em>. Yes, <code>db.test</code> actually calls a function,
+though it does not look like it does.</p>
+
+<p>The <code>db</code> object has auto-magic member attributes. The <code>db</code> object will have a
+member attribute for existing collection. The member will automatically vanish when
+a collection gets dropped, and the member will rename itself when collections are
+renamed.</p>
+
+<p>This magic is made possible by late-binding attributes and using accessor functions
+for attribute accesses on the <code>db</code> object: whenever the attributes of the <code>db</code> object
+are queried, an accessor function (<code>property query</code>) is called internally to compile
+them. Accessing a specific attribute of the <code>db</code> object will also call an accessor
+function (<code>property get</code>). This is exactly what happens in our case when we access
+<code>db.test</code>.</p>
+
+<p>If this was too complicated, it may become more obvious if we modified the original
+code to this:
+<code>js using attribute lookup
+for (var i = 0; i &lt; 100000; ++i) {
+  db['test'].save({ value: 1 });
+}
+</code>
+Now it should be obvious that accessing <code>test</code> requires an attribute lookup on the
+<code>db</code> object, and behind the scenes the same will happen if we had written <code>db.test</code>
+instead.</p>
+
+<p>Let&rsquo;s avoid the repeated call to the accessor function inside the loop! This can
+easily be achieved by assigning <code>db.test</code> to a variable once and forever outside
+of the loop. This technique is called loop-invariant code motion, and it can be
+applied in a lot of other situations, too:
+<code>js loop-invariant code motion
+var collection = db.test;
+for (var i = 0; i &lt; 100000; ++i) {
+  collection.save({ value: 1 });
+}
+</code>
+(on a side note: you cannot assign <code>db.test.save</code> to a variable and call it as a
+function)</p>
+
+<h2>Enjoying the silence</h2>
+
+<p>The <code>save</code> operation is chatty. Every time it is called, it will return some meta
+data of the just-inserted document, e.g.:
+<code>json save result
+{
+  "_id" : "test/11443981931568",
+  "_rev" : "11443981931568",
+  "_key" : "11443981931568"
+}
+</code>
+In our case, we&rsquo;re not interested in these returned values, and we don&rsquo;t
+capture them in a variable.
+The <code>save</code> function doesn&rsquo;t know this and will happily assemble its
+result array. The array consists of three string values (six when also counting
+attribute names). Setting up the result definitely requires costly
+memory allocations and string copying.</p>
+
+<p>We can avoid all this by passing an <code>options</code> parameter into <code>save</code>, and setting
+its <code>silent</code> attribute to <code>true</code>:
+<code>js silence option
+for (var i = 0; i &lt; 100000; ++i) {
+  db.test.save({ value: 1 }, { silent: true });
+}
+</code>
+Now <code>save()</code> will only return a boolean value, which is much quicker.</p>
+
+<h1>Results</h1>
+
+<p>How far have we got with these minimal code adjustments?</p>
+
+<p>I have put together a <a href="/downloads/code/speeding-up-server.js">script</a>
+that can be run in arangod that will run the different
+versions of the loop 10 times each and time the execution. The minimum, maximum and
+average execution times are printed (in seconds, less is better).</p>
+
+<p>Here&rsquo;s an excerpt of the script&rsquo;s output:</p>
+
+<p>```</p>
+
+<h2>test name       |   min/run (s) |   max/run (s) |   avg/run (s) </h2>
+
+<p>baseline        |        1.3064 |        1.3748 |        1.3214
+loop-invariant  |        1.0501 |        1.0996 |        1.0655
+silence         |        1.0829 |        1.1202 |        1.0991
+combined        |        0.8353 |        0.8825 |        0.8555
+<code>``
+As can be seen, moving the loop-invariant accessor function call outside of the
+loop provided an almost 20% speedup (from 1.32 to 1.06 s). Using the</code>silence`
+option alone was in the same ballpark. Combining the two already provided a 35%
+speedup.</p>
+
+<p>Your mileage may vary. Please feel free to adjust the test script and run your
+own tests.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Why JSON?]]></title>
@@ -33,11 +198,14 @@ some alternative formats and present my personal opinion on why
 using a different format may not provide too much benefit for us,
 at least at the moment.</p>
 
-<p>This does not intend to say that any of these formats are better or
-worse.</p>
-
 <!-- more -->
 
+
+<p>This post does not intend to say that any of these formats are better
+or worse in general. I think there are applications for all of them.</p>
+
+<p>However, I wanted to look at the different formats with our specific
+use case, i.e. a RESTful database, in mind.</p>
 
 <h1>What I don&rsquo;t like about JSON</h1>
 
@@ -200,7 +368,8 @@ other things.</p>
 
 <p>It&rsquo;s human-readable, understandable, has a good standard type system
 and is extensible. But if you thought that JSON is already inefficient
-and verbose, try using XML and have fun.</p>
+and verbose, try using XML and have fun. A colleague of mine even
+claimed that XML is not human-readable due to its chattyness.</p>
 
 <p>XML also hasn&rsquo;t been adopted much in the JavaScript community, and we
 need to find a format that plays nicely with JavaScript.</p>

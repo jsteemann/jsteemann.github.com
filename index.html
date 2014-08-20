@@ -9,9 +9,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="To JSON or not? We&rsquo;re often asked why ArangoDB uses JSON as its
-data-interchange format for transferring documents from clients to
-the database &hellip;">
+  <meta name="description" content="Sometimes it is easier to make server-side operations run a bit faster.
+In the following post I&rsquo;ll show a few low-level optimizations that can &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -85,6 +84,50 @@ the database &hellip;">
       
   <header>
     
+      <h1 class="entry-title"><a href="/blog/2014/08/20/speeding-up-server-side-operations/">Speeding Up Server-side Operations</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-08-20T22:02:09+02:00" pubdate data-updated="true">Aug 20<span>th</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>Sometimes it is easier to make server-side operations run a bit faster.
+In the following post I&rsquo;ll show a few low-level optimizations that can
+be applied to user-defined JavaScript code that is executed inside the
+ArangoDB server.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2014/08/20/speeding-up-server-side-operations/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
       <h1 class="entry-title"><a href="/blog/2014/08/14/why-json/">Why JSON?</a></h1>
     
     
@@ -122,9 +165,6 @@ we picked JSON as the interchange format, and why we still use it.</p>
 some alternative formats and present my personal opinion on why
 using a different format may not provide too much benefit for us,
 at least at the moment.</p>
-
-<p>This does not intend to say that any of these formats are better or
-worse.</p>
 
 </div>
   
@@ -303,6 +343,10 @@ same data types).</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2014/08/20/speeding-up-server-side-operations/">Speeding Up Server-side Operations</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2014/08/14/why-json/">Why JSON?</a>
       </li>
     
@@ -326,7 +370,7 @@ same data types).</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/performance/'>Performance (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (1)</a></li><li><a href='/blog/categories/performance/'>Performance (2)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 
   

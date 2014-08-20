@@ -16,11 +16,15 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/08/14/why-json/</loc>
-        <lastmod>2014-08-15T02:15:47+02:00</lastmod>
+        <lastmod>2014-08-20T22:09:30+02:00</lastmod>
+    </url>
+    <url>
+        <loc>http://jsteemann.github.io/blog/2014/08/20/speeding-up-server-side-operations/</loc>
+        <lastmod>2014-08-21T00:16:17+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2014-08-15T02:15:47+02:00</lastmod>
+        <lastmod>2014-08-21T00:16:17+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -28,6 +32,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2014-08-15T02:15:47+02:00</lastmod>
+        <lastmod>2014-08-21T00:16:17+02:00</lastmod>
     </url>
 </urlset>

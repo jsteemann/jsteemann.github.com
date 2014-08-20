@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Concepts | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/concepts/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-08-15T02:15:51+02:00</updated>
+  <updated>2014-08-21T00:18:21+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -33,11 +33,14 @@ some alternative formats and present my personal opinion on why
 using a different format may not provide too much benefit for us,
 at least at the moment.</p>
 
-<p>This does not intend to say that any of these formats are better or
-worse.</p>
-
 <!-- more -->
 
+
+<p>This post does not intend to say that any of these formats are better
+or worse in general. I think there are applications for all of them.</p>
+
+<p>However, I wanted to look at the different formats with our specific
+use case, i.e. a RESTful database, in mind.</p>
 
 <h1>What I don&rsquo;t like about JSON</h1>
 
@@ -200,7 +203,8 @@ other things.</p>
 
 <p>It&rsquo;s human-readable, understandable, has a good standard type system
 and is extensible. But if you thought that JSON is already inefficient
-and verbose, try using XML and have fun.</p>
+and verbose, try using XML and have fun. A colleague of mine even
+claimed that XML is not human-readable due to its chattyness.</p>
 
 <p>XML also hasn&rsquo;t been adopted much in the JavaScript community, and we
 need to find a format that plays nicely with JavaScript.</p>
