@@ -58,24 +58,33 @@ var testRunner = function () {
 
     var headLength = 15, 
         runsLength = 8, 
-        cellLength = 14, 
+        cellLength = 12, 
         sep = " | ",
-        lineLength = headLength + runsLength + 5 * cellLength + 4 * sep.length;
+        lineLength = headLength + 2 * runsLength + 5 * cellLength + 5 * sep.length - 1;
     
     print(pad("test name", headLength, "right") + sep +  
           pad("runs", runsLength, "left") + sep +
           pad("total (s)", cellLength, "left") + sep +
-          pad("min/run (s)", cellLength, "left") + sep +
-          pad("max/run (s)", cellLength, "left") + sep +
-          pad("avg/run (s)", cellLength, "left") + sep +
-          pad("avg2/run (s)",cellLength, "left"));
+          pad("min (s)", cellLength, "left") + sep +
+          pad("max (s)", cellLength, "left") + sep +
+          pad("avg (s)", cellLength, "left") + sep +
+          pad("final (s)", cellLength, "left") + sep +
+          pad("%", runsLength, "left"));
  
     print(Array(lineLength).join("-"));
 
-    var i;
+    var i, baseline;
     for (i = 0; i < tests.length; ++i) {
       var test = tests[i];
       var stats = calc(measure(test, options), options); 
+
+      if (i === 0) {
+        stats.rat = 100;
+        baseline = stats.har;
+      }
+      else {
+        stats.rat = 100 * stats.har / baseline;
+      }
   
       print(pad(test.name, headLength, "right") + sep +  
             pad(String(options.runs), runsLength, "left") + sep +
@@ -83,7 +92,8 @@ var testRunner = function () {
             pad(stats.min.toFixed(options.digits), cellLength, "left") + sep +
             pad(stats.max.toFixed(options.digits), cellLength, "left") + sep + 
             pad(stats.avg.toFixed(options.digits), cellLength, "left") + sep + 
-            pad(stats.har.toFixed(options.digits), cellLength, "left")); 
+            pad(stats.har.toFixed(options.digits), cellLength, "left") + sep + 
+            pad(stats.rat.toFixed(2), runsLength, "left")); 
     }
   };
 
@@ -133,13 +143,35 @@ var silence = function (params) {
   }
 };
 
+// using "transaction" option
+var transaction = function (params) {
+  db._executeTransaction({
+    collections: {
+      write: "test" 
+    },
+    action: function () {
+      var i, n = params.n;
+      for (i = 0; i < n; ++i) { 
+        db.test.save({ value: 1 }, { silent: true });
+      }
+    }
+  });
+};
+
 // combination of avoiding the accessor call and the "silent" option
 var combined = function (params) {
-  var i, n = params.n;
-  var c = db.test;
-  for (i = 0; i < n; ++i) { 
-    c.save({ value: 1 }, { silent: true });
-  }
+  db._executeTransaction({
+    collections: {
+      write: "test" 
+    },
+    action: function () {
+      var i, n = params.n;
+      var c = db.test;
+      for (i = 0; i < n; ++i) { 
+        c.save({ value: 1 }, { silent: true });
+      }
+    }
+  });
 };
 
 // test parameters
@@ -159,6 +191,7 @@ var tests = [
   { name: "baseline",       setup: setup, teardown: teardown, params: params, func: baseline },
   { name: "loop-invariant", setup: setup, teardown: teardown, params: params, func: invariant },
   { name: "silence",        setup: setup, teardown: teardown, params: params, func: silence },
+  { name: "transaction",    setup: setup, teardown: teardown, params: params, func: transaction },
   { name: "combined",       setup: setup, teardown: teardown, params: params, func: combined }
 ];
 

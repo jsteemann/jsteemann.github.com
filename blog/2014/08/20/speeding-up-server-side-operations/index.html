@@ -129,6 +129,7 @@ the ArangoDB server are for example:</p>
 <li><a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a> controllers</li>
 <li><a href="http://docs.arangodb.org/Transactions/TransactionInvocation.html">transactions</a></li>
 <li><a href="http://docs.arangodb.org/ModuleTasks/README.html">tasks</a></li>
+<li><a href="http://docs.arangodb.org/Traversals/README.html">traversals</a></li>
 </ul>
 
 
@@ -160,9 +161,9 @@ one attribute only. These numbers are arbitrary, but good enough for a demo.</p>
 
 <h2>Non-optimizations</h2>
 
-<p>The <code>for</code> statement itself is not worth optimizing. It won&rsquo;t matter much if we used
+<p>The <em>for</em> statement itself is not worth optimizing. It won&rsquo;t matter much if we used
 pre-increment or post-increment for the loop induction variable <code>i</code> or if we
-turned the <code>for</code> loop into a <code>while</code> loop. Any changes here might only save us a
+turned the <em>for</em> loop into a <em>while</em> loop. Any changes here might only save us a
 few nanoseconds in total, but are likely to make the code more unreadable.</p>
 
 <p>Let&rsquo;s not do that!</p>
@@ -183,9 +184,9 @@ renamed.</p>
 
 <p>This magic is made possible by late-binding attributes and using accessor functions
 for attribute accesses on the <code>db</code> object: whenever the attributes of the <code>db</code> object
-are queried, an accessor function (<code>property query</code>) is called internally to compile
+are queried, an accessor function (<em>property query</em>) is called internally to compile
 them. Accessing a specific attribute of the <code>db</code> object will also call an accessor
-function (<code>property get</code>). This is exactly what happens in our case when we access
+function (<em>property get</em>). This is exactly what happens in our case when we access
 <code>db.test</code>.</p>
 
 <p>If this was too complicated, it may become more obvious if we modified the original
@@ -226,7 +227,7 @@ function)</p>
 <h2>Enjoying the silence</h2>
 
 <p>The <code>save</code> operation is chatty. Every time it is called, it will return some meta
-data of the just-inserted document, e.g.:</p>
+data from the just-inserted document, e.g.:</p>
 
 <figure class='code'><figcaption><span>save result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -248,7 +249,7 @@ result array. The array consists of three string values (six when also counting
 attribute names). Setting up the result definitely requires costly
 memory allocations and string copying.</p>
 
-<p>We can avoid all this by passing an <code>options</code> parameter into <code>save</code>, and setting
+<p>We can avoid all this by passing an <em>options</em> parameter into <code>save</code>, and setting
 its <code>silent</code> attribute to <code>true</code>:</p>
 
 <figure class='code'><figcaption><span>silence option</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
@@ -262,36 +263,77 @@ its <code>silent</code> attribute to <code>true</code>:</p>
 
 <p>Now <code>save()</code> will only return a boolean value, which is much quicker.</p>
 
-<h1>Results</h1>
+<h2>Transactions</h2>
 
-<p>How far have we got with these minimal code adjustments?</p>
+<p>Yet another alternative is use to wrap the operations in the loop into a
+transaction. Transaction themselves won&rsquo;t buy us much feature-wise, so why use
+them? The reason is simple: if we do not use a transaction ourselves, each
+<code>save</code> operation will implicitly be executed in a transaction of its own.
+For a loop with 100,000 operations, that will be 100K transactions!</p>
 
-<p>I have put together a <a href="/downloads/code/speeding-up-server.js">script</a>
-that can be run in arangod that will run the different
-versions of the loop 10 times each and time the execution. The minimum, maximum and
-average execution times are printed (in seconds, less is better).</p>
+<p>So when we put all the operations into a single, now explicit transaction,
+we can save the overhead of 99,999 transaction begin and commit operations.
+Here&rsquo;s how to do it:</p>
 
-<p>Here&rsquo;s an excerpt of the script&rsquo;s output:</p>
-
-<figure class='code'><figcaption><span>silence option</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span>transaction</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
 <span class='line-number'>5</span>
 <span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span> <span class="nx">name</span>       <span class="o">|</span>   <span class="nx">min</span><span class="o">/</span><span class="nx">run</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>   <span class="nx">max</span><span class="o">/</span><span class="nx">run</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>   <span class="nx">avg</span><span class="o">/</span><span class="nx">run</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span>
-</span><span class='line'><span class="o">---------------------------------------------------------------</span>
-</span><span class='line'><span class="nx">baseline</span>        <span class="o">|</span>        <span class="mf">1.3064</span> <span class="o">|</span>        <span class="mf">1.3748</span> <span class="o">|</span>        <span class="mf">1.3214</span>
-</span><span class='line'><span class="nx">loop</span><span class="o">-</span><span class="nx">invariant</span>  <span class="o">|</span>        <span class="mf">1.0501</span> <span class="o">|</span>        <span class="mf">1.0996</span> <span class="o">|</span>        <span class="mf">1.0655</span>
-</span><span class='line'><span class="nx">silence</span>         <span class="o">|</span>        <span class="mf">1.0829</span> <span class="o">|</span>        <span class="mf">1.1202</span> <span class="o">|</span>        <span class="mf">1.0991</span>
-</span><span class='line'><span class="nx">combined</span>        <span class="o">|</span>        <span class="mf">0.8353</span> <span class="o">|</span>        <span class="mf">0.8825</span> <span class="o">|</span>        <span class="mf">0.8555</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_executeTransaction</span><span class="p">({</span>
+</span><span class='line'>  <span class="nx">collections</span><span class="o">:</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">write</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span>
+</span><span class='line'>  <span class="p">},</span>
+</span><span class='line'>  <span class="nx">action</span><span class="o">:</span> <span class="kd">function</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="mi">100000</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nx">db</span><span class="p">.</span><span class="nx">test</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">value</span><span class="o">:</span> <span class="mi">1</span> <span class="p">});</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h1>Results</h1>
+
+<p>How far have we got with these minimal code adjustments?</p>
+
+<p>I have put together a <a href="/downloads/code/speeding-up-server.js">script</a>
+that can be run in arangod. The script will run each version of the loop
+10 times and time the execution. The minimum, maximum and
+average execution times are printed (in seconds, less is better). Note that
+the absolute times do not matter much here. Please have a look at the percentage
+column, which shows the execution time of each variant in comparison to the
+baseline.</p>
+
+<p>Here&rsquo;s an excerpt of the script&rsquo;s output:</p>
+
+<figure class='code'><figcaption><span>transaction</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span> <span class="nx">name</span>      <span class="o">|</span>   <span class="nx">total</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>     <span class="nx">min</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>     <span class="nx">max</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>    <span class="nx">avg2</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>       <span class="o">%</span>
+</span><span class='line'><span class="o">--------------------------------------------------------------------------------</span>
+</span><span class='line'><span class="nx">baseline</span>       <span class="o">|</span>     <span class="mf">13.0940</span> <span class="o">|</span>      <span class="mf">1.2907</span> <span class="o">|</span>      <span class="mf">1.3357</span> <span class="o">|</span>      <span class="mf">1.3084</span> <span class="o">|</span>  <span class="mf">100.00</span>
+</span><span class='line'><span class="nx">loop</span><span class="o">-</span><span class="nx">invariant</span> <span class="o">|</span>     <span class="mf">10.6888</span> <span class="o">|</span>      <span class="mf">1.0506</span> <span class="o">|</span>      <span class="mf">1.1042</span> <span class="o">|</span>      <span class="mf">1.0667</span> <span class="o">|</span>   <span class="mf">81.53</span>
+</span><span class='line'><span class="nx">silence</span>        <span class="o">|</span>     <span class="mf">11.7186</span> <span class="o">|</span>      <span class="mf">1.1512</span> <span class="o">|</span>      <span class="mf">1.2247</span> <span class="o">|</span>      <span class="mf">1.1678</span> <span class="o">|</span>   <span class="mf">89.25</span>
+</span><span class='line'><span class="nx">transaction</span>    <span class="o">|</span>     <span class="mf">10.1521</span> <span class="o">|</span>      <span class="mf">0.9987</span> <span class="o">|</span>      <span class="mf">1.0346</span> <span class="o">|</span>      <span class="mf">1.0149</span> <span class="o">|</span>   <span class="mf">77.56</span>
+</span><span class='line'><span class="nx">combined</span>       <span class="o">|</span>      <span class="mf">7.8545</span> <span class="o">|</span>      <span class="mf">0.7768</span> <span class="o">|</span>      <span class="mf">0.7977</span> <span class="o">|</span>      <span class="mf">0.7850</span> <span class="o">|</span>   <span class="mf">59.99</span>
 </span></code></pre></td></tr></table></div></figure>
 
 
 <p>As can be seen, moving the loop-invariant accessor function call outside of the
-loop provided an almost 20% speedup (from 1.32 to 1.06 s). Using the <code>silence</code>
-option alone was in the same ballpark. Combining the two already provided a 35%
-speedup.</p>
+loop provided an almost 20% speedup (from 1.30 to 1.06 s). Using the silence
+option did also provide some, but not the same speedup. Using transactions reduced
+the execution time, and by putting all this together, a reduction of about 40 %
+was achieved.</p>
 
 <p>Your mileage may vary. Please feel free to adjust the test script and run your
 own tests.</p>
@@ -343,6 +385,8 @@ own tests.</p>
         <a class="basic-alignment left" href="/blog/2014/08/14/why-json/" title="Previous Post: Why JSON?">&laquo; Why JSON?</a>
       
       
+        <a class="basic-alignment right" href="/blog/2014/08/30/understanding-where-operations-are-executed/" title="Next Post: Understanding where operations are executed">Understanding where operations are executed &raquo;</a>
+      
     </p>
   </footer>
 </article>
@@ -362,6 +406,10 @@ own tests.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2014/08/30/understanding-where-operations-are-executed/">Understanding Where Operations Are Executed</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2014/08/20/speeding-up-server-side-operations/">Speeding Up Server-side Operations</a>
       </li>
     
@@ -377,10 +425,6 @@ own tests.</p>
         <a href="/blog/2014/08/06/how-arangodbs-write-ahead-log-works/">How ArangoDB's Write-ahead Log Works</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2014/06/03/schema-handling-in-arangodb/">Schema Handling in ArangoDB</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -389,7 +433,7 @@ own tests.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (1)</a></li><li><a href='/blog/categories/performance/'>Performance (2)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (6)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (2)</a></li><li><a href='/blog/categories/performance/'>Performance (3)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 
   

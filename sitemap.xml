@@ -20,11 +20,17 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/08/20/speeding-up-server-side-operations/</loc>
-        <lastmod>2014-08-21T00:16:17+02:00</lastmod>
+        <lastmod>2014-08-31T02:24:20+02:00</lastmod>
+    </url>
+    <url>
+        <loc>
+            http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed/
+        </loc>
+        <lastmod>2014-08-31T03:24:24+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2014-08-21T00:16:17+02:00</lastmod>
+        <lastmod>2014-08-31T03:24:24+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -32,6 +38,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2014-08-21T00:16:17+02:00</lastmod>
+        <lastmod>2014-08-31T03:24:24+02:00</lastmod>
     </url>
 </urlset>
