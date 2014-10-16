@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Foxx | J@ArangoDB]]></title>
+  <link href="http://jsteemann.github.io/blog/categories/foxx/atom.xml" rel="self"/>
+  <link href="http://jsteemann.github.io/"/>
+  <updated>2014-10-16T02:13:55+02:00</updated>
+  <id>http://jsteemann.github.io/</id>
+  <author>
+    <name><![CDATA[jsteemann]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Handling Binary Data in Foxx]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/10/15/handling-binary-data-in-foxx/"/>
+    <updated>2014-10-15T20:41:30+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/10/15/handling-binary-data-in-foxx</id>
+    <content type="html"><![CDATA[<p>Handling binary data in JavaScript applications is a bit
+tricky because JavaScript does not provide a data type for
+binary data. This post explains how to use binary data in
+JavaScript actions written using ArangoDB&rsquo;s <a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a>.</p>
+
+<!-- more -->
+
+
+<h1>Strings vs. binary data</h1>
+
+<p>Internally, JavaScript strings are <a href="http://ecma-international.org/ecma-262/5.1/#sec-4.3.16">sequences of 16 bit integer values</a>.
+Furthermore, the ECMAScript standard requires that a JavaScript
+implementation should interpret characters in conformance with the
+Unicode standard, using either UCS-2 or UTF-16 encoding.</p>
+
+<p>While this is fine for handling natural language, it becomes problematic
+when trying to work with arbitrary binary data. Binary data cannot be
+used safely in a JavaScript string because it may not be valid UTF-16
+data.</p>
+
+<p>To make it work anyway, binary data needs to be stored in a wrapper
+object. I won&rsquo;t go into details about ES6 typed arrays here, but will
+focus on <code>Buffer</code> objects.</p>
+
+<h1>Binary data in Foxx actions</h1>
+
+<p>A Foxx route that shall handle HTTP POST requests containing arbitrary
+(binary) body in the request body should not use <code>req.body()</code>. The
+reason is that <code>req.body()</code> will return the body as a JavaScript string,
+and this isn&rsquo;t going to work with arbitrary binary data.</p>
+
+<p>Instead, the <code>req.rawBodyBuffer()</code> should be used. This will return the
+request body inside a buffer.
+Here&rsquo;s an example that stores the received data in a file on the server:</p>
+
+<p>```js Foxx action that can handle binary input
+controller.post(&lsquo;/receive-binary&rsquo;, function (req, res) {
+  // fetch request body into the buffer
+  var body = req.rawBodyBuffer();
+  // create an absolute filename, local to the Foxx application directory
+  var filename = applicationContext.foxxFilename(&ldquo;body&rdquo;);</p>
+
+<p>  require(&ldquo;fs&rdquo;).write(filename, body);
+});
+```</p>
+
+<p>This action can be invoked as follows if the app is mounted with name <code>app</code>:</p>
+
+<pre><code>curl -X POST http://localhost:8529/app/receive-binary --data-binary @filename
+</code></pre>
+
+<p>This will send the contents of the file <code>filename</code> to the server. The Foxx
+action will then store the received data as is in a file name <code>body</code> in the
+application directory.</p>
+
+<p>Returning binary data from a Foxx action is simple, too. Here&rsquo;s a way that
+returns the contents of the file named <code>body</code> in the application&rsquo;s directory:
+<code>js Foxx action that returns contents of a file
+controller.get('/provide-binary-file', function (req, res) {
+  // create an absolute filename, local to the Foxx application directory
+  var filename = applicationContext.foxxFilename("body");
+  // send the contents, this will also set mime type "application/octet-stream"
+  res.sendFile(filename);
+});
+</code></p>
+
+<p>It is also possible to return data from an arbitrary buffer:
+```js Foxx action that returns data in a buffer
+controller.get(&lsquo;/provide-binary-buffer&rsquo;, function (req, res) {
+  // create an absolute filename, local to the Foxx application directory
+  var filename = applicationContext.foxxFilename(&ldquo;body&rdquo;);
+  // read the file content into a buffer
+  var fileContent = require(&ldquo;fs&rdquo;).readBuffer(filename);</p>
+
+<p>  // TODO: modify the contents of buffer here&hellip;</p>
+
+<p>  // send the contents, this will also set mime type &ldquo;application/octet-stream&rdquo;
+  res.send(fileContent);
+});
+```</p>
+
+<h1>Example application</h1>
+
+<p>I quickly put together an example application that shows how to handle arbitrary
+binary data in Foxx actions. The example app allows uploading files to the server.
+The server will then list these files and allows downloading them again.</p>
+
+<p>The application has no CSS at all. Its only purpose is to demo the server-side code.
+The application can be downloaded <a href="/downloads/code/filelist-app.tar.gz">here</a>.</p>
+]]></content>
+  </entry>
+  
+</feed>

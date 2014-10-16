@@ -312,20 +312,20 @@ baseline.</p>
 
 <p>Here&rsquo;s an excerpt of the script&rsquo;s output:</p>
 
-<figure class='code'><figcaption><span>transaction</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span>results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
 <span class='line-number'>5</span>
 <span class='line-number'>6</span>
 <span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span> <span class="nx">name</span>      <span class="o">|</span>   <span class="nx">total</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>     <span class="nx">min</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>     <span class="nx">max</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>    <span class="nx">avg2</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>       <span class="o">%</span>
-</span><span class='line'><span class="o">--------------------------------------------------------------------------------</span>
-</span><span class='line'><span class="nx">baseline</span>       <span class="o">|</span>     <span class="mf">13.0940</span> <span class="o">|</span>      <span class="mf">1.2907</span> <span class="o">|</span>      <span class="mf">1.3357</span> <span class="o">|</span>      <span class="mf">1.3084</span> <span class="o">|</span>  <span class="mf">100.00</span>
-</span><span class='line'><span class="nx">loop</span><span class="o">-</span><span class="nx">invariant</span> <span class="o">|</span>     <span class="mf">10.6888</span> <span class="o">|</span>      <span class="mf">1.0506</span> <span class="o">|</span>      <span class="mf">1.1042</span> <span class="o">|</span>      <span class="mf">1.0667</span> <span class="o">|</span>   <span class="mf">81.53</span>
-</span><span class='line'><span class="nx">silence</span>        <span class="o">|</span>     <span class="mf">11.7186</span> <span class="o">|</span>      <span class="mf">1.1512</span> <span class="o">|</span>      <span class="mf">1.2247</span> <span class="o">|</span>      <span class="mf">1.1678</span> <span class="o">|</span>   <span class="mf">89.25</span>
-</span><span class='line'><span class="nx">transaction</span>    <span class="o">|</span>     <span class="mf">10.1521</span> <span class="o">|</span>      <span class="mf">0.9987</span> <span class="o">|</span>      <span class="mf">1.0346</span> <span class="o">|</span>      <span class="mf">1.0149</span> <span class="o">|</span>   <span class="mf">77.56</span>
-</span><span class='line'><span class="nx">combined</span>       <span class="o">|</span>      <span class="mf">7.8545</span> <span class="o">|</span>      <span class="mf">0.7768</span> <span class="o">|</span>      <span class="mf">0.7977</span> <span class="o">|</span>      <span class="mf">0.7850</span> <span class="o">|</span>   <span class="mf">59.99</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>test name      |   total (s) |     min (s) |     max (s) |    avg2 (s) |       %
+</span><span class='line'>--------------------------------------------------------------------------------
+</span><span class='line'>baseline       |     13.0940 |      1.2907 |      1.3357 |      1.3084 |  100.00
+</span><span class='line'>loop-invariant |     10.6888 |      1.0506 |      1.1042 |      1.0667 |   81.53
+</span><span class='line'>silence        |     11.7186 |      1.1512 |      1.2247 |      1.1678 |   89.25
+</span><span class='line'>transaction    |     10.1521 |      0.9987 |      1.0346 |      1.0149 |   77.56
+</span><span class='line'>combined       |      7.8545 |      0.7768 |      0.7977 |      0.7850 |   59.99
 </span></code></pre></td></tr></table></div></figure>
 
 
@@ -406,6 +406,10 @@ own tests.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2014/10/15/handling-binary-data-in-foxx/">Handling Binary Data in Foxx</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2014/08/30/understanding-where-operations-are-executed/">Understanding Where Operations Are Executed</a>
       </li>
     
@@ -421,10 +425,6 @@ own tests.</p>
         <a href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Benchmarking ArangoDB's Write-ahead Log</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2014/08/06/how-arangodbs-write-ahead-log-works/">How ArangoDB's Write-ahead Log Works</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -433,7 +433,7 @@ own tests.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (6)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (2)</a></li><li><a href='/blog/categories/performance/'>Performance (3)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (7)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/foxx/'>Foxx (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (3)</a></li><li><a href='/blog/categories/performance/'>Performance (3)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 
   

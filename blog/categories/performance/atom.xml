@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-08-31T03:25:17+02:00</updated>
+  <updated>2014-10-16T02:13:55+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -376,7 +376,7 @@ baseline.</p>
 
 <p>Here&rsquo;s an excerpt of the script&rsquo;s output:</p>
 
-<p>```</p>
+<p>```plain results</p>
 
 <h2>test name      |   total (s) |     min (s) |     max (s) |    avg2 (s) |       %</h2>
 

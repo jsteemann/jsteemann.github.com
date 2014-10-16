@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-08-31T03:25:17+02:00</updated>
+  <updated>2014-10-16T02:13:55+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,130 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Handling Binary Data in Foxx]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/10/15/handling-binary-data-in-foxx/"/>
+    <updated>2014-10-15T20:41:30+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/10/15/handling-binary-data-in-foxx</id>
+    <content type="html"><![CDATA[<p>Handling binary data in JavaScript applications is a bit
+tricky because JavaScript does not provide a data type for
+binary data. This post explains how to use binary data in
+JavaScript actions written using ArangoDB&rsquo;s <a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a>.</p>
+
+<!-- more -->
+
+
+<h1>Strings vs. binary data</h1>
+
+<p>Internally, JavaScript strings are <a href="http://ecma-international.org/ecma-262/5.1/#sec-4.3.16">sequences of 16 bit integer values</a>.
+Furthermore, the ECMAScript standard requires that a JavaScript
+implementation should interpret characters in conformance with the
+Unicode standard, using either UCS-2 or UTF-16 encoding.</p>
+
+<p>While this is fine for handling natural language, it becomes problematic
+when trying to work with arbitrary binary data. Binary data cannot be
+used safely in a JavaScript string because it may not be valid UTF-16
+data.</p>
+
+<p>To make it work anyway, binary data needs to be stored in a wrapper
+object. I won&rsquo;t go into details about ES6 typed arrays here, but will
+focus on <code>Buffer</code> objects.</p>
+
+<h1>Binary data in Foxx actions</h1>
+
+<p>A Foxx route that shall handle HTTP POST requests containing arbitrary
+(binary) body in the request body should not use <code>req.body()</code>. The
+reason is that <code>req.body()</code> will return the body as a JavaScript string,
+and this isn&rsquo;t going to work with arbitrary binary data.</p>
+
+<p>Instead, the <code>req.rawBodyBuffer()</code> should be used. This will return the
+request body inside a buffer.
+Here&rsquo;s an example that stores the received data in a file on the server:</p>
+
+<figure class='code'><figcaption><span>Foxx action that can handle binary input</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">controller</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/receive-binary&#39;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// fetch request body into the buffer</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">body</span> <span class="o">=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">rawBodyBuffer</span><span class="p">();</span>
+</span><span class='line'>  <span class="c1">// create an absolute filename, local to the Foxx application directory</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">filename</span> <span class="o">=</span> <span class="nx">applicationContext</span><span class="p">.</span><span class="nx">foxxFilename</span><span class="p">(</span><span class="s2">&quot;body&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;fs&quot;</span><span class="p">).</span><span class="nx">write</span><span class="p">(</span><span class="nx">filename</span><span class="p">,</span> <span class="nx">body</span><span class="p">);</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This action can be invoked as follows if the app is mounted with name <code>app</code>:</p>
+
+<pre><code>curl -X POST http://localhost:8529/app/receive-binary --data-binary @filename
+</code></pre>
+
+<p>This will send the contents of the file <code>filename</code> to the server. The Foxx
+action will then store the received data as is in a file name <code>body</code> in the
+application directory.</p>
+
+<p>Returning binary data from a Foxx action is simple, too. Here&rsquo;s a way that
+returns the contents of the file named <code>body</code> in the application&rsquo;s directory:</p>
+
+<figure class='code'><figcaption><span>Foxx action that returns contents of a file</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">controller</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/provide-binary-file&#39;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// create an absolute filename, local to the Foxx application directory</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">filename</span> <span class="o">=</span> <span class="nx">applicationContext</span><span class="p">.</span><span class="nx">foxxFilename</span><span class="p">(</span><span class="s2">&quot;body&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="c1">// send the contents, this will also set mime type &quot;application/octet-stream&quot;</span>
+</span><span class='line'>  <span class="nx">res</span><span class="p">.</span><span class="nx">sendFile</span><span class="p">(</span><span class="nx">filename</span><span class="p">);</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>It is also possible to return data from an arbitrary buffer:</p>
+
+<figure class='code'><figcaption><span>Foxx action that returns data in a buffer </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">controller</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/provide-binary-buffer&#39;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// create an absolute filename, local to the Foxx application directory</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">filename</span> <span class="o">=</span> <span class="nx">applicationContext</span><span class="p">.</span><span class="nx">foxxFilename</span><span class="p">(</span><span class="s2">&quot;body&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="c1">// read the file content into a buffer</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">fileContent</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;fs&quot;</span><span class="p">).</span><span class="nx">readBuffer</span><span class="p">(</span><span class="nx">filename</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// TODO: modify the contents of buffer here...</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// send the contents, this will also set mime type &quot;application/octet-stream&quot;</span>
+</span><span class='line'>  <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">fileContent</span><span class="p">);</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h1>Example application</h1>
+
+<p>I quickly put together an example application that shows how to handle arbitrary
+binary data in Foxx actions. The example app allows uploading files to the server.
+The server will then list these files and allows downloading them again.</p>
+
+<p>The application has no CSS at all. Its only purpose is to demo the server-side code.
+The application can be downloaded <a href="http://jsteemann.github.io/downloads/code/filelist-app.tar.gz">here</a>.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Understanding Where Operations Are Executed]]></title>
@@ -416,20 +540,20 @@ baseline.</p>
 
 <p>Here&rsquo;s an excerpt of the script&rsquo;s output:</p>
 
-<figure class='code'><figcaption><span>transaction</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span>results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
 <span class='line-number'>5</span>
 <span class='line-number'>6</span>
 <span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span> <span class="nx">name</span>      <span class="o">|</span>   <span class="nx">total</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>     <span class="nx">min</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>     <span class="nx">max</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>    <span class="nx">avg2</span> <span class="p">(</span><span class="nx">s</span><span class="p">)</span> <span class="o">|</span>       <span class="o">%</span>
-</span><span class='line'><span class="o">--------------------------------------------------------------------------------</span>
-</span><span class='line'><span class="nx">baseline</span>       <span class="o">|</span>     <span class="mf">13.0940</span> <span class="o">|</span>      <span class="mf">1.2907</span> <span class="o">|</span>      <span class="mf">1.3357</span> <span class="o">|</span>      <span class="mf">1.3084</span> <span class="o">|</span>  <span class="mf">100.00</span>
-</span><span class='line'><span class="nx">loop</span><span class="o">-</span><span class="nx">invariant</span> <span class="o">|</span>     <span class="mf">10.6888</span> <span class="o">|</span>      <span class="mf">1.0506</span> <span class="o">|</span>      <span class="mf">1.1042</span> <span class="o">|</span>      <span class="mf">1.0667</span> <span class="o">|</span>   <span class="mf">81.53</span>
-</span><span class='line'><span class="nx">silence</span>        <span class="o">|</span>     <span class="mf">11.7186</span> <span class="o">|</span>      <span class="mf">1.1512</span> <span class="o">|</span>      <span class="mf">1.2247</span> <span class="o">|</span>      <span class="mf">1.1678</span> <span class="o">|</span>   <span class="mf">89.25</span>
-</span><span class='line'><span class="nx">transaction</span>    <span class="o">|</span>     <span class="mf">10.1521</span> <span class="o">|</span>      <span class="mf">0.9987</span> <span class="o">|</span>      <span class="mf">1.0346</span> <span class="o">|</span>      <span class="mf">1.0149</span> <span class="o">|</span>   <span class="mf">77.56</span>
-</span><span class='line'><span class="nx">combined</span>       <span class="o">|</span>      <span class="mf">7.8545</span> <span class="o">|</span>      <span class="mf">0.7768</span> <span class="o">|</span>      <span class="mf">0.7977</span> <span class="o">|</span>      <span class="mf">0.7850</span> <span class="o">|</span>   <span class="mf">59.99</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>test name      |   total (s) |     min (s) |     max (s) |    avg2 (s) |       %
+</span><span class='line'>--------------------------------------------------------------------------------
+</span><span class='line'>baseline       |     13.0940 |      1.2907 |      1.3357 |      1.3084 |  100.00
+</span><span class='line'>loop-invariant |     10.6888 |      1.0506 |      1.1042 |      1.0667 |   81.53
+</span><span class='line'>silence        |     11.7186 |      1.1512 |      1.2247 |      1.1678 |   89.25
+</span><span class='line'>transaction    |     10.1521 |      0.9987 |      1.0346 |      1.0149 |   77.56
+</span><span class='line'>combined       |      7.8545 |      0.7768 |      0.7977 |      0.7850 |   59.99
 </span></code></pre></td></tr></table></div></figure>
 
 
