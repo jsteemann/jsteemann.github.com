@@ -34,11 +34,17 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/</loc>
-        <lastmod>2014-10-17T02:37:12+02:00</lastmod>
+        <lastmod>2014-10-17T21:12:43+02:00</lastmod>
+    </url>
+    <url>
+        <loc>
+            http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/
+        </loc>
+        <lastmod>2014-10-17T21:13:38+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2014-10-17T02:37:12+02:00</lastmod>
+        <lastmod>2014-10-17T21:13:38+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -46,6 +52,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2014-10-17T02:37:12+02:00</lastmod>
+        <lastmod>2014-10-17T21:13:38+02:00</lastmod>
     </url>
 </urlset>

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Linux | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/linux/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-17T02:37:17+02:00</updated>
+  <updated>2014-10-17T21:13:44+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,53 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Using Travis CI for a C++11 Project]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/"/>
+    <updated>2014-10-17T19:36:57+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project</id>
+    <content type="html"><![CDATA[<p><a href="http://travis-ci.com">TravisCI</a> is a very useful cloud service
+for continous integration. It can be integrated with Github, with each
+commit triggering a new build and reporting back when it broke something.</p>
+
+<p>Travis has support for many programming languages, among them C++.
+But it lacks support for C++11 features.</p>
+
+<!-- more -->
+
+
+<p>Travis CI build machines run on Ubuntu 12.04 LTS 64 bit.
+This version of Ubuntu is rather old already, and does not bring
+too many packages for C++11 development. For example, the default
+C++ compiler installed on TravisCI is g++-4.6.3. This version
+doesn&rsquo;t even understand the compile option <code>-std=c++11</code>.</p>
+
+<p>C++11 support started in the g++ 4.7 branch. To get decent C++11
+support, it is even better to use g++4.8 or higher.</p>
+
+<p>Fortunately TravisCI allows installing other software. To get
+a more recent C++ compiler, it can simply be added from a PPA.
+This can be achieved by putting the PPA in the <code>.travis.yml</code> file,
+e.g.</p>
+
+<p>```yaml
+language: cpp
+compiler: g++</p>
+
+<p>before_install:
+&ndash; sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+&ndash; sudo apt-get update -qq</p>
+
+<p>install:
+&ndash; sudo apt-get install -qq g++-4.8
+&ndash; export CXX=&ldquo;g++-4.8&rdquo;
+```</p>
+
+<p>I have set up an <a href="https://github.com/jsteemann/travis-cxx11">example project on Github</a>
+that demonstrates how to use it.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[How to Compile ArangoDB From Source]]></title>
@@ -36,7 +83,7 @@ from scratch.</p>
 
 <p>The following instructions are for Ubuntu 14.04 LTS, which seems to
 be quite popular at the moment. Other flavors of Linux are probably
-quite similar, though package manager names and packages will likely
+quite similar, though package manager and packages names will likely
 be somewhat different.</p>
 
 <h2>Using Vagrant</h2>
@@ -53,7 +100,7 @@ box from the list:</p>
 <pre><code>vagrant box add ubuntu-14.04-32 https://cloud-images.ubuntu.com/vagrant/trusty/current/trusty-server-cloudimg-i386-vagrant-disk1.box
 </code></pre>
 
-<p>After downloading it, it can be made available via these commands:</p>
+<p>After downloading the box, it can be made available via these commands:</p>
 
 <pre><code>mkdir temp
 cd temp

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-17T02:37:17+02:00</updated>
+  <updated>2014-10-17T21:13:44+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -36,7 +36,7 @@ from scratch.</p>
 
 <p>The following instructions are for Ubuntu 14.04 LTS, which seems to
 be quite popular at the moment. Other flavors of Linux are probably
-quite similar, though package manager names and packages will likely
+quite similar, though package manager and packages names will likely
 be somewhat different.</p>
 
 <h2>Using Vagrant</h2>
@@ -53,7 +53,7 @@ box from the list:</p>
 <pre><code>vagrant box add ubuntu-14.04-32 https://cloud-images.ubuntu.com/vagrant/trusty/current/trusty-server-cloudimg-i386-vagrant-disk1.box
 </code></pre>
 
-<p>After downloading it, it can be made available via these commands:</p>
+<p>After downloading the box, it can be made available via these commands:</p>
 
 <pre><code>mkdir temp
 cd temp
