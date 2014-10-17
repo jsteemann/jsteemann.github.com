@@ -33,8 +33,12 @@
         <lastmod>2014-10-16T02:16:30+02:00</lastmod>
     </url>
     <url>
+        <loc>http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/</loc>
+        <lastmod>2014-10-17T02:37:12+02:00</lastmod>
+    </url>
+    <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2014-10-16T02:16:30+02:00</lastmod>
+        <lastmod>2014-10-17T02:37:12+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -42,6 +46,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2014-10-16T02:16:30+02:00</lastmod>
+        <lastmod>2014-10-17T02:37:12+02:00</lastmod>
     </url>
 </urlset>

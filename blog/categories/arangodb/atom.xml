@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-16T02:16:42+02:00</updated>
+  <updated>2014-10-17T02:37:17+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,193 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[How to Compile ArangoDB From Source]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/"/>
+    <updated>2014-10-16T22:24:48+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source</id>
+    <content type="html"><![CDATA[<p>Though we provide a lot of pre-built packages for the stable
+versions of ArangoDB <a href="https://www.arangodb.org/install">here</a>, it
+is often more interesting to play with the bleeding edge development
+version. New ArangoDB features are normally added to the <em>devel</em>
+branch, where they can be tested, documented and improved. When a
+feature matures, it is either backported to a stable branch or will
+eventually be released when the next stable branch is forked from
+<em>devel</em>.</p>
+
+<p>Contributing to the core of ArangoDB is also much easier with a
+ready-to-go <em>devel</em> version. This post explains how to set one up
+from scratch.</p>
+
+<!-- more -->
+
+
+<p>The following instructions are for Ubuntu 14.04 LTS, which seems to
+be quite popular at the moment. Other flavors of Linux are probably
+quite similar, though package manager names and packages will likely
+be somewhat different.</p>
+
+<h2>Using Vagrant</h2>
+
+<p>If you don&rsquo;t have an Ubuntu 14 installation yet, you can easily
+install one using <a href="http://www.vagrantup.com">Vagrant</a>. If you happen
+to have a Linux installation already and are familiar with it, just
+skip this section.</p>
+
+<p>After installing Vagrant on your system, pick a suitable Vagrant box from
+<a href="http://www.vagrantbox.es">here</a>. For example, I picked this 32 bit
+box from the list:</p>
+
+<pre><code>vagrant box add ubuntu-14.04-32 https://cloud-images.ubuntu.com/vagrant/trusty/current/trusty-server-cloudimg-i386-vagrant-disk1.box
+</code></pre>
+
+<p>After downloading it, it can be made available via these commands:</p>
+
+<pre><code>mkdir temp
+cd temp
+vagrant init ubuntu-14.04-32
+vagrant up
+</code></pre>
+
+<p>After the VM is booted, connect to it via SSH:</p>
+
+<pre><code>vagrant ssh
+</code></pre>
+
+<h2>Cloning the repository</h2>
+
+<p>You&rsquo;re now on the Ubuntu VM. Next step is fetch the ArangoDB source
+code from Github. Cloning the repository from there requires <code>git</code>. Let&rsquo;s
+install it and clone the <em>devel</em> branch of the repository into a
+directory named <em>devel</em> on the VM:</p>
+
+<pre><code>sudo apt-get install git 
+git clone -b devel https://github.com/triAGENS/ArangoDB.git
+</code></pre>
+
+<p>The repository contains a lot of history so cloning may take a while.
+In case you don&rsquo;t need the full history, you can create a shallow
+clone like this:</p>
+
+<pre><code>git clone -b devel --single-branch --depth 1 https://github.com/triAGENS/ArangoDB.git 
+</code></pre>
+
+<p>This will reduce the download size from (currently) 375 MB to 56 MB
+and should be much faster. The downside of using a shallow copy is
+that there is no history and pushing and merging won&rsquo;t work most of
+the time. So it&rsquo;s better used for throw-away tests only.</p>
+
+<h2>Installing build tools and libraries</h2>
+
+<p>Now that the repository has been cloned into directory <em>ArangoDB</em>,
+we can install the required tools and libraries we need to build
+from source:</p>
+
+<pre><code>sudo apt-get install automake g++ libssl-dev libreadline-dev
+</code></pre>
+
+<p>If you prefer to install a different C++ compiler, please make sure it
+has proper support for C++11.</p>
+
+<p>Go 1.2 is also required. The official list of downloadable Go
+versions can be found <a href="https://golang.org/dl/">here</a>. In the example,
+I am using the 32 bit version in this example:</p>
+
+<pre><code>wget https://storage.googleapis.com/golang/go1.2.2.linux-386.tar.gz
+sudo tar -C /usr/local -xzf go1.2.2.linux-386.tar.gz
+export PATH=$PATH:/usr/local/go/bin
+echo "export PATH=\$PATH:/usr/local/go/bin" &gt;&gt; $HOME/.profile
+</code></pre>
+
+<h2>Compiling ArangoDB</h2>
+
+<p>With all prerequisites set up, it&rsquo;s now time to compile ArangoDB.</p>
+
+<p>You probably noticed that no <code>configure</code> file is shipped with ArangoDB
+in the <code>devel</code> branch. To create it, we need to execute <code>make setup</code>
+once. After that, <code>configure</code> can be executed to create the <code>Makefile</code>.
+The <code>Makefile</code> finally contains the stuff that <code>make</code> needs:</p>
+
+<pre><code>make setup
+./configure --enable-all-in-one-icu --enable-all-in-one-v8 --enable-relative 
+make
+</code></pre>
+
+<p>There first <code>make</code> run will take a while as it will compile all support
+libraries (ICU, V8, libev, zlib) before it will actually compile ArangoDB.
+Further invocations of <code>make</code> will not build these libraries again.
+Only any changed code will be rebuilt.</p>
+
+<p>Note that <code>make</code> can be parallelized if you have multiple processors
+available. For 4 parallel <code>make</code> processes, use <code>make -j4</code>.</p>
+
+<p><code>make</code> will produce a lot of output. The most important information, whether
+or not an error occurred, can be found in its last line of its output. If
+it does <strong>not</strong> say something like this, <code>make</code> has probably succeeded:
+<code>
+make: *** [all] Error 2
+</code></p>
+
+<h2>Starting ArangoDB</h2>
+
+<p>When finished, <code>make</code> should have created all binaries in the <code>bin</code>
+subdirectory. We can now start <code>arangod</code> and the binaries directly from
+there without running a <code>make install</code>. In fact, <code>make install</code> is
+awkward to do if you do many change-compile-test cycles.</p>
+
+<pre><code>mkdir data          # creates a data directory
+bin/arangod data    # starts the server
+</code></pre>
+
+<p>The server will be started as a foreground process (which is ideal
+when developing the server). To stop the server, simply press CTRL-C.</p>
+
+<h2>Connecting to ArangoDB</h2>
+
+<p>To verify ArangoDB is actually working, open a separate terminal and
+connect to it with the ArangoShell.</p>
+
+<p>Note that if you used Vagrant, you will first need to connect to the
+Vagrant box in the other terminal using <code>vagrant ssh</code> from the directory
+you ran the <code>vagrant init</code> in. When connect to the Vagrant box, don&rsquo;t
+forget to switch into the <code>ArangoDB</code> directory.</p>
+
+<p>Once you&rsquo;re in the correct directory, just issue this:</p>
+
+<pre><code>bin/arangosh
+</code></pre>
+
+<h2>Making changes</h2>
+
+<p>Time to make some changes in the code. A good place to start is usually
+<code>main</code>. Here are a few places to get you started:
+<code>
+~/ArangoDB$ grep -r "int main" arangod/ arangosh/
+arangod/RestServer/arango.cpp:int main (int argc, char* argv[]) {
+arangosh/Benchmark/arangob.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangorestore.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangodump.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangoimp.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangosh.cpp:int main (int argc, char* argv[]) {
+</code></p>
+
+<p>Once you&rsquo;re done with your changes, you need to re-compile and run:</p>
+
+<pre><code>make
+bin/arangod data
+</code></pre>
+
+<p>Don&rsquo;t worry, <code>make</code> will only recompile what you changed plus what
+depends on it and finally link it all together. This won&rsquo;t take as long
+as on the previous run.</p>
+
+<p>If you are serious about contributing to the server code, please let us
+know <a href="https://groups.google.com/forum/#!forum/arangodb">here</a> so we can assist you.</p>
+
+<p>Enjoy!</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Handling Binary Data in Foxx]]></title>
@@ -751,349 +938,6 @@ is yet that widely supported and easy to use as JSON.</p>
 <p>For our use case, it looks like Msgpack could fit quite well, but
 probably only as a second, alternative interface for highest-efficiency
 data transfers.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Benchmarking ArangoDB's Write-ahead Log]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/"/>
-    <updated>2014-08-07T01:27:04+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log</id>
-    <content type="html"><![CDATA[<h1>Motivation</h1>
-
-<p>One of the major changes in ArangoDB 2.2 was the introduction of the
-<em>write-ahead log</em> (abbreviated <em>WAL</em>).</p>
-
-<p>The introduction of the WAL changed how documents are stored internally in
-ArangoDB. A lot of things have been changed for it under the hood, and it has
-been a lot of work to implement it.</p>
-
-<p>During the implementation, we refactored some code parts and made them
-considerably faster. From these changes we expected a positive effect on the
-database performance. But due to the fact that shape information is now also
-saved in the write-ahead log, there may also be some negative effect.</p>
-
-<p>We developers were of course very interested in seeing the net effects, so
-we ran some tests for a few use cases. We compared ArangoDB 2.1.2 (still without
-the WAL) with ArangoDB 2.2.1 (with the WAL). The results are interesting.</p>
-
-<!-- more -->
-
-
-<h1>Test setup</h1>
-
-<p>To get a broad overview of performance changes, we ran a few different test cases:</p>
-
-<ul>
-<li><strong>document</strong>: inserts a document</li>
-<li><strong>crud</strong>: inserts a document, fetches it, updates it, and deletes it</li>
-<li><strong>crud-append</strong>: inserts a document, fetches it, updates it, and fetches it again</li>
-<li><strong>multi-collection</strong>: transactionally save two documents in two collections</li>
-<li><strong>random-shapes</strong>: save documents with completely different structures/shapes</li>
-</ul>
-
-
-<p>All tests were run with the <code>arangob</code> benchmark tool, with various concurrency levels,
-complexity settings and repeated several times. <code>arangob</code> was invoked like this:</p>
-
-<p><code>
-arangob                         \
-  --test-case $case             \
-  --request $requests           \
-  --concurrency $concurrency    \
-  --complexity $complexity
-</code></p>
-
-<p>Both ArangoDB servers and <code>arangob</code> were located on the same server. Only one
-ArangoDB server was active during each test run, and the other was shut down so
-it didn&rsquo;t compete for system resources.</p>
-
-<h1>Test results</h1>
-
-<p>Following are the results for the different test cases.</p>
-
-<p>In the result tables, the columns have the following meanings:</p>
-
-<ul>
-<li><strong>Complexity</strong>: the number of attributes for the test documents, used as parameter
-<code>--complexity</code> for <code>arangob</code></li>
-<li><strong>Requests</strong>: the number of operations executed, used as parameter <code>--requests</code>
-for <code>arangob</code></li>
-<li><strong>Concurrency</strong>: the number of client threads started by <code>arangob</code>, used a parameter
-<code>concurrency</code> for <code>arangob</code></li>
-<li><strong>Time 2.1</strong>: test execution time (in seconds) for ArangoDB 2.1</li>
-<li><strong>Time 2.2</strong>: test execution time (in seconds) for ArangoDB 2.2</li>
-<li><strong>T2.1/T2.2</strong>: relative performance of ArangoDB 2.1 compared to ArangoDB 2.2. Values
-less than one indicate that ArangoDB 2.1 was faster than ArangoDB 2.2. Values
-greater than one indicate that ArangoDB 2.1 was slower than ArangoDB 2.2. A
-value of one means that both versions had equal speed.</li>
-</ul>
-
-
-<p>Please note that the absolute execution times aren&rsquo;t too interesting in the
-results shown here. We haven&rsquo;t used the most powerful server on earth for running
-these tests. We were most interested in how ArangoDB 2.2 compared to
-ArangoDB 2.1.</p>
-
-<h2>Inserting documents</h2>
-
-<p>The <code>document</code> test appends new documents (with an identical structure) to a
-collection. Here are the results for inserting a million documents with 100
-attributes each:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code>   100       1000000               1       97.452       94.839         1.02    
-   100       1000000               2       61.146       53.928         1.13   
-   100       1000000               4       54.368       31.379         1.73  
-</code></pre>
-
-<p>```</p>
-
-<p>Following are the results for 100,000 documents with 1,000 attributes each:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code>  1000        100000               1       86.883       80.669         1.07 
-  1000        100000               2       59.381       48.599         1.22 
-  1000        100000               4       53.784       27.494         1.95 
-</code></pre>
-
-<p>```</p>
-
-<p>The results for 5,000 documents with 10,000 attributes each:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code> 10000          5000               1       43.991       40.577         1.08 
- 10000          5000               2       31.403       26.117         1.20 
- 10000          5000               4       28.713       20.044         1.43 
-</code></pre>
-
-<p>```</p>
-
-<p>As we can see in the results above, ArangoDB 2.2 is faster than ArangoDB 2.1 for
-all tested configurations. The difference is negligible if the test client is
-single-threaded (one insert thread), but ArangoDB 2.2 is considerably faster than
-ArangoDB 2.1 with more concurrent clients.</p>
-
-<h2>CRUD operations (I)</h2>
-
-<p>The <code>crud</code> test case inserts a document, fetches it, updates it, fetches it again
-and finally deletes it. Executing 1 million crud operations on documents with 100
-attributes each results in the following execution times:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code>   100       1000000               1       66.856       67.072         0.99       
-   100       1000000               2       47.907       47.043         1.01        
-   100       1000000               4       42.089       42.047         1.00         
-</code></pre>
-
-<p>```</p>
-
-<p>Running 100,000 crud operations on documents with 1,000 attributes each:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code>  1000        100000               1      160.228      158.312         1.01 
-  1000        100000               2      147.413      147.990         0.99  
-  1000        100000               4      143.575      143.233         1.00   
-</code></pre>
-
-<p>```</p>
-
-<p>And here are the test results for running 5,000 crud operations on documents with
-10,000 attributes each:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code> 10000          5000               1      645.859      643.924         1.00        
- 10000          5000               2      640.414      640.767         0.99       
- 10000          5000               4      637.438      637.132         1.00      
-</code></pre>
-
-<p>```</p>
-
-<p>The results of all these tests show that performance for the tested workload hasn&rsquo;t
-changed between ArangoDB 2.1 and 2.2. This is somewhat expected, as the WAL should
-not affect the performance of read and delete operations much: reading a document
-does not require writing to the WAL at all, and removing a document only requires
-writing a very small remove marker to the WAL.</p>
-
-<h2>CRUD operations (II)</h2>
-
-<p>The <code>crud-append</code> test case inserts a document, fetches it, updates it, and fetches
-it again. Executing 1 million crud operations on documents with 100 attributes each
-results in the following execution times:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code>   100       1000000               1       81.187       79.079         1.02 
-   100       1000000               2       59.544       56.934         1.04  
-   100       1000000               4       53.845       52.098         1.03   
-</code></pre>
-
-<p>```</p>
-
-<p>Running 100,000 crud operations on documents with 1,000 attributes each:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code>  1000        100000               1      200.057      196.722         1.01 
-  1000        100000               2      182.436      181.633         1.00 
-  1000        100000               4      181.233      180.631         1.00 
-</code></pre>
-
-<p>```</p>
-
-<p>And here are the test results for running 5,000 crud operations on documents with
-10,000 attributes each:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code> 10000          5000               1      804.781      801.903         1.00 
- 10000          5000               2      796.589      797.693         0.99  
- 10000          5000               4      796.664      795.823         1.00  
-</code></pre>
-
-<p>```</p>
-
-<p>Again, ArangoDB 2.1 and 2.2 are pretty much the same speed for the tested operations.</p>
-
-<h2>Multi-collection write transactions</h2>
-
-<p>The <code>multi-collection</code> test stores two documents in two different collections
-transactionally. Here are the results for executing 100,000 transactions for
-documents with 100 attributes each:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code>   100        100000               1     6936.895       30.736       225.69   
-   100        100000               2     6946.524       25.577       271.59    
-   100        100000               4     7720.682       24.334       317.27     
-</code></pre>
-
-<p>```</p>
-
-<p>Executing 10,000 transactions on documents with 1,000 attributes each:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code>  1000         10000               1      949.974       21.368        44.45     
-  1000         10000               2      953.672       19.322        49.35    
-  1000         10000               4      941.645       20.486        45.96   
-</code></pre>
-
-<p>```</p>
-
-<p>And finally, the results for executing 500 transactions on documents with 10,000
-attributes each:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code> 10000           500               1       46.776       10.413         4.49 
- 10000           500               2       45.102       10.173         4.43 
- 10000           500               4       44.172        9.192         4.80  
-</code></pre>
-
-<p>```</p>
-
-<p>The above results show that ArangoDB 2.2 is much faster than ArangoDB 2.1 for
-executing transactions that write to two collections.</p>
-
-<p>We expected that! Multi-collection (write) transactions in ArangoDB 2.2 require
-far less calls to <code>msync</code> than in ArangoDB 2.1. ArangoDB 2.2 can sync operations
-of multiple transactions together in one call to <code>msync</code>. ArangoDB 2.1 needed to
-synchronize each transaction separately.</p>
-
-<h2>(Fully) heterogenous documents</h2>
-
-<p>The <code>random-shapes</code> test inserts documents that have different structures each.
-For each inserted document a new shape will need to be stored. Inserting one million
-documents with 100 attributes each results in the following figures:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code>   100       1000000               1      664.006       87.181         7.61        
-   100       1000000               2      433.570       60.613         7.15       
-   100       1000000               4      313.666       45.327         6.92      
-</code></pre>
-
-<p>```
-The results show that ArangoDB 2.2 is considerably faster than ArangoDB 2.1 for
-these cases &ndash; even with the storage overhead of writing the shapes to the WAL.</p>
-
-<p>Now we inserted 100,000 documents with 1,000 document attributes each:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code>  1000        100000              1        61.709       66.954         0.92    
-  1000        100000              2        39.294       46.458         0.84   
-  1000        100000              4        36.866       40.910         0.90  
-</code></pre>
-
-<p>```
-In these cases, the storage overhead of writing all shapes to the WAL seems to
-start to matter, and ArangoDB 2.2 gets slower than ArangoDB 2.1 in this test
-case.</p>
-
-<p>The same was true when we inserted 5,000 documents with 10,000 attributes each:
-```</p>
-
-<h2>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2</h2>
-
-<pre><code> 10000          5000               1       25.337       30.412         0.83    
- 10000          5000               2       20.021       22.128         0.90     
- 10000          5000               4       14.800       18.872         0.78      
-</code></pre>
-
-<p>```</p>
-
-<p>Note that the <code>random-shapes</code> test case is an extreme test case. We do not
-consider it realistic that all documents in a collection have completely different
-attribute names. Still we included it in our tests because we were sure that this
-would be a case in which the overhead of the WAL would be clearly measurable.</p>
-
-<p>Note that there is a way to make ArangoDB 2.2 faster than ArangoDB 2.1 even for
-this test case: setting the option <code>--wal.suppress-shape-information</code> to <code>true</code>
-will make ArangoDB not write shape information to the WAL, making document write
-operations much faster in case all documents have heterogenous structures.</p>
-
-<p>The option won&rsquo;t help much if a shapes repeat a lot. In this case, the WAL overhead
-shouldn&rsquo;t matter too much already, or ArangoDB 2.2 should already be faster than 2.1
-(as shown in the results above).</p>
-
-<h1>Summary</h1>
-
-<p>The tests revealed that the overhead of the WAL in ArangoDB 2.2 seems to be
-negligible for most of the tested workloads. In many cases, ArangoDB 2.2 with
-the WAL is even faster than ArangoDB 2.1 that did not have a WAL at all.</p>
-
-<p>There is one notable exception: when documents have fully heterogenous structures,
-the overhead of the WAL is measurable and significant. Though we consider this
-to be a rather hypothetical case, we have added the configurtion option
-<code>--wal.suppress-shape-information</code>. This can be used to turn off storing
-shape information in the WAL. This is not safe when the server is to be used
-as a replication master, but should work in cases when replication is not used.</p>
-
-<p>The option should not have a big effect if documents are greatly or at least
-somewhat homogenous. For these cases, ArangoDB 2.2 with its WAL should already
-be as fast as 2.1 (or even faster).</p>
 ]]></content>
   </entry>
   

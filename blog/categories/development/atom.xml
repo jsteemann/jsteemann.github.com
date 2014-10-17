@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Development | J@ArangoDB]]></title>
+  <link href="http://jsteemann.github.io/blog/categories/development/atom.xml" rel="self"/>
+  <link href="http://jsteemann.github.io/"/>
+  <updated>2014-10-17T02:37:17+02:00</updated>
+  <id>http://jsteemann.github.io/</id>
+  <author>
+    <name><![CDATA[jsteemann]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[How to Compile ArangoDB From Source]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/"/>
+    <updated>2014-10-16T22:24:48+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source</id>
+    <content type="html"><![CDATA[<p>Though we provide a lot of pre-built packages for the stable
+versions of ArangoDB <a href="https://www.arangodb.org/install">here</a>, it
+is often more interesting to play with the bleeding edge development
+version. New ArangoDB features are normally added to the <em>devel</em>
+branch, where they can be tested, documented and improved. When a
+feature matures, it is either backported to a stable branch or will
+eventually be released when the next stable branch is forked from
+<em>devel</em>.</p>
+
+<p>Contributing to the core of ArangoDB is also much easier with a
+ready-to-go <em>devel</em> version. This post explains how to set one up
+from scratch.</p>
+
+<!-- more -->
+
+
+<p>The following instructions are for Ubuntu 14.04 LTS, which seems to
+be quite popular at the moment. Other flavors of Linux are probably
+quite similar, though package manager names and packages will likely
+be somewhat different.</p>
+
+<h2>Using Vagrant</h2>
+
+<p>If you don&rsquo;t have an Ubuntu 14 installation yet, you can easily
+install one using <a href="http://www.vagrantup.com">Vagrant</a>. If you happen
+to have a Linux installation already and are familiar with it, just
+skip this section.</p>
+
+<p>After installing Vagrant on your system, pick a suitable Vagrant box from
+<a href="http://www.vagrantbox.es">here</a>. For example, I picked this 32 bit
+box from the list:</p>
+
+<pre><code>vagrant box add ubuntu-14.04-32 https://cloud-images.ubuntu.com/vagrant/trusty/current/trusty-server-cloudimg-i386-vagrant-disk1.box
+</code></pre>
+
+<p>After downloading it, it can be made available via these commands:</p>
+
+<pre><code>mkdir temp
+cd temp
+vagrant init ubuntu-14.04-32
+vagrant up
+</code></pre>
+
+<p>After the VM is booted, connect to it via SSH:</p>
+
+<pre><code>vagrant ssh
+</code></pre>
+
+<h2>Cloning the repository</h2>
+
+<p>You&rsquo;re now on the Ubuntu VM. Next step is fetch the ArangoDB source
+code from Github. Cloning the repository from there requires <code>git</code>. Let&rsquo;s
+install it and clone the <em>devel</em> branch of the repository into a
+directory named <em>devel</em> on the VM:</p>
+
+<pre><code>sudo apt-get install git 
+git clone -b devel https://github.com/triAGENS/ArangoDB.git
+</code></pre>
+
+<p>The repository contains a lot of history so cloning may take a while.
+In case you don&rsquo;t need the full history, you can create a shallow
+clone like this:</p>
+
+<pre><code>git clone -b devel --single-branch --depth 1 https://github.com/triAGENS/ArangoDB.git 
+</code></pre>
+
+<p>This will reduce the download size from (currently) 375 MB to 56 MB
+and should be much faster. The downside of using a shallow copy is
+that there is no history and pushing and merging won&rsquo;t work most of
+the time. So it&rsquo;s better used for throw-away tests only.</p>
+
+<h2>Installing build tools and libraries</h2>
+
+<p>Now that the repository has been cloned into directory <em>ArangoDB</em>,
+we can install the required tools and libraries we need to build
+from source:</p>
+
+<pre><code>sudo apt-get install automake g++ libssl-dev libreadline-dev
+</code></pre>
+
+<p>If you prefer to install a different C++ compiler, please make sure it
+has proper support for C++11.</p>
+
+<p>Go 1.2 is also required. The official list of downloadable Go
+versions can be found <a href="https://golang.org/dl/">here</a>. In the example,
+I am using the 32 bit version in this example:</p>
+
+<pre><code>wget https://storage.googleapis.com/golang/go1.2.2.linux-386.tar.gz
+sudo tar -C /usr/local -xzf go1.2.2.linux-386.tar.gz
+export PATH=$PATH:/usr/local/go/bin
+echo "export PATH=\$PATH:/usr/local/go/bin" &gt;&gt; $HOME/.profile
+</code></pre>
+
+<h2>Compiling ArangoDB</h2>
+
+<p>With all prerequisites set up, it&rsquo;s now time to compile ArangoDB.</p>
+
+<p>You probably noticed that no <code>configure</code> file is shipped with ArangoDB
+in the <code>devel</code> branch. To create it, we need to execute <code>make setup</code>
+once. After that, <code>configure</code> can be executed to create the <code>Makefile</code>.
+The <code>Makefile</code> finally contains the stuff that <code>make</code> needs:</p>
+
+<pre><code>make setup
+./configure --enable-all-in-one-icu --enable-all-in-one-v8 --enable-relative 
+make
+</code></pre>
+
+<p>There first <code>make</code> run will take a while as it will compile all support
+libraries (ICU, V8, libev, zlib) before it will actually compile ArangoDB.
+Further invocations of <code>make</code> will not build these libraries again.
+Only any changed code will be rebuilt.</p>
+
+<p>Note that <code>make</code> can be parallelized if you have multiple processors
+available. For 4 parallel <code>make</code> processes, use <code>make -j4</code>.</p>
+
+<p><code>make</code> will produce a lot of output. The most important information, whether
+or not an error occurred, can be found in its last line of its output. If
+it does <strong>not</strong> say something like this, <code>make</code> has probably succeeded:
+<code>
+make: *** [all] Error 2
+</code></p>
+
+<h2>Starting ArangoDB</h2>
+
+<p>When finished, <code>make</code> should have created all binaries in the <code>bin</code>
+subdirectory. We can now start <code>arangod</code> and the binaries directly from
+there without running a <code>make install</code>. In fact, <code>make install</code> is
+awkward to do if you do many change-compile-test cycles.</p>
+
+<pre><code>mkdir data          # creates a data directory
+bin/arangod data    # starts the server
+</code></pre>
+
+<p>The server will be started as a foreground process (which is ideal
+when developing the server). To stop the server, simply press CTRL-C.</p>
+
+<h2>Connecting to ArangoDB</h2>
+
+<p>To verify ArangoDB is actually working, open a separate terminal and
+connect to it with the ArangoShell.</p>
+
+<p>Note that if you used Vagrant, you will first need to connect to the
+Vagrant box in the other terminal using <code>vagrant ssh</code> from the directory
+you ran the <code>vagrant init</code> in. When connect to the Vagrant box, don&rsquo;t
+forget to switch into the <code>ArangoDB</code> directory.</p>
+
+<p>Once you&rsquo;re in the correct directory, just issue this:</p>
+
+<pre><code>bin/arangosh
+</code></pre>
+
+<h2>Making changes</h2>
+
+<p>Time to make some changes in the code. A good place to start is usually
+<code>main</code>. Here are a few places to get you started:
+<code>
+~/ArangoDB$ grep -r "int main" arangod/ arangosh/
+arangod/RestServer/arango.cpp:int main (int argc, char* argv[]) {
+arangosh/Benchmark/arangob.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangorestore.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangodump.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangoimp.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangosh.cpp:int main (int argc, char* argv[]) {
+</code></p>
+
+<p>Once you&rsquo;re done with your changes, you need to re-compile and run:</p>
+
+<pre><code>make
+bin/arangod data
+</code></pre>
+
+<p>Don&rsquo;t worry, <code>make</code> will only recompile what you changed plus what
+depends on it and finally link it all together. This won&rsquo;t take as long
+as on the previous run.</p>
+
+<p>If you are serious about contributing to the server code, please let us
+know <a href="https://groups.google.com/forum/#!forum/arangodb">here</a> so we can assist you.</p>
+
+<p>Enjoy!</p>
+]]></content>
+  </entry>
+  
+</feed>
