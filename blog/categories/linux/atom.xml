@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Linux | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/linux/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-23T00:00:33+02:00</updated>
+  <updated>2014-10-23T00:03:08+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -109,9 +109,9 @@ Note that completion may need to be re-initialized once in order for it to work:
 2.2 and activate it:
 ```bash activate completion for ArangoDB 2.2
 sudo \
-  wget -o /etc/bash_completion.d/arangodb \</p>
+  wget -O /etc/bash_completion.d/arangodb \</p>
 
-<pre><code>https://jsteemann.github.io/downloads/code/completions-2.2 &amp;&amp; . /etc/bash_completion.d/arangod
+<pre><code>https://jsteemann.github.io/downloads/code/completions-2.2 &amp;&amp; . /etc/bash_completion.d/arangodb
 </code></pre>
 
 <p>```</p>
