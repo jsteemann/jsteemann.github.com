@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-23T00:03:08+02:00</updated>
+  <updated>2014-10-23T00:07:20+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -18,10 +18,10 @@
     <link href="http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/"/>
     <updated>2014-10-22T23:10:32+02:00</updated>
     <id>http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb</id>
-    <content type="html"><![CDATA[<p>I was interested in how bash auto-completion works and how
-to write a custom completer. After about an hour of work, I
-came up with a solution that at least works on Ubuntu. I
-haven&rsquo;t tried anywhere else.</p>
+    <content type="html"><![CDATA[<p>I was interested in how bash auto-completion works and how to write
+a custom completer. After about an hour of work, I came up with a
+solution that at least seems to work on Ubuntu. I now have auto-completion
+for ArangoDB and all its client tools!</p>
 
 <!-- more -->
 
@@ -105,8 +105,8 @@ Note that completion may need to be re-initialized once in order for it to work:
 
 <h2>Quick setup</h2>
 
-<p>For the impatient user the following command should install the completion for
-2.2 and activate it:
+<p>For the impatient: the following command should install the completions for
+2.2 and activate them:
 ```bash activate completion for ArangoDB 2.2
 sudo \
   wget -O /etc/bash_completion.d/arangodb \</p>
