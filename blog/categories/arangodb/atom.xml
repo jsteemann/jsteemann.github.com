@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-23T00:07:20+02:00</updated>
+  <updated>2014-10-23T00:12:08+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -68,13 +68,14 @@ fi
 <p>complete -F _arangosh arangosh
 ```</p>
 
-<p>Determining the available options for a binary can be achieveed by invoking it with its
-<code>--help-all</code> (for arangod) or <code>--help</code> (all others) option, e.g.:</p>
+<p>As can be seen, the variable <code>opts</code> should be filled with the list of possible
+options. Determining the options for a binary can be achieved by invoking it with its
+<code>--help</code> option, e.g.:</p>
 
 <p>```bash figuring out program options
 arangosh &mdash;help | grep -o &ldquo;^\ +&mdash;[a-z-]+(.[a-z0-9-]+)\?&rdquo; | xargs</p>
 
-<h1>will generate something like the following output:</h1>
+<h1>this will generate something like the following output:</h1>
 
 <h1>&mdash;audit-log &mdash;chunk-size &mdash;configuration &mdash;help &mdash;no-auto-complete &mdash;no-colors &mdash;pager &mdash;pretty-print &mdash;prompt &mdash;quiet &mdash;temp-path &mdash;use-pager &mdash;javascript.check &mdash;javascript.current-module-directory &mdash;javascript.execute &mdash;javascript.execute-string &mdash;javascript.gc-interval &mdash;javascript.startup-directory &mdash;javascript.unit-tests &mdash;jslint &mdash;log.level &mdash;log.use-local-time &mdash;server.connect-timeout &mdash;server.database &mdash;server.disable-authentication &mdash;server.endpoint &mdash;server.password &mdash;server.request-timeout &mdash;server.ssl-protocol &mdash;server.username</h1>
 

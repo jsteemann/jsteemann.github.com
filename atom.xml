@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-23T00:07:20+02:00</updated>
+  <updated>2014-10-23T00:12:08+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -80,8 +80,9 @@ is initialized.</p>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>Determining the available options for a binary can be achieveed by invoking it with its
-<code>--help-all</code> (for arangod) or <code>--help</code> (all others) option, e.g.:</p>
+<p>As can be seen, the variable <code>opts</code> should be filled with the list of possible
+options. Determining the options for a binary can be achieved by invoking it with its
+<code>--help</code> option, e.g.:</p>
 
 <figure class='code'><figcaption><span>figuring out program options </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -89,7 +90,7 @@ is initialized.</p>
 <span class='line-number'>4</span>
 </pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh --help | grep -o <span class="s2">&quot;^\ \+--[a-z-]\+\(\.[a-z0-9-]\+\)\?&quot;</span> | xargs
 </span><span class='line'>
-</span><span class='line'><span class="c"># will generate something like the following output:</span>
+</span><span class='line'><span class="c"># this will generate something like the following output:</span>
 </span><span class='line'><span class="c"># --audit-log --chunk-size --configuration --help --no-auto-complete --no-colors --pager --pretty-print --prompt --quiet --temp-path --use-pager --javascript.check --javascript.current-module-directory --javascript.execute --javascript.execute-string --javascript.gc-interval --javascript.startup-directory --javascript.unit-tests --jslint --log.level --log.use-local-time --server.connect-timeout --server.database --server.disable-authentication --server.endpoint --server.password --server.request-timeout --server.ssl-protocol --server.username</span>
 </span></code></pre></td></tr></table></div></figure>
 
