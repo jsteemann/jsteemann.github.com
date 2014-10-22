@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-23T00:12:08+02:00</updated>
+  <updated>2014-10-23T00:13:41+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -138,6 +138,9 @@ Note that completion may need to be re-initialized once in order for it to work:
 
 
 <p>To see it in action, type <code>arangosh --</code> and then press <strong>TAB</strong>.</p>
+
+<p><em>Note: I have no idea whether this works in other shells or in Linux distributions other
+than Ubuntu.</em></p>
 ]]></content>
   </entry>
   
