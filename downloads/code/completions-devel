@@ -1,0 +1,98 @@
+# auto-generated file
+
+_arangob()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--async --batch-size --collection --complexity --concurrency --configuration --delay --help --keep-alive --progress --quiet --requests --temp-path --test-case --log.level --log.use-local-time --server.connect-timeout --server.database --server.disable-authentication --server.endpoint --server.password --server.request-timeout --server.ssl-protocol --server.username"
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -F _arangob arangob
+
+_arangosh()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--audit-log --chunk-size --configuration --help --no-auto-complete --no-colors --pager --pretty-print --prompt --quiet --temp-path --use-pager --javascript.check --javascript.current-module-directory --javascript.execute --javascript.execute-string --javascript.gc-interval --javascript.startup-directory --javascript.unit-tests --jslint --log.level --log.use-local-time --server.connect-timeout --server.database --server.disable-authentication --server.endpoint --server.password --server.request-timeout --server.ssl-protocol --server.username"
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -F _arangosh arangosh
+
+_arangoimp()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--backslash-escape --batch-size --collection --configuration --create-collection --file --help --overwrite --progress --quiet --quote --separator --temp-path --type --log.level --log.use-local-time --server.connect-timeout --server.database --server.disable-authentication --server.endpoint --server.password --server.request-timeout --server.ssl-protocol --server.username"
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -F _arangoimp arangoimp
+
+_arangodump()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--batch-size --collection --configuration --dump-data --force --help --include-system-collections --output-directory --overwrite --progress --quiet --temp-path --tick-end --tick-start --log.level --log.use-local-time --server.connect-timeout --server.database --server.disable-authentication --server.endpoint --server.password --server.request-timeout --server.ssl-protocol --server.username"
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -F _arangodump arangodump
+
+_arangorestore()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--batch-size --collection --configuration --create-collection --force --help --import-data --include-system-collections --input-directory --overwrite --progress --quiet --recycle-ids --temp-path --log.level --log.use-local-time --server.connect-timeout --server.database --server.disable-authentication --server.endpoint --server.password --server.request-timeout --server.ssl-protocol --server.username"
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -F _arangorestore arangorestore
+
+_arangod()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--cluster.agency-endpoint --cluster.agency-prefix --cluster.agent-path --cluster.arangod-path --cluster.coordinator-config --cluster.data-path --cluster.dbserver-config --cluster.disable-dispatcher-frontend --cluster.disable-dispatcher-kickstarter --cluster.log-path --cluster.my-address --cluster.my-id --cluster.password --cluster.username --check-version --configuration --console --help --upgrade --version --daemon --exit-on-parent-death --pid-file --show-io-backends --supervisor --watch-process --working-directory --database.force-sync-properties --database.maximal-journal-size --database.wait-for-sync --database.directory --javascript.app-path --javascript.dev-app-path --javascript.gc-frequency --javascript.gc-interval --javascript.script --javascript.script-parameter --javascript.startup-directory --javascript.v8-options --javascript.unit-tests --log.file --log.level --log.requests-file --log.application --log.content-filter --log.facility --log.hostname --log.line-number --log.prefix --log.severity --log.source-filter --log.syslog --log.thread --log.use-local-time --server.cafile --server.keyfile --server.ssl-cache --server.ssl-cipher-list --server.ssl-options --server.ssl-protocol --default-language --server.endpoint --temp-path --server.allow-method-override --server.allow-use-database --server.authenticate-system-only --server.backlog-size --server.default-api-compatibility --server.disable-authentication --server.disable-authentication-unix-sockets --server.disable-replication-applier --server.disable-statistics --server.keep-alive-timeout --server.reuse-address --dispatcher.report-interval --random.generator --scheduler.backend --scheduler.maximal-queue-size --scheduler.report-interval --server.descriptors-minimum --server.gid --server.uid --scheduler.threads --server.threads --wal.allow-oversize-entries --wal.logfile-size --wal.directory --wal.historic-logfiles --wal.ignore-logfile-errors --wal.ignore-recovery-errors --wal.logfile-size --wal.open-logfiles --wal.reserve-logfiles --wal.slots --wal.suppress-shape-information --wal.sync-interval --wal.throttle-wait --wal.throttle-when-pending"
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -F _arangod arangod
+

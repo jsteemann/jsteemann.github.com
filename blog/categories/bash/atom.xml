@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Bash | J@ArangoDB]]></title>
+  <link href="http://jsteemann.github.io/blog/categories/bash/atom.xml" rel="self"/>
+  <link href="http://jsteemann.github.io/"/>
+  <updated>2014-10-22T23:57:31+02:00</updated>
+  <id>http://jsteemann.github.io/</id>
+  <author>
+    <name><![CDATA[jsteemann]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[How to Set Up Bash Completion for ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/"/>
+    <updated>2014-10-22T23:10:32+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb</id>
+    <content type="html"><![CDATA[<p>I was interested in how bash auto-completion works and how
+to write a custom completer. After about an hour of work, I
+came up with a solution that at least works on Ubuntu. I
+haven&rsquo;t tried anywhere else.</p>
+
+<!-- more -->
+
+
+<h2>The problem</h2>
+
+<p>I use the command-line for almost everything, including starting
+and stopping ArangoDB and its client tools. They provide lots
+of options which I cannot completely memorize.</p>
+
+<p>The bash solution for &ldquo;I don&rsquo;t know what I am looking for&rdquo; is to
+press the <strong>TAB</strong> key. This will bring up a list of suggestions for
+how to complete the currently entered word. I thought using the
+same thing for ArangoDB&rsquo;s command-line options would be nice, too.</p>
+
+<h2>The solution</h2>
+
+<p>It turned out that I needed to put a shell script that generates the
+auto completion for <code>arangod</code> and all the other tools into <code>/etc/bash_completion.d</code>.
+From there, the system will automatically pick it up when auto-completion
+is initialized.</p>
+
+<p>The script is rather simple. For example, to have auto-completion for
+<code>arangosh</code> it would look like this:</p>
+
+<p>```bash completion script example for arangosh
+_arangosh()
+{</p>
+
+<pre><code>local cur prev opts
+COMPREPLY=()
+cur="${COMP_WORDS[COMP_CWORD]}"
+prev="${COMP_WORDS[COMP_CWORD-1]}"
+opts="--help --server.endpoint --server.username" # ...all the options go here
+
+if [[ ${cur} == -* ]] ; then
+    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    return 0
+fi
+</code></pre>
+
+<p>}</p>
+
+<p>complete -F _arangosh arangosh
+```</p>
+
+<p>Determining the available options for a binary can be achieveed by invoking it with its
+<code>--help-all</code> (for arangod) or <code>--help</code> (all others) option, e.g.:</p>
+
+<p>```bash figuring out program options
+arangosh &mdash;help | grep -o &ldquo;^\ +&mdash;[a-z-]+(.[a-z0-9-]+)\?&rdquo; | xargs</p>
+
+<h1>will generate something like the following output:</h1>
+
+<h1>&mdash;audit-log &mdash;chunk-size &mdash;configuration &mdash;help &mdash;no-auto-complete &mdash;no-colors &mdash;pager &mdash;pretty-print &mdash;prompt &mdash;quiet &mdash;temp-path &mdash;use-pager &mdash;javascript.check &mdash;javascript.current-module-directory &mdash;javascript.execute &mdash;javascript.execute-string &mdash;javascript.gc-interval &mdash;javascript.startup-directory &mdash;javascript.unit-tests &mdash;jslint &mdash;log.level &mdash;log.use-local-time &mdash;server.connect-timeout &mdash;server.database &mdash;server.disable-authentication &mdash;server.endpoint &mdash;server.password &mdash;server.request-timeout &mdash;server.ssl-protocol &mdash;server.username</h1>
+
+<p>```</p>
+
+<p>That has to be repeated for all binaries in the ArangoDB package (i.e. arangob, arangosh,
+arangoimp, arangodump, arangorestore, and arangod).</p>
+
+<p>As the available options might change over time, I wrote a script that extracts them
+from the binaries and puts together the completions file. This script can be downloaded
+<a href="/downloads/code/build-completions.sh">here</a>. The script expects the already-built ArangoDB
+binaries to be located in the <code>bin</code> subdirectory. Provided that ArangoDB was compiled from
+source, this should already be the case.</p>
+
+<p>The script should then be run from the base directory:
+<code>bash
+build-completions.sh arangodb
+</code>
+This will write the completions script for all binaries into the file <code>arangodb</code>.
+An already generated version for devel can be found <a href="/downloads/code/completions-devel">here</a>.
+Completions for current 2.2 can be found <a href="/downloads/code/completions-2.2">here</a>.</p>
+
+<p>To activate completions, copy the appropriate file into <code>/etc/bash_completion.d/arangodb</code>.
+Note that completion may need to be re-initialized once in order for it to work:
+<code>bash
+. /etc/bash_completion.d/arangodb
+</code></p>
+
+<h2>Quick setup</h2>
+
+<p>For the impatient user the following command should install the completion for
+2.2 and activate it:
+```bash activate completion for ArangoDB 2.2
+sudo \
+  wget -o /etc/bash_completion.d/arangodb \</p>
+
+<pre><code>https://jsteemann.github.io/downloads/code/completions-2.2 &amp;&amp; \ 
+</code></pre>
+
+<p>  . /etc/bash_completion.d/arangod
+```</p>
+
+<p>To see it in action, type <code>arangosh --</code> and then press <strong>TAB</strong>.</p>
+]]></content>
+  </entry>
+  
+</feed>

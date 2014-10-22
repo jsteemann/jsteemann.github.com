@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-17T21:13:44+02:00</updated>
+  <updated>2014-10-22T23:57:28+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,135 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[How to Set Up Bash Completion for ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/"/>
+    <updated>2014-10-22T23:10:32+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb</id>
+    <content type="html"><![CDATA[<p>I was interested in how bash auto-completion works and how
+to write a custom completer. After about an hour of work, I
+came up with a solution that at least works on Ubuntu. I
+haven&rsquo;t tried anywhere else.</p>
+
+<!-- more -->
+
+
+<h2>The problem</h2>
+
+<p>I use the command-line for almost everything, including starting
+and stopping ArangoDB and its client tools. They provide lots
+of options which I cannot completely memorize.</p>
+
+<p>The bash solution for &ldquo;I don&rsquo;t know what I am looking for&rdquo; is to
+press the <strong>TAB</strong> key. This will bring up a list of suggestions for
+how to complete the currently entered word. I thought using the
+same thing for ArangoDB&rsquo;s command-line options would be nice, too.</p>
+
+<h2>The solution</h2>
+
+<p>It turned out that I needed to put a shell script that generates the
+auto completion for <code>arangod</code> and all the other tools into <code>/etc/bash_completion.d</code>.
+From there, the system will automatically pick it up when auto-completion
+is initialized.</p>
+
+<p>The script is rather simple. For example, to have auto-completion for
+<code>arangosh</code> it would look like this:</p>
+
+<figure class='code'><figcaption><span>completion script example for arangosh</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>_arangosh<span class="o">()</span>
+</span><span class='line'><span class="o">{</span>
+</span><span class='line'>    <span class="nb">local </span>cur prev opts
+</span><span class='line'>    <span class="nv">COMPREPLY</span><span class="o">=()</span>
+</span><span class='line'>    <span class="nv">cur</span><span class="o">=</span><span class="s2">&quot;${COMP_WORDS[COMP_CWORD]}&quot;</span>
+</span><span class='line'>    <span class="nv">prev</span><span class="o">=</span><span class="s2">&quot;${COMP_WORDS[COMP_CWORD-1]}&quot;</span>
+</span><span class='line'>    <span class="nv">opts</span><span class="o">=</span><span class="s2">&quot;--help --server.endpoint --server.username&quot;</span> <span class="c"># ...all the options go here</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="o">[[</span> <span class="k">${</span><span class="nv">cur</span><span class="k">}</span> <span class="o">==</span> -* <span class="o">]]</span> ; <span class="k">then</span>
+</span><span class='line'><span class="k">        </span><span class="nv">COMPREPLY</span><span class="o">=(</span> <span class="k">$(</span><span class="nb">compgen</span> -W <span class="s2">&quot;${opts}&quot;</span> -- <span class="k">${</span><span class="nv">cur</span><span class="k">})</span> <span class="o">)</span>
+</span><span class='line'>        <span class="k">return </span>0
+</span><span class='line'>    <span class="k">fi</span>
+</span><span class='line'><span class="o">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nb">complete</span> -F _arangosh arangosh
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Determining the available options for a binary can be achieveed by invoking it with its
+<code>--help-all</code> (for arangod) or <code>--help</code> (all others) option, e.g.:</p>
+
+<figure class='code'><figcaption><span>figuring out program options </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh --help | grep -o <span class="s2">&quot;^\ \+--[a-z-]\+\(\.[a-z0-9-]\+\)\?&quot;</span> | xargs
+</span><span class='line'>
+</span><span class='line'><span class="c"># will generate something like the following output:</span>
+</span><span class='line'><span class="c"># --audit-log --chunk-size --configuration --help --no-auto-complete --no-colors --pager --pretty-print --prompt --quiet --temp-path --use-pager --javascript.check --javascript.current-module-directory --javascript.execute --javascript.execute-string --javascript.gc-interval --javascript.startup-directory --javascript.unit-tests --jslint --log.level --log.use-local-time --server.connect-timeout --server.database --server.disable-authentication --server.endpoint --server.password --server.request-timeout --server.ssl-protocol --server.username</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>That has to be repeated for all binaries in the ArangoDB package (i.e. arangob, arangosh,
+arangoimp, arangodump, arangorestore, and arangod).</p>
+
+<p>As the available options might change over time, I wrote a script that extracts them
+from the binaries and puts together the completions file. This script can be downloaded
+<a href="http://jsteemann.github.io/downloads/code/build-completions.sh">here</a>. The script expects the already-built ArangoDB
+binaries to be located in the <code>bin</code> subdirectory. Provided that ArangoDB was compiled from
+source, this should already be the case.</p>
+
+<p>The script should then be run from the base directory:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>build-completions.sh arangodb
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will write the completions script for all binaries into the file <code>arangodb</code>.
+An already generated version for devel can be found <a href="http://jsteemann.github.io/downloads/code/completions-devel">here</a>.
+Completions for current 2.2 can be found <a href="http://jsteemann.github.io/downloads/code/completions-2.2">here</a>.</p>
+
+<p>To activate completions, copy the appropriate file into <code>/etc/bash_completion.d/arangodb</code>.
+Note that completion may need to be re-initialized once in order for it to work:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>. /etc/bash_completion.d/arangodb
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Quick setup</h2>
+
+<p>For the impatient user the following command should install the completion for
+2.2 and activate it:</p>
+
+<figure class='code'><figcaption><span>activate completion for ArangoDB 2.2 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo <span class="se">\</span>
+</span><span class='line'>  wget -o /etc/bash_completion.d/arangodb <span class="se">\</span>
+</span><span class='line'>    https://jsteemann.github.io/downloads/code/completions-2.2 <span class="o">&amp;&amp;</span> <span class="se">\ </span>
+</span><span class='line'>  . /etc/bash_completion.d/arangod
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To see it in action, type <code>arangosh --</code> and then press <strong>TAB</strong>.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Using Travis CI for a C++11 Project]]></title>

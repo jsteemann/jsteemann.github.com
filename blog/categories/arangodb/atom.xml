@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-17T21:13:44+02:00</updated>
+  <updated>2014-10-22T23:57:31+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,114 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[How to Set Up Bash Completion for ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/"/>
+    <updated>2014-10-22T23:10:32+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb</id>
+    <content type="html"><![CDATA[<p>I was interested in how bash auto-completion works and how
+to write a custom completer. After about an hour of work, I
+came up with a solution that at least works on Ubuntu. I
+haven&rsquo;t tried anywhere else.</p>
+
+<!-- more -->
+
+
+<h2>The problem</h2>
+
+<p>I use the command-line for almost everything, including starting
+and stopping ArangoDB and its client tools. They provide lots
+of options which I cannot completely memorize.</p>
+
+<p>The bash solution for &ldquo;I don&rsquo;t know what I am looking for&rdquo; is to
+press the <strong>TAB</strong> key. This will bring up a list of suggestions for
+how to complete the currently entered word. I thought using the
+same thing for ArangoDB&rsquo;s command-line options would be nice, too.</p>
+
+<h2>The solution</h2>
+
+<p>It turned out that I needed to put a shell script that generates the
+auto completion for <code>arangod</code> and all the other tools into <code>/etc/bash_completion.d</code>.
+From there, the system will automatically pick it up when auto-completion
+is initialized.</p>
+
+<p>The script is rather simple. For example, to have auto-completion for
+<code>arangosh</code> it would look like this:</p>
+
+<p>```bash completion script example for arangosh
+_arangosh()
+{</p>
+
+<pre><code>local cur prev opts
+COMPREPLY=()
+cur="${COMP_WORDS[COMP_CWORD]}"
+prev="${COMP_WORDS[COMP_CWORD-1]}"
+opts="--help --server.endpoint --server.username" # ...all the options go here
+
+if [[ ${cur} == -* ]] ; then
+    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    return 0
+fi
+</code></pre>
+
+<p>}</p>
+
+<p>complete -F _arangosh arangosh
+```</p>
+
+<p>Determining the available options for a binary can be achieveed by invoking it with its
+<code>--help-all</code> (for arangod) or <code>--help</code> (all others) option, e.g.:</p>
+
+<p>```bash figuring out program options
+arangosh &mdash;help | grep -o &ldquo;^\ +&mdash;[a-z-]+(.[a-z0-9-]+)\?&rdquo; | xargs</p>
+
+<h1>will generate something like the following output:</h1>
+
+<h1>&mdash;audit-log &mdash;chunk-size &mdash;configuration &mdash;help &mdash;no-auto-complete &mdash;no-colors &mdash;pager &mdash;pretty-print &mdash;prompt &mdash;quiet &mdash;temp-path &mdash;use-pager &mdash;javascript.check &mdash;javascript.current-module-directory &mdash;javascript.execute &mdash;javascript.execute-string &mdash;javascript.gc-interval &mdash;javascript.startup-directory &mdash;javascript.unit-tests &mdash;jslint &mdash;log.level &mdash;log.use-local-time &mdash;server.connect-timeout &mdash;server.database &mdash;server.disable-authentication &mdash;server.endpoint &mdash;server.password &mdash;server.request-timeout &mdash;server.ssl-protocol &mdash;server.username</h1>
+
+<p>```</p>
+
+<p>That has to be repeated for all binaries in the ArangoDB package (i.e. arangob, arangosh,
+arangoimp, arangodump, arangorestore, and arangod).</p>
+
+<p>As the available options might change over time, I wrote a script that extracts them
+from the binaries and puts together the completions file. This script can be downloaded
+<a href="/downloads/code/build-completions.sh">here</a>. The script expects the already-built ArangoDB
+binaries to be located in the <code>bin</code> subdirectory. Provided that ArangoDB was compiled from
+source, this should already be the case.</p>
+
+<p>The script should then be run from the base directory:
+<code>bash
+build-completions.sh arangodb
+</code>
+This will write the completions script for all binaries into the file <code>arangodb</code>.
+An already generated version for devel can be found <a href="/downloads/code/completions-devel">here</a>.
+Completions for current 2.2 can be found <a href="/downloads/code/completions-2.2">here</a>.</p>
+
+<p>To activate completions, copy the appropriate file into <code>/etc/bash_completion.d/arangodb</code>.
+Note that completion may need to be re-initialized once in order for it to work:
+<code>bash
+. /etc/bash_completion.d/arangodb
+</code></p>
+
+<h2>Quick setup</h2>
+
+<p>For the impatient user the following command should install the completion for
+2.2 and activate it:
+```bash activate completion for ArangoDB 2.2
+sudo \
+  wget -o /etc/bash_completion.d/arangodb \</p>
+
+<pre><code>https://jsteemann.github.io/downloads/code/completions-2.2 &amp;&amp; \ 
+</code></pre>
+
+<p>  . /etc/bash_completion.d/arangod
+```</p>
+
+<p>To see it in action, type <code>arangosh --</code> and then press <strong>TAB</strong>.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[How to Compile ArangoDB From Source]]></title>
@@ -682,262 +790,6 @@ was achieved.</p>
 
 <p>Your mileage may vary. Please feel free to adjust the test script and run your
 own tests.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Why JSON?]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/08/14/why-json/"/>
-    <updated>2014-08-14T22:27:27+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/08/14/why-json</id>
-    <content type="html"><![CDATA[<h1>To JSON or not?</h1>
-
-<p>We&rsquo;re often asked why ArangoDB uses <a href="http://json.org">JSON</a> as its
-data-interchange format for transferring documents from clients to
-the database server and back. This is often accompanied by the
-question if we could use <code>&lt;insert fancy format here&gt;</code> instead.</p>
-
-<p>In the following article, I&rsquo;ll try to outline the reasons for why
-we picked JSON as the interchange format, and why we still use it.</p>
-
-<p>I&rsquo;ll start with a discussion of the pros and cons of JSON, look at
-some alternative formats and present my personal opinion on why
-using a different format may not provide too much benefit for us,
-at least at the moment.</p>
-
-<!-- more -->
-
-
-<p>This post does not intend to say that any of these formats are better
-or worse in general. I think there are applications for all of them.</p>
-
-<p>However, I wanted to look at the different formats with our specific
-use case, i.e. a RESTful database, in mind.</p>
-
-<h1>What I don&rsquo;t like about JSON</h1>
-
-<p>JSON is often criticized for its inefficiency and lack of <strong>real</strong>
-data types. I&rsquo;ll often criticize it myself.</p>
-
-<p>Following are my personal top 3 pain points.</p>
-
-<h2>Parsing and memory allocation</h2>
-
-<p>I have to admit that parsing JSON is painful from the efficiency
-perspective. When the JSON parser encounters a <code>{</code> token,
-it will know this is the start of an object, but it has no idea how
-many object members will follow and need to be stored with the
-object. The same is true for lists (starting with <code>[</code>).</p>
-
-<p>String values are no different: when the parser encounters a <code>"</code>,
-the length of the string is still unknown. To determine the length
-of the string, one must read until the end of the string, taking
-into account escape sequences for special characters, e.g. <code>\/</code>,
-<code>\n</code>, <code>\t</code>, <code>\\</code>, but also Unicode escape sequences.</p>
-
-<p>For example, the escaped 36-byte string <code>In K\u00f6ln, it's 15 \u00b0 outside</code>
-will be parsed into the 28-byte UTF-8 string <code>In Köln, it's 15 ° outside</code>.</p>
-
-<p>With the overall size of objects, lists or strings unknown at the
-start of a token, it&rsquo;s hard to reserve the <strong>right</strong> amount of memory.
-Instead, memory either needs to be allocated on the fly as JSON
-tokens are parsed, or (potentially too big) chunk(s) of memory
-needs to be put aside at the start of parsing. The parser can
-then use this already allocated memory to store whatever is found
-afterwards.</p>
-
-<h2>Verbosity</h2>
-
-<p>JSON data can also become very fluffy. I already mentioned that
-serializing strings to JSON might incur some overhead due to escape
-sequences.</p>
-
-<p>But there&rsquo;s more things like this: each boolean value requires 4
-(<code>true</code>) or 5 (<code>false</code>) bytes respectively. Repeating object member
-names need to be stored repeatedly, as JSON does not provide string
-interning or similar mechanisms.</p>
-
-<h2>Data types</h2>
-
-<p>Apart from that, the JSON type system is limited. There is only one
-type to represent numbers. Different types for representing numbers
-of different value ranges are (intentionally) missing. For example,
-one might miss 64 bit integer data types or arbitrary precision
-numbers. A date type (for calendar dates and times) is often missed, too.</p>
-
-<p>And yes, binary data cannot be represented in JSON without converting
-them into a JSON string first. This may require base64-encoding or
-something similar.</p>
-
-<p>In general, the available data types in JSON are very limited, and the
-format by itself is not extensible. Extending JSON with own type information
-will either create ill-formed JSON (read: <em>non-portable</em>) or would
-introduce special meaning members that other programs and tools won&rsquo;t
-understand (read: <em>non-portable</em>).</p>
-
-<h1>Why still use JSON?</h1>
-
-<p>So what are the reasons to still stick with JSON?
-From my point of view, there are still a few good reasons to do so:</p>
-
-<h2>Simplicity</h2>
-
-<p>The <a href="http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf">JSON specification</a>
-fits on five pages (including images). It is simple and intuitive.</p>
-
-<p>Additionally, JSON-encoded data is instantly comprehensible. There is
-simply no need to look up the meanings of binary magic values in format
-specifications. It is also very easy to spot errors in ill-formed JSON.</p>
-
-<p>In my eyes, looking at JSON data during a debugging session is much
-easier than looking at binary data (and I do look at binary data sometimes).</p>
-
-<h2>Flexibility</h2>
-
-<p>JSON requires no schema to be defined for data. This is good, as it allows to
-get something done earlier. Schemas also tend to change over time, and this
-can become a problem with other formats that have schemas. With schema-less JSON,
-a schema change becomes a no-brainer &ndash; just change the data inside the JSON
-and you&rsquo;re done. No need to maintain a separate schema.</p>
-
-<p>The schema-relaxed approach of JSON also plays quite well with languages that
-are loosely typed or allow runtime modifications of data structures. Most
-scripting languages are in this category.</p>
-
-<h2>Language support</h2>
-
-<p>JSON is supported in almost every environment. Support for JSON is
-sometimes built into languages directly (JavaScript) or the languages come
-with built-in serialization and deserialization functions (e.g. PHP).
-Just go and use it.</p>
-
-<p>For any other language without built-in support for JSON, it won&rsquo;t be hard to find
-a robust implementation for JSON serialization/deserialization.</p>
-
-<p>In the ArangoDB server, we use a lot of JavaScript code ourselves. Users
-can also extend the server functionality with JavaScript. Guess what happens
-when a JSON request is sent to the server and its payload is handed to a
-JavaScript-based action handler in the server? Yes, we&rsquo;ll take the request
-body and create JavaScript objects from it. This is as simple as it can be,
-because we have native JSON support in JavaScript, our server-side programming
-language.</p>
-
-<p>We also encourage users to use ArangoDB as a back end for their JavaScript-based
-front ends. Especially when running in a browser, using JSON as the interchange
-format inside AJAX* requests makes sense. You don&rsquo;t want to load serialization/deserialization
-libraries that handle binary format into front ends for various reasons.</p>
-
-<p>Many tools, including browsers, also support inspecting JSON data or can
-import or export JSON-encoded data.</p>
-
-<p>*Pop quiz: does anyone remember what was the meaning of the &ldquo;X&rdquo; in AJAX??</p>
-
-<h1>Alternatives</h1>
-
-<p>As I have tried to outline above, I think JSON has both strengths and
-weaknesses. Is there an alternative format that is superior? I am listing
-a few candidate formats below, and try to assess them quickly.</p>
-
-<p>One thing that they all have in common is that they are not as much supported
-by programming languages and tools as JSON is at the moment. For most of the
-alternative formats, you would have to install some library in the environment
-of your choice. XML is already available in many environments by default, with
-the notable exception of JavaScript.</p>
-
-<p>Even if a format is well supported by most programming languages, there are
-other tools that should handle the format, too.</p>
-
-<p>If there aren&rsquo;t any tools that allow converting existing data into the format,
-then this is a severe limitation. Browsers, for example, are important tools.
-Most of the alternative formats cannot be inspected easily with a browser,
-which makes debugging data transfers from browser-based applications hard.</p>
-
-<p>Additionally, one should consider how much example datasets are available.
-I think at the moment it&rsquo;s much more likely that you&rsquo;ll find a JSON-encoded
-dump of Wikipedia somewhere on the Internet than in one of the alternative
-formats.</p>
-
-<h2>Proprietary format</h2>
-
-<p>An alternative to using JSON would be to create and our own binary format.
-We could use a protocol tailored to our needs, and make it very very
-efficient. The disadvantages of using a proprietary format are
-that it is nowhere supported, so writing clients for ArangoDB in
-another language becomes much harder for ourselves and for third-party
-contributors. Effectively, we would need to write an adapter for
-our binary protocol for each environment we want to have ArangoDB
-used in.</p>
-
-<p>This sounds like it would take a lot of time and keep us from doing
-other things.</p>
-
-<h2>XML</h2>
-
-<p>It&rsquo;s human-readable, understandable, has a good standard type system
-and is extensible. But if you thought that JSON is already inefficient
-and verbose, try using XML and have fun. A colleague of mine even
-claimed that XML is not human-readable due to its chattyness.</p>
-
-<p>XML also hasn&rsquo;t been adopted much in the JavaScript community, and we
-need to find a format that plays nicely with JavaScript.</p>
-
-<h2>Smile</h2>
-
-<p>There is also the <a href="http://wiki.fasterxml.com/SmileFormat">Smile</a> format.
-Its goals are to provide an efficient alternative to JSON. It looks
-good, but it does not seem to be used much outside of <a href="http://wiki.fasterxml.com/JacksonHome">Jackson</a>.
-As mentioned earlier, we need a format that is supported in a variety of
-environments.</p>
-
-<h2>BSON</h2>
-
-<p>Then there is <a href="http://bsonspec.org/">BSON</a>, made popular by MongoDB.
-We had a look at it. It is not as space-efficient as it could be, but
-it makes memory allocation very easy and allows for fast packing and
-unpacking. It is not so good when values inside the structure need to
-be updated. There are BSON-libraries for several languages</p>
-
-<p>Still, it is a binary format. Using it for communication in the ArangoDB
-cases includes using it from arbitrary JavaScript programs (including
-applications run in a browser), using it in AJAX calls etc. This sounds
-a bit like debugging hell.</p>
-
-<h2>Msgpack</h2>
-
-<p><a href="http://msgpack.org/">Msgpack</a> so far looks like the most-promising
-alternative. It seems to become available in more and more programming
-language environments. The format also seems to be relatively efficient.</p>
-
-<p>A major drawback is that as a binary format, it will still be hard to debug.
-Tool support is also not that great yet. Using Msgpack with a browser also
-sounds like fun. I&rsquo;d like if tools like Firebug could display Msgpack
-packet internals.</p>
-
-<h2>Protocol buffers</h2>
-
-<p>Two years ago, we also experimented with <a href="https://code.google.com/p/protobuf/">Protocol buffers</a>.
-Protocol buffers require to set up a schema for the data first, and
-then provide efficient means to serialize data from the wire into
-programming-language objects.</p>
-
-<p>The problem is that there are no fixed schemas in a document database
-like ArangoDB. Users can structure their documents as they like. Each
-document can have a completely different structure.</p>
-
-<p>We ended up defining a schema for something JSON-like inside Protocol
-buffers, and it did not make much sense in our use case.</p>
-
-<h1>Conclusion</h1>
-
-<p>There are alternative formats out there that address some of the issues
-that JSON has from my point of view. However, none of the other formats
-is yet that widely supported and easy to use as JSON.</p>
-
-<p>This may change over time.</p>
-
-<p>For our use case, it looks like Msgpack could fit quite well, but
-probably only as a second, alternative interface for highest-efficiency
-data transfers.</p>
 ]]></content>
   </entry>
   
