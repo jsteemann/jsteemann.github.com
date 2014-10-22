@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Linux | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/linux/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-22T23:57:31+02:00</updated>
+  <updated>2014-10-23T00:00:33+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -111,11 +111,10 @@ Note that completion may need to be re-initialized once in order for it to work:
 sudo \
   wget -o /etc/bash_completion.d/arangodb \</p>
 
-<pre><code>https://jsteemann.github.io/downloads/code/completions-2.2 &amp;&amp; \ 
+<pre><code>https://jsteemann.github.io/downloads/code/completions-2.2 &amp;&amp; . /etc/bash_completion.d/arangod
 </code></pre>
 
-<p>  . /etc/bash_completion.d/arangod
-```</p>
+<p>```</p>
 
 <p>To see it in action, type <code>arangosh --</code> and then press <strong>TAB</strong>.</p>
 ]]></content>
