@@ -226,8 +226,32 @@ Note that completion may need to be re-initialized once in order for it to work:
 
 <p>To see it in action, type <code>arangosh --</code> and then press <strong>TAB</strong>.</p>
 
-<p><em>Note: I have no idea whether this works in other shells or in Linux distributions other
-than Ubuntu.</em></p>
+<h2>Other environments (MacOS etc.)</h2>
+
+<p><em>Note: I have checked that the above works on Ubuntu and OpenSuSE. I have no idea whether this works
+with other Linux distributions let alone other shells.</em></p>
+
+<p>Some Linux/Unix distros do not have <code>/etc/bash_completion.d</code> at all. I was told MacOS is one
+of them. For such environments, downloading and sourcing the completions script should work:</p>
+
+<figure class='code'><figcaption><span>activate completion without bash_completion.d</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/arangodb-completions-2.2 <span class="se">\</span>
+</span><span class='line'>    https://jsteemann.github.io/downloads/code/completions-2.2
+</span><span class='line'>. ~/arangodb-completions-2.2
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will enable the completions in the current shell. To enable them permanently, add the
+completions script to your <code>.bashrc</code> file:</p>
+
+<figure class='code'><figcaption><span>adding completions to .bashrc</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">echo</span> <span class="s2">&quot;. ~/arangodb-completions-2.2&quot;</span> &gt;&gt; ~/.bashrc
+</span></code></pre></td></tr></table></div></figure>
+
+
+
 </div>
 
 
@@ -255,7 +279,7 @@ than Ubuntu.</em></p>
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>, <a class='category' href='/blog/categories/bash/'>bash</a>
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/bash/'>Bash</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>
   
 </span>
 
@@ -322,7 +346,7 @@ than Ubuntu.</em></p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (9)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/bash/'>bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (2)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/development/'>development (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (3)</a></li><li><a href='/blog/categories/linux/'>Linux (3)</a></li><li><a href='/blog/categories/performance/'>Performance (3)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (1)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (9)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (2)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/development/'>Development (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (3)</a></li><li><a href='/blog/categories/linux/'>Linux (3)</a></li><li><a href='/blog/categories/performance/'>Performance (3)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (1)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 
   

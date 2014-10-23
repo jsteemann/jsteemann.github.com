@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Bash | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/bash/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-23T00:13:41+02:00</updated>
+  <updated>2014-10-23T22:35:57+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -119,8 +119,27 @@ sudo \
 
 <p>To see it in action, type <code>arangosh --</code> and then press <strong>TAB</strong>.</p>
 
-<p><em>Note: I have no idea whether this works in other shells or in Linux distributions other
-than Ubuntu.</em></p>
+<h2>Other environments (MacOS etc.)</h2>
+
+<p><em>Note: I have checked that the above works on Ubuntu and OpenSuSE. I have no idea whether this works
+with other Linux distributions let alone other shells.</em></p>
+
+<p>Some Linux/Unix distros do not have <code>/etc/bash_completion.d</code> at all. I was told MacOS is one
+of them. For such environments, downloading and sourcing the completions script should work:
+```bash activate completion without bash_completion.d
+wget -O ~/arangodb-completions-2.2 \</p>
+
+<pre><code>https://jsteemann.github.io/downloads/code/completions-2.2
+</code></pre>
+
+<p>. ~/arangodb-completions-2.2
+```</p>
+
+<p>This will enable the completions in the current shell. To enable them permanently, add the
+completions script to your <code>.bashrc</code> file:
+<code>bash adding completions to .bashrc
+echo ". ~/arangodb-completions-2.2" &gt;&gt; ~/.bashrc
+</code></p>
 ]]></content>
   </entry>
   
