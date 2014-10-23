@@ -1,0 +1,639 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>What I Most Like About C++11 - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="About half a year ago we started compiling our code with -std=c++11. We had to fix a few, but not too many code parts for this. That was
+the easy &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>Notes on ArangoDB development</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">What I Most Like About C++11</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-10-23T23:02:12+02:00" pubdate data-updated="true">Oct 23<span>rd</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>About half a year ago we started compiling our code with <code>-std=c++11</code>.</p>
+
+<p>We had to fix a few, but not too many code parts for this. That was
+the easy part.</p>
+
+<p>Getting C++11 to work on all supported platforms, build and testing
+environments was a bit more challenging, but we finally managed to do it.</p>
+
+<p>Having used C++11 for some time now, I think it&rsquo;s time to share a few
+of improvements in C++11 that solve common problems.</p>
+
+<!-- more -->
+
+
+<p>First of all, I don&rsquo;t regret we changed to it. In my opinion,
+<strong>C++11 makes coding easier and safer.</strong> I will try to demonstrate that
+with a few examples in a second.</p>
+
+<p>Before I go into details, just let me state that I will only show a few
+of my personal favorites here. There are so many more improvements in C++11
+that are all worth having a look. If you haven&rsquo;t looked into C++11 much,
+I recommend getting started at the <a href="http://en.wikipedia.org/wiki/C%2B%2B11">Wikipedia page about C++11</a>.</p>
+
+<h2>Auto</h2>
+
+<p>From a developer perspective, one of the most compelling features of
+C++11 is the revamped <code>auto</code> keyword. Consider the following C++98/C++03 code:</p>
+
+<figure class='code'><figcaption><span>C++03 version</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&gt;::</span><span class="n">iterator</span> <span class="n">it</span> <span class="o">=</span> <span class="n">resultHeaders</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">value</span><span class="p">);</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">it</span> <span class="o">!=</span> <span class="n">resultHeaders</span><span class="p">.</span><span class="n">end</span><span class="p">())</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// do something with value</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In C++11 this code can be simplified to:</p>
+
+<figure class='code'><figcaption><span>C++11 version with auto</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">auto</span> <span class="n">it</span> <span class="o">=</span> <span class="n">resultHeaders</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">value</span><span class="p">);</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">it</span> <span class="o">!=</span> <span class="n">resultHeaders</span><span class="p">.</span><span class="n">end</span><span class="p">())</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// do something with value</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In the C++11 version of the code, the compiler can figure out the type of
+variable <code>it</code> all by itself. This allows writing less (i.e. better) code.</p>
+
+<p>The more complex the types are, the more helpful this gets. Compare the
+following two lines and check for yourself which one you prefer:</p>
+
+<figure class='code'><figcaption><span>C++03 version</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">CollectionID</span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&gt;</span> <span class="o">&gt;</span> <span class="o">&gt;::</span><span class="n">iterator</span> <span class="n">it</span> <span class="o">=</span> <span class="n">shards</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">collectionID</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>C++11 version with auto</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">auto</span> <span class="n">it</span> <span class="o">=</span> <span class="n">shards</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">collectionID</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>auto</code> provides an <em>extra benefit</em>:
+when using <code>auto</code> it is not necessary to repeat the type information
+throughout the code. This is helpful when types need to be changed and the
+change needs to be reflected everywhere. With <code>auto</code>, chances are that less
+code needs to be adjusted. And it is not necessary to set up extra
+typedefs for this.</p>
+
+<p>If you think <code>auto</code> obfuscates the meaning too much, you can be a bit more
+expressive, e.g.</p>
+
+<figure class='code'><figcaption><span>C++11 version with auto, const reference</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">auto</span> <span class="k">const</span><span class="o">&amp;</span> <span class="n">it</span> <span class="o">=</span> <span class="n">resultHeaders</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">value</span><span class="p">);</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">it</span> <span class="o">!=</span> <span class="n">resultHeaders</span><span class="p">.</span><span class="n">end</span><span class="p">())</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// do something with value</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Range-based loops</h2>
+
+<p>We all have written a lot of code that iterates over a ranges, like this:</p>
+
+<figure class='code'><figcaption><span>C++03: iterating over a range</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">string</span><span class="p">,</span> <span class="n">AgencyCommResultEntry</span><span class="o">&gt;::</span><span class="n">iterator</span> <span class="n">it</span><span class="p">;</span>
+</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="n">it</span> <span class="o">=</span> <span class="n">result</span><span class="p">.</span><span class="n">values</span><span class="p">.</span><span class="n">begin</span><span class="p">();</span> <span class="n">it</span> <span class="o">!=</span> <span class="n">result</span><span class="p">.</span><span class="n">values</span><span class="p">.</span><span class="n">end</span><span class="p">();</span> <span class="o">++</span><span class="n">it</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// do something with it</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>C++11 provides a special range-based syntax for <code>for</code> loops, which makes
+this a lot easier and compact:</p>
+
+<figure class='code'><figcaption><span>C++11: iterating over a range</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">for</span> <span class="p">(</span><span class="k">auto</span> <span class="n">it</span> <span class="o">:</span> <span class="n">result</span><span class="p">.</span><span class="n">values</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// do something with it</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Decltype</h2>
+
+<p>As we have seen, the compiler can deduce the type of expressions
+automatically. C++11 also allows using this type information with the
+<code>decltype</code> keyword. This allows to write more generic and maintainable code.</p>
+
+<p>In the following code, the type of variable <code>document</code> is a pointer to a
+<code>Document</code>. Variable <code>myDocument</code> has the same type:</p>
+
+<figure class='code'><figcaption><span>C++03 explicit type specification </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="n">Document</span><span class="o">*</span> <span class="n">document</span> <span class="o">=</span> <span class="n">res</span><span class="o">-&gt;</span><span class="n">getDocumentCollection</span><span class="p">(</span><span class="n">registerId</span><span class="p">);</span>
+</span><span class='line'><span class="n">Document</span><span class="o">*</span> <span class="n">myDocument</span> <span class="o">=</span> <span class="n">document</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In C++03, we couldn&rsquo;t tell the compiler that the two variables should
+always have the same types. In C++11, we can explicitly give <code>myDocument</code>
+the same type as <code>document</code>, without any typedefs:</p>
+
+<figure class='code'><figcaption><span>C++11 automatic type deduction</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="err">```</span><span class="n">c</span><span class="o">++</span> <span class="n">C</span><span class="o">++</span><span class="mi">11</span> <span class="n">automatic</span> <span class="n">type</span> <span class="n">deduction</span>
+</span><span class='line'><span class="k">auto</span><span class="o">*</span> <span class="n">document</span> <span class="o">=</span> <span class="n">res</span><span class="o">-&gt;</span><span class="n">getDocumentCollection</span><span class="p">(</span><span class="n">registerId</span><span class="p">);</span>
+</span><span class='line'><span class="n">decltype</span><span class="p">(</span><span class="n">document</span><span class="p">)</span> <span class="n">myDocument</span> <span class="o">=</span> <span class="n">document</span><span class="p">;</span>  <span class="c1">// myDocument has same type as document</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>decltype</code> can also be used to deduce the type of expressions.</p>
+
+<h2>Lambdas / Closures</h2>
+
+<p>Lambdas are available in most other mainstream languages today, and they
+are available in C++11, too.</p>
+
+<p>Probably one of the most common use cases for a lambda is a custom
+comparator function for sorting:</p>
+
+<figure class='code'><figcaption><span>custom comparator function using a lambda </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="n">std</span><span class="o">::</span><span class="n">sort</span><span class="p">(</span><span class="n">operations</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span>
+</span><span class='line'>          <span class="n">operations</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span>
+</span><span class='line'>          <span class="p">[]</span> <span class="p">(</span><span class="n">Operation</span> <span class="k">const</span><span class="o">*</span> <span class="n">left</span><span class="p">,</span> <span class="n">Operation</span> <span class="k">const</span><span class="o">*</span> <span class="n">right</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">return</span> <span class="p">(</span><span class="n">left</span><span class="o">-&gt;</span><span class="n">id</span> <span class="o">&lt;</span> <span class="n">right</span><span class="o">-&gt;</span><span class="n">id</span><span class="p">);</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In the above example, the lambda has two input parameters and produces a
+boolean result. Note that the type of the result was not explicitly specified.
+Again the compiler is able to figure it out automatically.</p>
+
+<p>A lambda can be assigned to a variable, and it can be passed as a parameter
+to another function/method. Lambdas can optionally have access to the
+variables of the scope they were created in.</p>
+
+<p>The following code defines a struct <code>ScopeGuard</code> that executes a lambda
+in its constructor and another lambda in its destructor:</p>
+
+<figure class='code'><figcaption><span>lambdas as function parameters</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="c1">// define ScopeGuard struct</span>
+</span><span class='line'><span class="k">struct</span> <span class="n">ScopeGuard</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">ScopeGuard</span> <span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">void</span><span class="p">()</span><span class="o">&gt;</span> <span class="n">onEnter</span><span class="p">,</span>
+</span><span class='line'>              <span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">void</span><span class="p">()</span><span class="o">&gt;</span> <span class="n">onExit</span><span class="p">)</span>
+</span><span class='line'>    <span class="o">:</span> <span class="n">onExit</span><span class="p">(</span><span class="n">onExit</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="n">onEnter</span><span class="p">();</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="o">~</span><span class="n">ScopeGuard</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">onExit</span><span class="p">();</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">void</span><span class="p">()</span><span class="o">&gt;</span> <span class="n">onExit</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// lambda to be executed in constructor</span>
+</span><span class='line'><span class="k">auto</span> <span class="n">onEnter</span> <span class="o">=</span> <span class="p">[</span><span class="o">&amp;</span><span class="n">engine</span><span class="p">]()</span> <span class="o">-&gt;</span> <span class="kt">void</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">engine</span><span class="o">-&gt;</span><span class="n">getQuery</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">enterContext</span><span class="p">();</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// lambda to be executed in destructor</span>
+</span><span class='line'><span class="k">auto</span> <span class="n">onExit</span> <span class="o">=</span> <span class="p">[</span><span class="o">&amp;</span><span class="p">]()</span> <span class="o">-&gt;</span> <span class="kt">void</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="k">auto</span> <span class="n">expression</span> <span class="o">:</span> <span class="n">allVariableBoundExpressions</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">expression</span><span class="o">-&gt;</span><span class="n">invalidate</span><span class="p">();</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="n">engine</span><span class="o">-&gt;</span><span class="n">getQuery</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">exitContext</span><span class="p">();</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// create guard object with the lambdas </span>
+</span><span class='line'><span class="c1">// this will instantly execute `onEnter`</span>
+</span><span class='line'><span class="n">ScopeGuard</span> <span class="n">guard</span><span class="p">(</span><span class="n">onEnter</span><span class="p">,</span> <span class="n">onExit</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// do something...</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// when scope is left, `onExit` will be executed</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As mentioned before, <code>decltype</code> can be used to determine the
+return type of a function automatically. Here&rsquo;s an example:</p>
+
+<figure class='code'><figcaption><span>function with automatic return type deduction</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">auto</span> <span class="n">add</span> <span class="o">=</span> <span class="p">[](</span><span class="kt">int</span> <span class="n">a</span><span class="p">,</span> <span class="kt">int</span> <span class="n">b</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">decltype</span><span class="p">(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As can be seen in the examples above, C++11 has introduced an
+alternative function declaration syntax, with the type of the
+function result following a <code>-&gt;</code>. The return type can be omitted
+if it can be unambiguously determined by the compiler. The new
+function declaration syntax is mainly useful for lambdas, but
+it can be used for regular functions, too.</p>
+
+<h2>Enum class</h2>
+
+<p>Enums in C++ are useful but just <em>don&rsquo;t feel right</em>: persisting a
+struct that contains an enum value is not portable as the
+underlying data type for the enum is implementation-dependent.</p>
+
+<p>Additionally, enum values can be compared to almost any other values,
+which in most cases doesn&rsquo;t make sense but obfuscates coding errors.
+There were also <em>scoping issues</em> with enum values.</p>
+
+<p>C++11 enum classes fix these problems. First of all, the underlying
+data type for an enum can be specified. For example, this creates
+an enum based with its value stored in an <code>std::uint8_t</code>:</p>
+
+<figure class='code'><figcaption><span>enum class with specified data type</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">enum</span> <span class="k">class</span> <span class="nc">StatusType</span> <span class="o">:</span> <span class="n">std</span><span class="o">::</span><span class="n">uint8_t</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">UNINITIALIZED</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
+</span><span class='line'>  <span class="n">STARTING</span><span class="p">,</span>
+</span><span class='line'>  <span class="n">RUNNING</span><span class="p">,</span>
+</span><span class='line'>  <span class="n">STOPPING</span><span class="p">,</span>
+</span><span class='line'>  <span class="n">STOPPED</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">StatusType</span> <span class="n">status</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Regarding the comparison of enum values to other values, C++11
+enum classes are much stronger typed than regular enums.
+Comparing the <code>status</code> variable from the above example to anything
+but a value from its enum class won&rsquo;t even compile.</p>
+
+<p>This provides much greater type safety than when using the old,
+implicitly converting enums:</p>
+
+<figure class='code'><figcaption><span>invalid usage of enums</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">status</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>  <span class="c1">// won&#39;t compile in C++11</span>
+</span><span class='line'>  <span class="c1">// ...</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">status</span> <span class="o">==</span> <span class="n">StatusType</span><span class="o">::</span><span class="n">UNINITIALIZED</span><span class="p">)</span> <span class="p">{</span>  <span class="c1">// this would work</span>
+</span><span class='line'>  <span class="c1">// ...</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Finally, enum classes fix the scoping problems of regular enums.
+In C++03, the following code did not complile because two enums
+contained the same member name:</p>
+
+<figure class='code'><figcaption><span>two enums with same member name</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">enum</span> <span class="n">DirectionType</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">LEFT</span><span class="p">,</span>
+</span><span class='line'>  <span class="n">RIGHT</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">enum</span> <span class="n">AnswerType</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">RIGHT</span><span class="p">,</span>  <span class="c1">// won&#39;t compile in C++03 and C++11</span>
+</span><span class='line'>  <span class="n">WRONG</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>With C++11 enum classes, the following code is all fine:</p>
+
+<figure class='code'><figcaption><span>two enums class with same member name</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">enum</span> <span class="k">class</span> <span class="nc">DirectionType</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">LEFT</span><span class="p">,</span>
+</span><span class='line'>  <span class="n">RIGHT</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">enum</span> <span class="k">class</span> <span class="nc">AnswerType</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">RIGHT</span><span class="p">,</span>  <span class="c1">// works!</span>
+</span><span class='line'>  <span class="n">WRONG</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Additional containers</h2>
+
+<p>C++11 provides the hash-based containers <code>std::unordered_map</code>
+and <code>std::unordered_set</code> (plus their non-unique counterparts).
+These containers are not sorted, so they can be more efficient
+than <code>std::map</code> and <code>std::set</code>.</p>
+
+<p>Turning an <code>std::map</code> into an <code>std::unordered_map</code> is simple as
+the APIs are more or less identical.</p>
+
+<p>There is now also a singly-linked list container, named
+<code>std::forward_list</code>. This obviously allows forward iteration
+only, but is more space efficient than the already existing
+doubly-linked list container.</p>
+
+<h2>More</h2>
+
+<p>Other improvements include move semantics, atomic variables and
+operations, a dedicated type for NULL pointers, STL support for
+threads and mutexes, regular expressions, more Unicode support,
+override, final &ndash; to name only a few&hellip;</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-10-23T23:02:12+02:00" pubdate data-updated="true">Oct 23<span>rd</span>, 2014</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/" title="Previous Post: How to set up bash completion for ArangoDB">&laquo; How to set up bash completion for ArangoDB</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    
+<section>
+	<span>
+		<img src="http://www.gravatar.com/avatar/ecea2672d02faabcfdcc3400ce7e713a" alt="Gravatar of jsteemann " title="Gravatar of jsteemann" />
+	</span>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/">What I Most Like About C++11</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/">How to Set Up Bash Completion for ArangoDB</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">Using Travis CI for a C++11 Project</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/10/16/how-to-compile-arangodb-from-source/">How to Compile ArangoDB From Source</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/10/15/handling-binary-data-in-foxx/">Handling Binary Data in Foxx</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (9)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (3)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/development/'>Development (3)</a></li><li><a href='/blog/categories/foxx/'>Foxx (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (3)</a></li><li><a href='/blog/categories/linux/'>Linux (3)</a></li><li><a href='/blog/categories/performance/'>Performance (3)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (1)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

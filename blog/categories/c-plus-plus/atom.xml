@@ -4,7 +4,7 @@
   <title><![CDATA[Category: C++ | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/c-plus-plus/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-23T22:35:57+02:00</updated>
+  <updated>2014-10-24T01:44:51+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,318 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[What I Most Like About C++11]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/"/>
+    <updated>2014-10-23T23:02:12+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11</id>
+    <content type="html"><![CDATA[<p>About half a year ago we started compiling our code with <code>-std=c++11</code>.</p>
+
+<p>We had to fix a few, but not too many code parts for this. That was
+the easy part.</p>
+
+<p>Getting C++11 to work on all supported platforms, build and testing
+environments was a bit more challenging, but we finally managed to do it.</p>
+
+<p>Having used C++11 for some time now, I think it&rsquo;s time to share a few
+of improvements in C++11 that solve common problems.</p>
+
+<!-- more -->
+
+
+<p>First of all, I don&rsquo;t regret we changed to it. In my opinion,
+<strong>C++11 makes coding easier and safer.</strong> I will try to demonstrate that
+with a few examples in a second.</p>
+
+<p>Before I go into details, just let me state that I will only show a few
+of my personal favorites here. There are so many more improvements in C++11
+that are all worth having a look. If you haven&rsquo;t looked into C++11 much,
+I recommend getting started at the <a href="http://en.wikipedia.org/wiki/C%2B%2B11">Wikipedia page about C++11</a>.</p>
+
+<h2>Auto</h2>
+
+<p>From a developer perspective, one of the most compelling features of
+C++11 is the revamped <code>auto</code> keyword. Consider the following C++98/C++03 code:</p>
+
+<p><code>c++ C++03 version
+std::map&lt;std::string, std::string&gt;::iterator it = resultHeaders.find(value);
+if (it != resultHeaders.end()) {
+  // do something with value
+}
+</code></p>
+
+<p>In C++11 this code can be simplified to:
+<code>c++ C++11 version with auto
+auto it = resultHeaders.find(value);
+if (it != resultHeaders.end()) {
+  // do something with value
+}
+</code>
+In the C++11 version of the code, the compiler can figure out the type of
+variable <code>it</code> all by itself. This allows writing less (i.e. better) code.</p>
+
+<p>The more complex the types are, the more helpful this gets. Compare the
+following two lines and check for yourself which one you prefer:</p>
+
+<p><code>c++ C++03 version
+std::map&lt;CollectionID, std::shared_ptr&lt;std::vector&lt;std::string&gt; &gt; &gt;::iterator it = shards.find(collectionID);
+</code></p>
+
+<p><code>c++ C++11 version with auto
+auto it = shards.find(collectionID);
+</code></p>
+
+<p><code>auto</code> provides an <em>extra benefit</em>:
+when using <code>auto</code> it is not necessary to repeat the type information
+throughout the code. This is helpful when types need to be changed and the
+change needs to be reflected everywhere. With <code>auto</code>, chances are that less
+code needs to be adjusted. And it is not necessary to set up extra
+typedefs for this.</p>
+
+<p>If you think <code>auto</code> obfuscates the meaning too much, you can be a bit more
+expressive, e.g.</p>
+
+<p><code>c++ C++11 version with auto, const reference
+auto const&amp; it = resultHeaders.find(value);
+if (it != resultHeaders.end()) {
+  // do something with value
+}
+</code></p>
+
+<h2>Range-based loops</h2>
+
+<p>We all have written a lot of code that iterates over a ranges, like this:</p>
+
+<p><code>c++ C++03: iterating over a range
+std::map&lt;string, AgencyCommResultEntry&gt;::iterator it;
+for (it = result.values.begin(); it != result.values.end(); ++it) {
+  // do something with it
+}
+</code></p>
+
+<p>C++11 provides a special range-based syntax for <code>for</code> loops, which makes
+this a lot easier and compact:
+<code>c++ C++11: iterating over a range
+for (auto it : result.values) {
+  // do something with it
+}
+</code></p>
+
+<h2>Decltype</h2>
+
+<p>As we have seen, the compiler can deduce the type of expressions
+automatically. C++11 also allows using this type information with the
+<code>decltype</code> keyword. This allows to write more generic and maintainable code.</p>
+
+<p>In the following code, the type of variable <code>document</code> is a pointer to a
+<code>Document</code>. Variable <code>myDocument</code> has the same type:</p>
+
+<p><code>c++ C++03 explicit type specification
+Document* document = res-&gt;getDocumentCollection(registerId);
+Document* myDocument = document;
+</code></p>
+
+<p>In C++03, we couldn&rsquo;t tell the compiler that the two variables should
+always have the same types. In C++11, we can explicitly give <code>myDocument</code>
+the same type as <code>document</code>, without any typedefs:</p>
+
+<p><code>c++ C++11 automatic type deduction
+</code>c++ C++11 automatic type deduction
+auto* document = res->getDocumentCollection(registerId);
+decltype(document) myDocument = document;  // myDocument has same type as document
+```</p>
+
+<p><code>decltype</code> can also be used to deduce the type of expressions.</p>
+
+<h2>Lambdas / Closures</h2>
+
+<p>Lambdas are available in most other mainstream languages today, and they
+are available in C++11, too.</p>
+
+<p>Probably one of the most common use cases for a lambda is a custom
+comparator function for sorting:</p>
+
+<p>```c++ custom comparator function using a lambda
+std::sort(operations.begin(),</p>
+
+<pre><code>      operations.end(), 
+      [] (Operation const* left, Operation const* right) {
+</code></pre>
+
+<p>  return (left->id &lt; right->id);
+});
+```</p>
+
+<p>In the above example, the lambda has two input parameters and produces a
+boolean result. Note that the type of the result was not explicitly specified.
+Again the compiler is able to figure it out automatically.</p>
+
+<p>A lambda can be assigned to a variable, and it can be passed as a parameter
+to another function/method. Lambdas can optionally have access to the
+variables of the scope they were created in.</p>
+
+<p>The following code defines a struct <code>ScopeGuard</code> that executes a lambda
+in its constructor and another lambda in its destructor:</p>
+
+<p>```c++ lambdas as function parameters
+// define ScopeGuard struct
+struct ScopeGuard {
+  ScopeGuard (std::function&lt;void()> onEnter,</p>
+
+<pre><code>          std::function&lt;void()&gt; onExit) 
+: onExit(onExit) {
+  onEnter();
+</code></pre>
+
+<p>  }</p>
+
+<p>  ~ScopeGuard () {</p>
+
+<pre><code>onExit();
+</code></pre>
+
+<p>  }</p>
+
+<p>  std::function&lt;void()> onExit;
+};</p>
+
+<p>// lambda to be executed in constructor
+auto onEnter = <a href="">&amp;engine</a> &ndash;> void {
+  engine->getQuery()&ndash;>enterContext();
+};</p>
+
+<p>// lambda to be executed in destructor
+auto onExit = <a href="">&amp;</a> &ndash;> void {
+  for (auto expression : allVariableBoundExpressions) {</p>
+
+<pre><code>expression-&gt;invalidate();
+</code></pre>
+
+<p>  }
+  engine->getQuery()&ndash;>exitContext();
+}</p>
+
+<p>// create guard object with the lambdas
+// this will instantly execute <code>onEnter</code>
+ScopeGuard guard(onEnter, onExit);</p>
+
+<p>// do something&hellip;</p>
+
+<p>// when scope is left, <code>onExit</code> will be executed
+```</p>
+
+<p>As mentioned before, <code>decltype</code> can be used to determine the
+return type of a function automatically. Here&rsquo;s an example:</p>
+
+<p><code>c++ function with automatic return type deduction
+auto add = [](int a, int b) -&gt; decltype(a + b) {
+  return a + b;
+};
+</code></p>
+
+<p>As can be seen in the examples above, C++11 has introduced an
+alternative function declaration syntax, with the type of the
+function result following a <code>-&gt;</code>. The return type can be omitted
+if it can be unambiguously determined by the compiler. The new
+function declaration syntax is mainly useful for lambdas, but
+it can be used for regular functions, too.</p>
+
+<h2>Enum class</h2>
+
+<p>Enums in C++ are useful but just <em>don&rsquo;t feel right</em>: persisting a
+struct that contains an enum value is not portable as the
+underlying data type for the enum is implementation-dependent.</p>
+
+<p>Additionally, enum values can be compared to almost any other values,
+which in most cases doesn&rsquo;t make sense but obfuscates coding errors.
+There were also <em>scoping issues</em> with enum values.</p>
+
+<p>C++11 enum classes fix these problems. First of all, the underlying
+data type for an enum can be specified. For example, this creates
+an enum based with its value stored in an <code>std::uint8_t</code>:</p>
+
+<p>```c++ enum class with specified data type
+enum class StatusType : std::uint8_t {
+  UNINITIALIZED = 0,
+  STARTING,
+  RUNNING,
+  STOPPING,
+  STOPPED
+};</p>
+
+<p>StatusType status;
+```</p>
+
+<p>Regarding the comparison of enum values to other values, C++11
+enum classes are much stronger typed than regular enums.
+Comparing the <code>status</code> variable from the above example to anything
+but a value from its enum class won&rsquo;t even compile.</p>
+
+<p>This provides much greater type safety than when using the old,
+implicitly converting enums:</p>
+
+<p><code>c++ invalid usage of enums
+if (status == 0) {  // won't compile in C++11
+  // ...
+}
+if (status == StatusType::UNINITIALIZED) {  // this would work
+  // ...
+}
+</code></p>
+
+<p>Finally, enum classes fix the scoping problems of regular enums.
+In C++03, the following code did not complile because two enums
+contained the same member name:</p>
+
+<p>```c++ two enums with same member name
+enum DirectionType {
+  LEFT,
+  RIGHT
+};</p>
+
+<p>enum AnswerType {
+  RIGHT,  // won&rsquo;t compile in C++03 and C++11
+  WRONG
+};
+```</p>
+
+<p>With C++11 enum classes, the following code is all fine:
+```c++ two enums class with same member name
+enum class DirectionType {
+  LEFT,
+  RIGHT
+};</p>
+
+<p>enum class AnswerType {
+  RIGHT,  // works!
+  WRONG
+};
+```</p>
+
+<h2>Additional containers</h2>
+
+<p>C++11 provides the hash-based containers <code>std::unordered_map</code>
+and <code>std::unordered_set</code> (plus their non-unique counterparts).
+These containers are not sorted, so they can be more efficient
+than <code>std::map</code> and <code>std::set</code>.</p>
+
+<p>Turning an <code>std::map</code> into an <code>std::unordered_map</code> is simple as
+the APIs are more or less identical.</p>
+
+<p>There is now also a singly-linked list container, named
+<code>std::forward_list</code>. This obviously allows forward iteration
+only, but is more space efficient than the already existing
+doubly-linked list container.</p>
+
+<h2>More</h2>
+
+<p>Other improvements include move semantics, atomic variables and
+operations, a dedicated type for NULL pointers, STL support for
+threads and mutexes, regular expressions, more Unicode support,
+override, final &ndash; to name only a few&hellip;</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Using Travis CI for a C++11 Project]]></title>
