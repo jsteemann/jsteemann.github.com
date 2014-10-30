@@ -5,13 +5,11 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>Using Travis CI for a C++11 Project - J@ArangoDB</title>
+  <title>Getting Core Dumps of Failed TravisCI Builds - J@ArangoDB</title>
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="TravisCI is a very useful cloud service
-for continous integration. It can be integrated with Github, with each
-commit triggering a new build and &hellip;">
+  <meta name="description" content="I recently wrote about using TravisCI for continuously testing C++11 projects. Now, what if a build fails? Especially for C and C++ projects, build &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -20,7 +18,7 @@ commit triggering a new build and &hellip;">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project">
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
@@ -82,7 +80,7 @@ commit triggering a new build and &hellip;">
   
   <header>
     
-      <h1 class="entry-title">Using Travis CI for a C++11 Project</h1>
+      <h1 class="entry-title">Getting Core Dumps of Failed TravisCI Builds</h1>
     
     
       <p class="meta">
@@ -98,66 +96,82 @@ commit triggering a new build and &hellip;">
   
 
 
-<time datetime="2014-10-17T19:36:57+02:00" pubdate data-updated="true">Oct 17<span>th</span>, 2014</time>
+<time datetime="2014-10-30T23:05:48+01:00" pubdate data-updated="true">Oct 30<span>th</span>, 2014</time>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p><a href="http://travis-ci.com">TravisCI</a> is a very useful cloud service
-for continous integration. It can be integrated with Github, with each
-commit triggering a new build and reporting back when it broke something.</p>
+<div class="entry-content"><p>I recently wrote about <a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">using TravisCI for continuously testing C++11 projects</a>.</p>
 
-<p>Travis has support for many programming languages, among them C++.
-But it lacks support for C++11 features.</p>
+<p><strong>Now, what if a build fails?</strong></p>
+
+<p>Especially for C and C++ projects, build failures may mean crashed
+programs. In a local setup, the usual way to analyze program crashes
+is to manually inspect the core files that are written on crash.</p>
+
+<p>With TravisCI, there is no way to log in to a build machine and
+inspect a core dump interactively. There is no SSH access to
+the build machines. TravisCI does not even persist any state of
+builds but the result and the log output.</p>
+
+<p>There is a way to get to the core dumps, but it was fiddly to find
+out and set up.</p>
 
 <!-- more -->
 
 
-<p>Travis provides basic support for C++ projects. <a href="http://docs.travis-ci.com/user/languages/cpp/">It comes with gcc, clang,
-the autotools, make, cmake and scons</a>.</p>
+<p>The basic idea is to run <code>gdb</code> on the TravisCI build machine
+automatically when a build fails. <code>gdb</code> can be scripted, so all
+we need to do is to make it print a backtrace in all threads at
+the time of the crash.</p>
 
-<p>While writing this post, Travis CI build machines run on Ubuntu 12.04
-LTS 64 bit. This version of Ubuntu is rather old already, and does not bring
-too many packages for C++11 development. For example, the default
-C++ compiler installed on TravisCI is g++-4.6.3. This version
-doesn&rsquo;t even understand the compile option <code>-std=c++11</code>.</p>
+<p>By default, no core dumps will be produced on TravisCI. To turn them
+on, an appropriate ulimit value must be set. We also need to install
+<code>gdb</code> so we can actually run it. Here is the <code>.travis.yml</code> adjustment
+for these prerequisites:</p>
 
-<p>Official C++11 support <a href="https://gcc.gnu.org/projects/cxx0x.html">started in g++ 4.7</a>,
-though C++0x features were supported way earlier. But to get decent C++11 support
-in g++, it is best to use g++4.8 or higher.</p>
-
-<p>Fortunately TravisCI allows installing other software. To get
-a more recent C++ compiler, it can simply be added from a PPA.
-This can be achieved by putting the PPA in the <code>.travis.yml</code> file of your
-Github repository, e.g.</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span>adjustments for install and before_script hooks</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
 <span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">language</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cpp</span>
-</span><span class='line'><span class="l-Scalar-Plain">compiler</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">g++</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">install</span><span class="p-Indicator">:</span>
+</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">sudo apt-get install -y gdb</span>  <span class="c1"># install gdb</span>
 </span><span class='line'>
-</span><span class='line'><span class="l-Scalar-Plain">before_install</span><span class="p-Indicator">:</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">sudo apt-get update -qq</span>
-</span><span class='line'>
-</span><span class='line'><span class="l-Scalar-Plain">install</span><span class="p-Indicator">:</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">sudo apt-get install -qq g++-4.8</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">export CXX=&quot;g++-4.8&quot;</span>
+</span><span class='line'><span class="l-Scalar-Plain">before_script</span><span class="p-Indicator">:</span>
+</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">ulimit -c unlimited -S</span>       <span class="c1"># enable core dumps</span>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>I have set up an <a href="https://github.com/jsteemann/travis-cxx11">example project on Github</a>
-that demonstrates how to use it.</p>
+<p>To get an idea of where the program crashed, we can finally install
+an <code>after_failure</code> hook. This hook can check for a core file and use
+<code>gdb</code> to print a nice backtrace.</p>
+
+<p>The core file pattern on TravisCI seems to be <code>core-%p</code>, so core
+filenames will include the executable&rsquo;s process id and change on
+every run. We can use <code>find</code> to look for files named <code>core*</code> in the
+cwd and pick the first one as there should only be at most one core
+file per build:</p>
+
+<figure class='code'><figcaption><span>adjustments for after_failure hook</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">after_failure</span><span class="p-Indicator">:</span>
+</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">COREFILE=$(find . -maxdepth 1 -name &quot;core*&quot; | head -n 1)</span> <span class="c1"># find core file</span>
+</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">if [[ -f &quot;$COREFILE&quot; ]]; then gdb -c &quot;$COREFILE&quot; example -ex &quot;thread apply all bt&quot; -ex &quot;set pagination 0&quot; -batch; fi</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>A failed build might produce output like this:</p>
+
+<p><img src="/downloads/screenshots/travis-ci-gdb.png"></p>
+
+<p>Note that it is wise to compile the executable to test with debug
+symbols on and with all optimizations turned off (i.e. compiler options
+<code>-g -O0</code>). Otherwise the backtrace might reveal less useful information
+for debugging.</p>
 </div>
 
 
@@ -180,7 +194,7 @@ that demonstrates how to use it.</p>
   
 
 
-<time datetime="2014-10-17T19:36:57+02:00" pubdate data-updated="true">Oct 17<span>th</span>, 2014</time>
+<time datetime="2014-10-30T23:05:48+01:00" pubdate data-updated="true">Oct 30<span>th</span>, 2014</time>
       
 
 <span class="categories">
@@ -194,7 +208,7 @@ that demonstrates how to use it.</p>
     
       <div class="sharing">
   
-  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/" >Tweet</a>
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/" >Tweet</a>
   
   
   
@@ -203,10 +217,8 @@ that demonstrates how to use it.</p>
     
     <p class="meta">
       
-        <a class="basic-alignment left" href="/blog/2014/10/16/how-to-compile-arangodb-from-source/" title="Previous Post: How to compile ArangoDB from source">&laquo; How to compile ArangoDB from source</a>
+        <a class="basic-alignment left" href="/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/" title="Previous Post: What I most like about C++11">&laquo; What I most like about C++11</a>
       
-      
-        <a class="basic-alignment right" href="/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/" title="Next Post: How to set up bash completion for ArangoDB">How to set up bash completion for ArangoDB &raquo;</a>
       
     </p>
   </footer>

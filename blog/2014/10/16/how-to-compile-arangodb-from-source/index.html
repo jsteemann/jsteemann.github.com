@@ -257,6 +257,9 @@ forget to switch into the <code>ArangoDB</code> directory.</p>
 <pre><code>bin/arangosh
 </code></pre>
 
+<p>This should bring up the ArangoShell connected to your devel ArangoDB
+instance.</p>
+
 <h2>Making changes</h2>
 
 <p>Time to make some changes in the code. A good place to start is usually
@@ -290,6 +293,26 @@ as on the previous run.</p>
 
 <p>If you are serious about contributing to the server code, please let us
 know <a href="https://groups.google.com/forum/#!forum/arangodb">here</a> so we can assist you.</p>
+
+<h2>Getting updates</h2>
+
+<p>We keep developing ArangoDB! To keep up to date and retrieve the latest
+changes from our repository, issue the following commands:</p>
+
+<pre><code>git pull origin devel
+make
+</code></pre>
+
+<p>If <code>make</code> complains about files not found etc., the <code>Makefile</code> may have
+changed. Then it&rsquo;s time for a rebuild:</p>
+
+<pre><code>make clean
+./configure --enable-all-in-one-icu --enable-all-in-one-v8 --enable-relative 
+make
+</code></pre>
+
+<p>By the way, if you used special configure options and forgot them, you
+can retrieve your previous options by typing <code>head config.log</code>.</p>
 
 <p>Enjoy!</p>
 </div>
@@ -361,6 +384,10 @@ know <a href="https://groups.google.com/forum/#!forum/arangodb">here</a> so we c
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/">Getting Core Dumps of Failed TravisCI Builds</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/">What I Most Like About C++11</a>
       </li>
     
@@ -376,10 +403,6 @@ know <a href="https://groups.google.com/forum/#!forum/arangodb">here</a> so we c
         <a href="/blog/2014/10/16/how-to-compile-arangodb-from-source/">How to Compile ArangoDB From Source</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2014/10/15/handling-binary-data-in-foxx/">Handling Binary Data in Foxx</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -388,7 +411,7 @@ know <a href="https://groups.google.com/forum/#!forum/arangodb">here</a> so we c
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (9)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (3)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/development/'>Development (3)</a></li><li><a href='/blog/categories/foxx/'>Foxx (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (3)</a></li><li><a href='/blog/categories/linux/'>Linux (3)</a></li><li><a href='/blog/categories/performance/'>Performance (3)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (1)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (9)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (3)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/performance/'>Performance (3)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 
   

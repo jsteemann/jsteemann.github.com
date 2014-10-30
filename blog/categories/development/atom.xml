@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Development | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/development/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-24T01:44:51+02:00</updated>
+  <updated>2014-10-30T23:44:45+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,75 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Getting Core Dumps of Failed TravisCI Builds]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/"/>
+    <updated>2014-10-30T23:05:48+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds</id>
+    <content type="html"><![CDATA[<p>I recently wrote about <a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">using TravisCI for continuously testing C++11 projects</a>.</p>
+
+<p><strong>Now, what if a build fails?</strong></p>
+
+<p>Especially for C and C++ projects, build failures may mean crashed
+programs. In a local setup, the usual way to analyze program crashes
+is to manually inspect the core files that are written on crash.</p>
+
+<p>With TravisCI, there is no way to log in to a build machine and
+inspect a core dump interactively. There is no SSH access to
+the build machines. TravisCI does not even persist any state of
+builds but the result and the log output.</p>
+
+<p>There is a way to get to the core dumps, but it was fiddly to find
+out and set up.</p>
+
+<!-- more -->
+
+
+<p>The basic idea is to run <code>gdb</code> on the TravisCI build machine
+automatically when a build fails. <code>gdb</code> can be scripted, so all
+we need to do is to make it print a backtrace in all threads at
+the time of the crash.</p>
+
+<p>By default, no core dumps will be produced on TravisCI. To turn them
+on, an appropriate ulimit value must be set. We also need to install
+<code>gdb</code> so we can actually run it. Here is the <code>.travis.yml</code> adjustment
+for these prerequisites:</p>
+
+<p>```yaml adjustments for install and before_script hooks
+install:
+&ndash; sudo apt-get install -y gdb  # install gdb</p>
+
+<p>before_script:
+&ndash; ulimit -c unlimited -S       # enable core dumps
+```</p>
+
+<p>To get an idea of where the program crashed, we can finally install
+an <code>after_failure</code> hook. This hook can check for a core file and use
+<code>gdb</code> to print a nice backtrace.</p>
+
+<p>The core file pattern on TravisCI seems to be <code>core-%p</code>, so core
+filenames will include the executable&rsquo;s process id and change on
+every run. We can use <code>find</code> to look for files named <code>core*</code> in the
+cwd and pick the first one as there should only be at most one core
+file per build:</p>
+
+<p><code>yaml adjustments for after_failure hook
+after_failure:
+- COREFILE=$(find . -maxdepth 1 -name "core*" | head -n 1) # find core file
+- if [[ -f "$COREFILE" ]]; then gdb -c "$COREFILE" example -ex "thread apply all bt" -ex "set pagination 0" -batch; fi
+</code></p>
+
+<p>A failed build might produce output like this:</p>
+
+<p><img src="/downloads/screenshots/travis-ci-gdb.png"></p>
+
+<p>Note that it is wise to compile the executable to test with debug
+symbols on and with all optimizations turned off (i.e. compiler options
+<code>-g -O0</code>). Otherwise the backtrace might reveal less useful information
+for debugging.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[What I Most Like About C++11]]></title>
@@ -340,19 +409,23 @@ But it lacks support for C++11 features.</p>
 <!-- more -->
 
 
-<p>Travis CI build machines run on Ubuntu 12.04 LTS 64 bit.
-This version of Ubuntu is rather old already, and does not bring
+<p>Travis provides basic support for C++ projects. <a href="http://docs.travis-ci.com/user/languages/cpp/">It comes with gcc, clang,
+the autotools, make, cmake and scons</a>.</p>
+
+<p>While writing this post, Travis CI build machines run on Ubuntu 12.04
+LTS 64 bit. This version of Ubuntu is rather old already, and does not bring
 too many packages for C++11 development. For example, the default
 C++ compiler installed on TravisCI is g++-4.6.3. This version
 doesn&rsquo;t even understand the compile option <code>-std=c++11</code>.</p>
 
-<p>C++11 support started in the g++ 4.7 branch. To get decent C++11
-support, it is even better to use g++4.8 or higher.</p>
+<p>Official C++11 support <a href="https://gcc.gnu.org/projects/cxx0x.html">started in g++ 4.7</a>,
+though C++0x features were supported way earlier. But to get decent C++11 support
+in g++, it is best to use g++4.8 or higher.</p>
 
 <p>Fortunately TravisCI allows installing other software. To get
 a more recent C++ compiler, it can simply be added from a PPA.
-This can be achieved by putting the PPA in the <code>.travis.yml</code> file,
-e.g.</p>
+This can be achieved by putting the PPA in the <code>.travis.yml</code> file of your
+Github repository, e.g.</p>
 
 <p>```yaml
 language: cpp
@@ -528,6 +601,9 @@ forget to switch into the <code>ArangoDB</code> directory.</p>
 <pre><code>bin/arangosh
 </code></pre>
 
+<p>This should bring up the ArangoShell connected to your devel ArangoDB
+instance.</p>
+
 <h2>Making changes</h2>
 
 <p>Time to make some changes in the code. A good place to start is usually
@@ -554,6 +630,26 @@ as on the previous run.</p>
 
 <p>If you are serious about contributing to the server code, please let us
 know <a href="https://groups.google.com/forum/#!forum/arangodb">here</a> so we can assist you.</p>
+
+<h2>Getting updates</h2>
+
+<p>We keep developing ArangoDB! To keep up to date and retrieve the latest
+changes from our repository, issue the following commands:</p>
+
+<pre><code>git pull origin devel
+make
+</code></pre>
+
+<p>If <code>make</code> complains about files not found etc., the <code>Makefile</code> may have
+changed. Then it&rsquo;s time for a rebuild:</p>
+
+<pre><code>make clean
+./configure --enable-all-in-one-icu --enable-all-in-one-v8 --enable-relative 
+make
+</code></pre>
+
+<p>By the way, if you used special configure options and forgot them, you
+can retrieve your previous options by typing <code>head config.log</code>.</p>
 
 <p>Enjoy!</p>
 ]]></content>

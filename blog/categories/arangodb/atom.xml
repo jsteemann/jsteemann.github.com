@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-24T01:44:51+02:00</updated>
+  <updated>2014-10-30T23:44:45+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -299,6 +299,9 @@ forget to switch into the <code>ArangoDB</code> directory.</p>
 <pre><code>bin/arangosh
 </code></pre>
 
+<p>This should bring up the ArangoShell connected to your devel ArangoDB
+instance.</p>
+
 <h2>Making changes</h2>
 
 <p>Time to make some changes in the code. A good place to start is usually
@@ -325,6 +328,26 @@ as on the previous run.</p>
 
 <p>If you are serious about contributing to the server code, please let us
 know <a href="https://groups.google.com/forum/#!forum/arangodb">here</a> so we can assist you.</p>
+
+<h2>Getting updates</h2>
+
+<p>We keep developing ArangoDB! To keep up to date and retrieve the latest
+changes from our repository, issue the following commands:</p>
+
+<pre><code>git pull origin devel
+make
+</code></pre>
+
+<p>If <code>make</code> complains about files not found etc., the <code>Makefile</code> may have
+changed. Then it&rsquo;s time for a rebuild:</p>
+
+<pre><code>make clean
+./configure --enable-all-in-one-icu --enable-all-in-one-v8 --enable-relative 
+make
+</code></pre>
+
+<p>By the way, if you used special configure options and forgot them, you
+can retrieve your previous options by typing <code>head config.log</code>.</p>
 
 <p>Enjoy!</p>
 ]]></content>
