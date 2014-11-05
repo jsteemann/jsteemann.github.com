@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-30T23:44:45+01:00</updated>
+  <updated>2014-11-05T01:28:35+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,152 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Setting Up Test Data]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/11/04/setting-up-test-data/"/>
+    <updated>2014-11-04T22:14:21+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/11/04/setting-up-test-data</id>
+    <content type="html"><![CDATA[<p>Today I was asked to look at code that was supposed to read data
+from a MySQL data source, process it and then import it into ArangoDB.</p>
+
+<p>To run and debug the code I had to have some MySQL data source. So I
+thought I&rsquo;d quickly set up a simple example table with a few rows.
+It turned out that this took more time than what I had expected.</p>
+
+<p>Maybe I&rsquo;m spoilt by JavaScript-enabled, schema-free databases where
+creating such test setups is so much easier.</p>
+
+<!-- more -->
+
+
+<p>I worked with MySQL databases in production for 10+ years and spent
+much time working with the mysql client. I always liked MySQL, but in
+the past few years, I was driven away from it and lost contact.
+Instead, I got sucked into the NoSQL landscape and enjoy it pretty much.</p>
+
+<p>Getting back to the original problem: I needed some MySQL table with a
+few thousand rows for a test. It turned out I didn&rsquo;t even have MySQL
+installed on my computer, so I needed to install it first.</p>
+
+<p>After setting up the MySQL server, I created a table <code>examples</code> for
+storing my test data:</p>
+
+<p><code>sql
+CREATE DATABASE test;
+USE test;
+CREATE TABLE examples (attribute1 VARCHAR(20), attribute2 VARCHAR(20));
+</code></p>
+
+<p>Not really the black belt of schema design, but good enough for a quick
+test.</p>
+
+<p>Now the table needed some rows. 100,000 rows should be enough. I wrote
+some bash script to create them as there is no sane way to do this with
+the MySQL client alone:</p>
+
+<p><code>``bash
+for i in</code>seq 1 100000`
+  do</p>
+
+<pre><code>echo "INSERT INTO examples VALUES (\"test$i\", \"test$i\");" &gt;&gt; import.sql 
+</code></pre>
+
+<p>  done
+```</p>
+
+<p>Time to import the data!</p>
+
+<p><code>bash
+mysql -u user test &lt; import.sql
+</code></p>
+
+<p>At first I was a bit surprised this command did not return instantly. I let it
+run for about a minute, and then began checking the import progress with a second mysql
+client. It turned out only very few records had been imported, and the import
+script continued to create only around 30-35 records per second.</p>
+
+<p>Seems I had forgotten that I am working with a No-NoSQL database, with full
+ACID semantics for everything. My import file contained 100,000 <code>INSERT</code>
+statements, so I was asking to perform 100,000 transactions and fsync operations.
+That import would have taken forever with my slow HDD!</p>
+
+<p>I quickly changed the InnoDB setting to make it commit only about once per second:
+<code>
+mysql&gt; SET GLOBAL innodb_flush_log_at_trx_commit = 2;
+Query OK, 0 rows affected (0.00 sec)
+</code></p>
+
+<p>Now the import finished in 7 seconds.</p>
+
+<p>I finally got the data in MySQL, but overall it took me about 10 minutes to get
+it done. Probably a bit less if I still were an active user of MySQL and had
+remembered the default behavior right from the start.</p>
+
+<p>Still, my feeling is that it takes too much time to get something so simple
+done.</p>
+
+<p>I don&rsquo;t blame the database for trying to commit all 100,000 single-row
+<code>INSERT</code> operations and fsync them to disk. It simply cannot know if the data
+are important or just throw-away test records.</p>
+
+<p>But there are other reasons: I had to write a bash script to produce the
+test data, as there is no sane way to do this with the MySQL client alone.
+Writing bash scripts is fine, and in general I like it, but I don&rsquo;t want to
+do it for a dead-simple test setup.</p>
+
+<p>And by the way, what if it turns out that I need to generate slightly more
+complex test data? In the MySQL case I probably would have resorted to sed
+or awk or would have thrown away my bash script and had rewritten it in some
+other language. So I would have wasted even more time.</p>
+
+<p>I personally prefer the ability to use a scripting language for such tasks.
+JavaScript is ubiquituous these days, and I want to use it in a database&rsquo;s
+command-line client.</p>
+
+<p>For example, here&rsquo;s how the test setup would look like in the ArangoShell:
+<code>js
+db._create("examples");
+for (i = 0; i &lt; 100000; ++i) {
+  db.examples.save({ attribute1: "test" + i, attribute2: "test" + i });
+}
+</code>
+I find this much easier to use: it allows to do everything in one place,
+removing the need to write another script that prepares a data file or an
+SQL file first.</p>
+
+<p>As a bonus, using a programming language is much more flexible and powerful.
+If I needed to generate slightly more complex test data, I can just do it,
+adjust the JavaScript code and re-run it.</p>
+
+<p>Even more annoying to me is that I needed to provide a schema for the
+table first. I could have got away with declaring all text fields as
+<code>VARCHAR(255)</code> or <code>TEXT</code> so I can at least ignore string
+length restrictions. But I still need to type in the table schema
+once, even if it feels completely useless for this particular use case.</p>
+
+<p>It would get even more annoying if during my test I noticed I needed more
+or other columns. Then I would need to adjust the table schema using <code>ALTER TABLE</code>
+or adjust the <code>CREATE TABLE</code> statement and run it again, keeping me
+away from the original task.</p>
+
+<p>Maybe using schema-free databases for too long has spoilt me, but I much
+more prefer starting quickly and without a schema. I know the data that
+I am going to load will have a structure and will be somewhat self-describing,
+so the database can still figure out what the individual parts of a record are.</p>
+
+<p><em>On a side-note: should you be a fan of using query languages, the same
+test setup can also be achieved by running the following AQL query from
+the ArangoShell</em>:
+```js
+db._query(&ldquo;FOR i IN 1..100000 LET value = CONCAT(&lsquo;test&rsquo;, i) &rdquo; +</p>
+
+<pre><code>      "INSERT { attribute1: value, attribute2: value } INTO examples");
+</code></pre>
+
+<p>```</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[How to Set Up Bash Completion for ArangoDB]]></title>
@@ -633,208 +779,6 @@ this supports a service-oriented approach.</p>
 <p>To learn more about how to write server-side actions, please have a look
 at ArangoDB&rsquo;s <a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a>. It is all
 about making server-side actions available via REST APIs.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Speeding Up Server-side Operations]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/08/20/speeding-up-server-side-operations/"/>
-    <updated>2014-08-20T22:02:09+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/08/20/speeding-up-server-side-operations</id>
-    <content type="html"><![CDATA[<p>Sometimes it is easier to make server-side operations run a bit faster.
-In the following post I&rsquo;ll show a few low-level optimizations that can
-be applied to user-defined JavaScript code that is executed inside the
-ArangoDB server.</p>
-
-<!-- more -->
-
-
-<h1>Scope</h1>
-
-<p>Some data-access operations can be sped up by using the appropriate indexes,
-but that&rsquo;s not what I am going to show here.
-Instead, I want to demo a few easy optimizations that don&rsquo;t require any
-changes to the data. Only JavaScript code needs to be minimally adjusted
-to use them.</p>
-
-<p>Note that I am not talking about code that is executed in the ArangoShell
-here. I will only be looking at code that is executed inside the arangod
-server instance. The natural places for using custom JavaScript code in
-the ArangoDB server are for example:</p>
-
-<ul>
-<li><a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a> controllers</li>
-<li><a href="http://docs.arangodb.org/Transactions/TransactionInvocation.html">transactions</a></li>
-<li><a href="http://docs.arangodb.org/ModuleTasks/README.html">tasks</a></li>
-<li><a href="http://docs.arangodb.org/Traversals/README.html">traversals</a></li>
-</ul>
-
-
-<p>Of course it does not make much sense to optimize operations that are not
-called very often. The code changes I show will only be useful for server-side
-operations that are called very often, for example, from within loops or
-from batch processing actions.</p>
-
-<p>Before starting to change any code, please make sure that the code is executed
-often and that it accounts for a significant part of the total execution time.</p>
-
-<h2>Baseline</h2>
-
-<p>Imagine the following custom JavaScript code running somewhere inside ArangoDB:
-<code>js baseline
-for (var i = 0; i &lt; 100000; ++i) {
-  db.test.save({ value: 1 });
-}
-</code>
-This code inserts 100,000 documents into a collection <code>test</code>. Each document has
-one attribute only. These numbers are arbitrary, but good enough for a demo.</p>
-
-<p>What can we do to improve the runtime of the above code?</p>
-
-<h2>Non-optimizations</h2>
-
-<p>The <em>for</em> statement itself is not worth optimizing. It won&rsquo;t matter much if we used
-pre-increment or post-increment for the loop induction variable <code>i</code> or if we
-turned the <em>for</em> loop into a <em>while</em> loop. Any changes here might only save us a
-few nanoseconds in total, but are likely to make the code more unreadable.</p>
-
-<p>Let&rsquo;s not do that!</p>
-
-<h2>Avoiding accessors</h2>
-
-<p>Clearly, we should be looking at the <code>save</code> operation.</p>
-
-<p><code>db.test.save()</code> looks like a function call, and we learned that function are
-expensive. In this case, we cannot avoid the function call to <code>save()</code>, but we
-can avoid another <em>hidden function call</em>. Yes, <code>db.test</code> actually calls a function,
-though it does not look like it does.</p>
-
-<p>The <code>db</code> object has auto-magic member attributes. The <code>db</code> object will have a
-member attribute for existing collection. The member will automatically vanish when
-a collection gets dropped, and the member will rename itself when collections are
-renamed.</p>
-
-<p>This magic is made possible by late-binding attributes and using accessor functions
-for attribute accesses on the <code>db</code> object: whenever the attributes of the <code>db</code> object
-are queried, an accessor function (<em>property query</em>) is called internally to compile
-them. Accessing a specific attribute of the <code>db</code> object will also call an accessor
-function (<em>property get</em>). This is exactly what happens in our case when we access
-<code>db.test</code>.</p>
-
-<p>If this was too complicated, it may become more obvious if we modified the original
-code to this:
-<code>js using attribute lookup
-for (var i = 0; i &lt; 100000; ++i) {
-  db['test'].save({ value: 1 });
-}
-</code>
-Now it should be obvious that accessing <code>test</code> requires an attribute lookup on the
-<code>db</code> object, and behind the scenes the same will happen if we had written <code>db.test</code>
-instead.</p>
-
-<p>Let&rsquo;s avoid the repeated call to the accessor function inside the loop! This can
-easily be achieved by assigning <code>db.test</code> to a variable once and forever outside
-of the loop. This technique is called loop-invariant code motion, and it can be
-applied in a lot of other situations, too:
-<code>js loop-invariant code motion
-var collection = db.test;
-for (var i = 0; i &lt; 100000; ++i) {
-  collection.save({ value: 1 });
-}
-</code>
-(on a side note: you cannot assign <code>db.test.save</code> to a variable and call it as a
-function)</p>
-
-<h2>Enjoying the silence</h2>
-
-<p>The <code>save</code> operation is chatty. Every time it is called, it will return some meta
-data from the just-inserted document, e.g.:
-<code>json save result
-{
-  "_id" : "test/11443981931568",
-  "_rev" : "11443981931568",
-  "_key" : "11443981931568"
-}
-</code>
-In our case, we&rsquo;re not interested in these returned values, and we don&rsquo;t
-capture them in a variable.
-The <code>save</code> function doesn&rsquo;t know this and will happily assemble its
-result array. The array consists of three string values (six when also counting
-attribute names). Setting up the result definitely requires costly
-memory allocations and string copying.</p>
-
-<p>We can avoid all this by passing an <em>options</em> parameter into <code>save</code>, and setting
-its <code>silent</code> attribute to <code>true</code>:
-<code>js silence option
-for (var i = 0; i &lt; 100000; ++i) {
-  db.test.save({ value: 1 }, { silent: true });
-}
-</code>
-Now <code>save()</code> will only return a boolean value, which is much quicker.</p>
-
-<h2>Transactions</h2>
-
-<p>Yet another alternative is use to wrap the operations in the loop into a
-transaction. Transaction themselves won&rsquo;t buy us much feature-wise, so why use
-them? The reason is simple: if we do not use a transaction ourselves, each
-<code>save</code> operation will implicitly be executed in a transaction of its own.
-For a loop with 100,000 operations, that will be 100K transactions!</p>
-
-<p>So when we put all the operations into a single, now explicit transaction,
-we can save the overhead of 99,999 transaction begin and commit operations.
-Here&rsquo;s how to do it:
-```js transaction
-db._executeTransaction({
-  collections: {</p>
-
-<pre><code>write: "test"
-</code></pre>
-
-<p>  },
-  action: function () {</p>
-
-<pre><code>for (var i = 0; i &lt; 100000; ++i) { 
-  db.test.save({ value: 1 });
-}
-</code></pre>
-
-<p>  }
-});
-```</p>
-
-<h1>Results</h1>
-
-<p>How far have we got with these minimal code adjustments?</p>
-
-<p>I have put together a <a href="/downloads/code/speeding-up-server.js">script</a>
-that can be run in arangod. The script will run each version of the loop
-10 times and time the execution. The minimum, maximum and
-average execution times are printed (in seconds, less is better). Note that
-the absolute times do not matter much here. Please have a look at the percentage
-column, which shows the execution time of each variant in comparison to the
-baseline.</p>
-
-<p>Here&rsquo;s an excerpt of the script&rsquo;s output:</p>
-
-<p>```plain results</p>
-
-<h2>test name      |   total (s) |     min (s) |     max (s) |    avg2 (s) |       %</h2>
-
-<p>baseline       |     13.0940 |      1.2907 |      1.3357 |      1.3084 |  100.00
-loop-invariant |     10.6888 |      1.0506 |      1.1042 |      1.0667 |   81.53
-silence        |     11.7186 |      1.1512 |      1.2247 |      1.1678 |   89.25
-transaction    |     10.1521 |      0.9987 |      1.0346 |      1.0149 |   77.56
-combined       |      7.8545 |      0.7768 |      0.7977 |      0.7850 |   59.99</p>
-
-<p>```
-As can be seen, moving the loop-invariant accessor function call outside of the
-loop provided an almost 20% speedup (from 1.30 to 1.06 s). Using the silence
-option did also provide some, but not the same speedup. Using transactions reduced
-the execution time, and by putting all this together, a reduction of about 40 %
-was achieved.</p>
-
-<p>Your mileage may vary. Please feel free to adjust the test script and run your
-own tests.</p>
 ]]></content>
   </entry>
   

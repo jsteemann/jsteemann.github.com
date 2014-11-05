@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Linux | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/linux/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-30T23:44:45+01:00</updated>
+  <updated>2014-11-05T01:28:35+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -75,10 +75,12 @@ after_failure:
 
 <p><img src="/downloads/screenshots/travis-ci-gdb.png"></p>
 
-<p>Note that it is wise to compile the executable to test with debug
-symbols on and with all optimizations turned off (i.e. compiler options
-<code>-g -O0</code>). Otherwise the backtrace might reveal less useful information
-for debugging.</p>
+<p>I recommend compiling the executable to test with debug symbols on and
+with all optimizations turned off (i.e. compiler options <code>-g -O0</code>).
+Otherwise backtraces might reveal less useful information for debugging.</p>
+
+<p>On a side note: the <a href="http://lint.travis-ci.org/">Travis WebLint</a> is a
+handy tool for validating <code>.travis.yml</code> files <em>before</em> pushing them.</p>
 ]]></content>
   </entry>
   

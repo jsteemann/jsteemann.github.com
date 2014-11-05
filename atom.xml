@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-10-30T23:44:45+01:00</updated>
+  <updated>2014-11-05T01:28:35+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,168 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Setting Up Test Data]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/11/04/setting-up-test-data/"/>
+    <updated>2014-11-04T22:14:21+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/11/04/setting-up-test-data</id>
+    <content type="html"><![CDATA[<p>Today I was asked to look at code that was supposed to read data
+from a MySQL data source, process it and then import it into ArangoDB.</p>
+
+<p>To run and debug the code I had to have some MySQL data source. So I
+thought I&rsquo;d quickly set up a simple example table with a few rows.
+It turned out that this took more time than what I had expected.</p>
+
+<p>Maybe I&rsquo;m spoilt by JavaScript-enabled, schema-free databases where
+creating such test setups is so much easier.</p>
+
+<!-- more -->
+
+
+<p>I worked with MySQL databases in production for 10+ years and spent
+much time working with the mysql client. I always liked MySQL, but in
+the past few years, I was driven away from it and lost contact.
+Instead, I got sucked into the NoSQL landscape and enjoy it pretty much.</p>
+
+<p>Getting back to the original problem: I needed some MySQL table with a
+few thousand rows for a test. It turned out I didn&rsquo;t even have MySQL
+installed on my computer, so I needed to install it first.</p>
+
+<p>After setting up the MySQL server, I created a table <code>examples</code> for
+storing my test data:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">CREATE</span> <span class="k">DATABASE</span> <span class="n">test</span><span class="p">;</span>
+</span><span class='line'><span class="n">USE</span> <span class="n">test</span><span class="p">;</span>
+</span><span class='line'><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">examples</span> <span class="p">(</span><span class="n">attribute1</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">),</span> <span class="n">attribute2</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">));</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Not really the black belt of schema design, but good enough for a quick
+test.</p>
+
+<p>Now the table needed some rows. 100,000 rows should be enough. I wrote
+some bash script to create them as there is no sane way to do this with
+the MySQL client alone:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="k">for </span>i in <span class="sb">`</span>seq 1 100000<span class="sb">`</span>
+</span><span class='line'>  <span class="k">do </span>
+</span><span class='line'><span class="k">    </span><span class="nb">echo</span> <span class="s2">&quot;INSERT INTO examples VALUES (\&quot;test$i\&quot;, \&quot;test$i\&quot;);&quot;</span> &gt;&gt; import.sql
+</span><span class='line'>  <span class="k">done</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Time to import the data!</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>mysql -u user <span class="nb">test</span> &lt; import.sql
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>At first I was a bit surprised this command did not return instantly. I let it
+run for about a minute, and then began checking the import progress with a second mysql
+client. It turned out only very few records had been imported, and the import
+script continued to create only around 30-35 records per second.</p>
+
+<p>Seems I had forgotten that I am working with a No-NoSQL database, with full
+ACID semantics for everything. My import file contained 100,000 <code>INSERT</code>
+statements, so I was asking to perform 100,000 transactions and fsync operations.
+That import would have taken forever with my slow HDD!</p>
+
+<p>I quickly changed the InnoDB setting to make it commit only about once per second:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>mysql&gt; SET GLOBAL <span class="nv">innodb_flush_log_at_trx_commit</span> <span class="o">=</span> 2;
+</span><span class='line'>Query OK, 0 rows affected <span class="o">(</span>0.00 sec<span class="o">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now the import finished in 7 seconds.</p>
+
+<p>I finally got the data in MySQL, but overall it took me about 10 minutes to get
+it done. Probably a bit less if I still were an active user of MySQL and had
+remembered the default behavior right from the start.</p>
+
+<p>Still, my feeling is that it takes too much time to get something so simple
+done.</p>
+
+<p>I don&rsquo;t blame the database for trying to commit all 100,000 single-row
+<code>INSERT</code> operations and fsync them to disk. It simply cannot know if the data
+are important or just throw-away test records.</p>
+
+<p>But there are other reasons: I had to write a bash script to produce the
+test data, as there is no sane way to do this with the MySQL client alone.
+Writing bash scripts is fine, and in general I like it, but I don&rsquo;t want to
+do it for a dead-simple test setup.</p>
+
+<p>And by the way, what if it turns out that I need to generate slightly more
+complex test data? In the MySQL case I probably would have resorted to sed
+or awk or would have thrown away my bash script and had rewritten it in some
+other language. So I would have wasted even more time.</p>
+
+<p>I personally prefer the ability to use a scripting language for such tasks.
+JavaScript is ubiquituous these days, and I want to use it in a database&rsquo;s
+command-line client.</p>
+
+<p>For example, here&rsquo;s how the test setup would look like in the ArangoShell:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;examples&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="mi">100000</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">db</span><span class="p">.</span><span class="nx">examples</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">attribute1</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">attribute2</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span> <span class="p">});</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>I find this much easier to use: it allows to do everything in one place,
+removing the need to write another script that prepares a data file or an
+SQL file first.</p>
+
+<p>As a bonus, using a programming language is much more flexible and powerful.
+If I needed to generate slightly more complex test data, I can just do it,
+adjust the JavaScript code and re-run it.</p>
+
+<p>Even more annoying to me is that I needed to provide a schema for the
+table first. I could have got away with declaring all text fields as
+<code>VARCHAR(255)</code> or <code>TEXT</code> so I can at least ignore string
+length restrictions. But I still need to type in the table schema
+once, even if it feels completely useless for this particular use case.</p>
+
+<p>It would get even more annoying if during my test I noticed I needed more
+or other columns. Then I would need to adjust the table schema using <code>ALTER TABLE</code>
+or adjust the <code>CREATE TABLE</code> statement and run it again, keeping me
+away from the original task.</p>
+
+<p>Maybe using schema-free databases for too long has spoilt me, but I much
+more prefer starting quickly and without a schema. I know the data that
+I am going to load will have a structure and will be somewhat self-describing,
+so the database can still figure out what the individual parts of a record are.</p>
+
+<p><em>On a side-note: should you be a fan of using query languages, the same
+test setup can also be achieved by running the following AQL query from
+the ArangoShell</em>:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="s2">&quot;FOR i IN 1..100000 LET value = CONCAT(&#39;test&#39;, i) &quot;</span> <span class="o">+</span>
+</span><span class='line'>          <span class="s2">&quot;INSERT { attribute1: value, attribute2: value } INTO examples&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Getting Core Dumps of Failed TravisCI Builds]]></title>
@@ -83,10 +245,12 @@ file per build:</p>
 
 <p><img src="http://jsteemann.github.io/downloads/screenshots/travis-ci-gdb.png"></p>
 
-<p>Note that it is wise to compile the executable to test with debug
-symbols on and with all optimizations turned off (i.e. compiler options
-<code>-g -O0</code>). Otherwise the backtrace might reveal less useful information
-for debugging.</p>
+<p>I recommend compiling the executable to test with debug symbols on and
+with all optimizations turned off (i.e. compiler options <code>-g -O0</code>).
+Otherwise backtraces might reveal less useful information for debugging.</p>
+
+<p>On a side note: the <a href="http://lint.travis-ci.org/">Travis WebLint</a> is a
+handy tool for validating <code>.travis.yml</code> files <em>before</em> pushing them.</p>
 ]]></content>
   </entry>
   

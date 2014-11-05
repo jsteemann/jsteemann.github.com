@@ -9,8 +9,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="Since version 2.2, ArangoDB stores all data-modification operations in its
-write-ahead log (abbreviated WAL). The introduction of the WAL massively &hellip;">
+  <meta name="description" content="Motivation One of the major changes in ArangoDB 2.2 was the introduction of the
+write-ahead log (abbreviated WAL). The introduction of the WAL &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -78,6 +78,63 @@ write-ahead log (abbreviated WAL). The introduction of the WAL massively &hellip
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Benchmarking ArangoDB&#8217;s Write-ahead Log</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-08-07T01:27:04+02:00" pubdate data-updated="true">Aug 7<span>th</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><h1>Motivation</h1>
+
+<p>One of the major changes in ArangoDB 2.2 was the introduction of the
+<em>write-ahead log</em> (abbreviated <em>WAL</em>).</p>
+
+<p>The introduction of the WAL changed how documents are stored internally in
+ArangoDB. A lot of things have been changed for it under the hood, and it has
+been a lot of work to implement it.</p>
+
+<p>During the implementation, we refactored some code parts and made them
+considerably faster. From these changes we expected a positive effect on the
+database performance. But due to the fact that shape information is now also
+saved in the write-ahead log, there may also be some negative effect.</p>
+
+<p>We developers were of course very interested in seeing the net effects, so
+we ran some tests for a few use cases. We compared ArangoDB 2.1.2 (still without
+the WAL) with ArangoDB 2.2.1 (with the WAL). The results are interesting.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -190,6 +247,10 @@ same data types).</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2014/11/04/setting-up-test-data/">Setting Up Test Data</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/">Getting Core Dumps of Failed TravisCI Builds</a>
       </li>
     
@@ -205,10 +266,6 @@ same data types).</p>
         <a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">Using Travis CI for a C++11 Project</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2014/10/16/how-to-compile-arangodb-from-source/">How to Compile ArangoDB From Source</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -217,7 +274,7 @@ same data types).</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (9)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (3)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/performance/'>Performance (3)</a></li><li><a href='/blog/categories/schemas/'>Schemas (2)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (10)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (3)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (3)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 
   
