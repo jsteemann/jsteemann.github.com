@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Indexes | J@ArangoDB]]></title>
+  <link href="http://jsteemann.github.io/blog/categories/indexes/atom.xml" rel="self"/>
+  <link href="http://jsteemann.github.io/"/>
+  <updated>2014-11-07T22:19:22+01:00</updated>
+  <id>http://jsteemann.github.io/</id>
+  <author>
+    <name><![CDATA[jsteemann]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Improved Non-unique Hash Indexes in 2.3]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/11/07/improved-non-unique-hash-indexes/"/>
+    <updated>2014-11-07T20:51:12+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/11/07/improved-non-unique-hash-indexes</id>
+    <content type="html"><![CDATA[<p>With ArangoDB 2.3 now getting into the <a href="https://www.arangodb.com/install-beta-version">beta stage</a>,
+it&rsquo;s time to spread the word about new features and improvements.</p>
+
+<p>Today&rsquo;s post will be about the changes made to non-unique hash
+indexes.</p>
+
+<!-- more -->
+
+
+<p>Hash indexes allow looking up documents quickly if the indexed
+attributes are all provided in a search query. They are not
+suitable for range queries, but are the perfect choice if equality
+comparisons are all that&rsquo;s needed.</p>
+
+<p>Hash indexes have been available in ArangoDB ever since. There
+have always been two variants of them:</p>
+
+<ul>
+<li>unique hash indexes</li>
+<li>non-unique hash indexes</li>
+</ul>
+
+
+<p>There wasn&rsquo;t much to be done for unique hash indexes, and so there
+haven&rsquo;t been any changes to them in 2.3. However, the non-unique
+hash indexes were improved significantly in the new version.</p>
+
+<p>The non-unique indexes already performed quite well if most of the
+indexed values were unique and only few repetitions occurred. But their
+performance suffered severly if the indexed attribute values repeated
+a lot &ndash; that is, when the indexed value had a <strong>low cardinality</strong> and thus
+the index had a <strong>low selectivity</strong>.</p>
+
+<p>This was a problem because it slowed down inserting new documents into
+a collection with such an index. And it also slowed down loading collections
+with low cardinality hash indexes.</p>
+
+<p>I am happy to state that in ArangoDB 2.3 this has been fixed, and the insert
+performance of non-unique hash indexes has been improved significantly.
+The index insertion time now scales quite well with the number
+of indexed documents regardless of the cardinality of the indexed
+attribute.</p>
+
+<p>Following are a few measurements of non-unique hash index insertion
+times from ArangoDB 2.3, for different cardinalities of the indexed
+attribute.</p>
+
+<p>The times reported are the net non-unique hash index
+insertion times (the documents were present already, just the index
+was created on them and index creation time was measured).</p>
+
+<p>Let&rsquo;s start with a not too challenging case: indexing documents in
+a collection with 100,000 different index values (<em>cardinality 100,000</em>):</p>
+
+<p><code>text index insertion times for cardinality 100,000
+number of documents:    128,000    =&gt;    time:   0.144 s
+number of documents:    256,000    =&gt;    time:   0.231 s
+number of documents:    512,000    =&gt;    time:   0.347 s
+number of documents:  1,024,000    =&gt;    time:   0.694 s
+number of documents:  2,048,000    =&gt;    time:   1.379 s
+</code></p>
+
+<p>The picture doesn&rsquo;t change much when reducing the cardinality
+by a factor or 10 (i.e. <em>cardinality 10,000</em>):</p>
+
+<p><code>text index insertion times for cardinality 10,000
+number of documents:    128,000    =&gt;    time:   0.169 s
+number of documents:    256,000    =&gt;    time:   0.194 s
+number of documents:    512,000    =&gt;    time:   0.355 s
+number of documents:  1,024,000    =&gt;    time:   0.668 s
+number of documents:  2,048,000    =&gt;    time:   1.325 s
+</code></p>
+
+<p>Let&rsquo;s again divide cardinality by 10 (now <em>cardinality 1,000</em>):</p>
+
+<p><code>text index insertion times for cardinality 1,000
+number of documents:    128,000    =&gt;    time:   0.130 s
+number of documents:    256,000    =&gt;    time:   0.152 s
+number of documents:    512,000    =&gt;    time:   0.261 s
+number of documents:  1,024,000    =&gt;    time:   0.524 s
+number of documents:  2,048,000    =&gt;    time:   0.934 s
+</code></p>
+
+<p><em>Cardinality 100</em>:</p>
+
+<p><code>text index insertion times for cardinality 100
+number of documents:    128,000    =&gt;    time:   0.114 s
+number of documents:    256,000    =&gt;    time:   0.148 s
+number of documents:    512,000    =&gt;    time:   0.337 s
+number of documents:  1,024,000    =&gt;    time:   0.452 s
+number of documents:  2,048,000    =&gt;    time:   0.907 s
+</code></p>
+
+<p><em>Cardinality 10</em>:</p>
+
+<p><code>text index insertion times for cardinality 10
+number of documents:    128,000    =&gt;    time:   0.130 s
+number of documents:    256,000    =&gt;    time:   0.327 s
+number of documents:    512,000    =&gt;    time:   0.239 s
+number of documents:  1,024,000    =&gt;    time:   0.442 s
+number of documents:  2,048,000    =&gt;    time:   0.827 s
+</code></p>
+
+<p>Finally we get to <em>cardinality 1</em>, the definitive indicator
+for the index being absolutely useless.</p>
+
+<p>Let&rsquo;s create it anyway:</p>
+
+<p><code>text index insertion times for cardinality 1
+number of documents:    128,000    =&gt;    time:   0.130 s
+number of documents:    128,000    =&gt;    time:   0.095 s
+number of documents:    256,000    =&gt;    time:   0.146 s
+number of documents:    512,000    =&gt;    time:   0.246 s
+number of documents:  1,024,000    =&gt;    time:   0.445 s
+number of documents:  2,048,000    =&gt;    time:   0.925 s
+</code></p>
+
+<p>All indexed values were numeric. In absolute terms, indexing string
+values will be slower than indexing numbers, but insertion should still
+scale nicely with the number of documents as long as everything fits
+in RAM.</p>
+]]></content>
+  </entry>
+  
+</feed>

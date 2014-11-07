@@ -9,8 +9,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="Today I was asked to look at code that was supposed to read data
-from a MySQL data source, process it and then import it into ArangoDB. To run and &hellip;">
+  <meta name="description" content="With ArangoDB 2.3 now getting into the beta stage,
+it&rsquo;s time to spread the word about new features and improvements. Today&rsquo;s post will be &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -78,6 +78,51 @@ from a MySQL data source, process it and then import it into ArangoDB. To run an
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2014/11/07/improved-non-unique-hash-indexes/">Improved Non-unique Hash Indexes in 2.3</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-11-07T20:51:12+01:00" pubdate data-updated="true">Nov 7<span>th</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>With ArangoDB 2.3 now getting into the <a href="https://www.arangodb.com/install-beta-version">beta stage</a>,
+it&rsquo;s time to spread the word about new features and improvements.</p>
+
+<p>Today&rsquo;s post will be about the changes made to non-unique hash
+indexes.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2014/11/07/improved-non-unique-hash-indexes/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -509,60 +554,6 @@ ArangoDB server.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/08/14/why-json/">Why JSON?</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-08-14T22:27:27+02:00" pubdate data-updated="true">Aug 14<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><h1>To JSON or not?</h1>
-
-<p>We&rsquo;re often asked why ArangoDB uses <a href="http://json.org">JSON</a> as its
-data-interchange format for transferring documents from clients to
-the database server and back. This is often accompanied by the
-question if we could use <code>&lt;insert fancy format here&gt;</code> instead.</p>
-
-<p>In the following article, I&rsquo;ll try to outline the reasons for why
-we picked JSON as the interchange format, and why we still use it.</p>
-
-<p>I&rsquo;ll start with a discussion of the pros and cons of JSON, look at
-some alternative formats and present my personal opinion on why
-using a different format may not provide too much benefit for us,
-at least at the moment.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2014/08/14/why-json/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -584,6 +575,10 @@ at least at the moment.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2014/11/07/improved-non-unique-hash-indexes/">Improved Non-unique Hash Indexes in 2.3</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2014/11/04/setting-up-test-data/">Setting Up Test Data</a>
       </li>
     
@@ -599,10 +594,6 @@ at least at the moment.</p>
         <a href="/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/">How to Set Up Bash Completion for ArangoDB</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">Using Travis CI for a C++11 Project</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -611,7 +602,7 @@ at least at the moment.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (10)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (3)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (3)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/arangodb/'>ArangoDB (11)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (3)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (3)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (4)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 
   

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-11-05T01:28:35+01:00</updated>
+  <updated>2014-11-07T22:19:22+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,135 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Improved Non-unique Hash Indexes in 2.3]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/11/07/improved-non-unique-hash-indexes/"/>
+    <updated>2014-11-07T20:51:12+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/11/07/improved-non-unique-hash-indexes</id>
+    <content type="html"><![CDATA[<p>With ArangoDB 2.3 now getting into the <a href="https://www.arangodb.com/install-beta-version">beta stage</a>,
+it&rsquo;s time to spread the word about new features and improvements.</p>
+
+<p>Today&rsquo;s post will be about the changes made to non-unique hash
+indexes.</p>
+
+<!-- more -->
+
+
+<p>Hash indexes allow looking up documents quickly if the indexed
+attributes are all provided in a search query. They are not
+suitable for range queries, but are the perfect choice if equality
+comparisons are all that&rsquo;s needed.</p>
+
+<p>Hash indexes have been available in ArangoDB ever since. There
+have always been two variants of them:</p>
+
+<ul>
+<li>unique hash indexes</li>
+<li>non-unique hash indexes</li>
+</ul>
+
+
+<p>There wasn&rsquo;t much to be done for unique hash indexes, and so there
+haven&rsquo;t been any changes to them in 2.3. However, the non-unique
+hash indexes were improved significantly in the new version.</p>
+
+<p>The non-unique indexes already performed quite well if most of the
+indexed values were unique and only few repetitions occurred. But their
+performance suffered severly if the indexed attribute values repeated
+a lot &ndash; that is, when the indexed value had a <strong>low cardinality</strong> and thus
+the index had a <strong>low selectivity</strong>.</p>
+
+<p>This was a problem because it slowed down inserting new documents into
+a collection with such an index. And it also slowed down loading collections
+with low cardinality hash indexes.</p>
+
+<p>I am happy to state that in ArangoDB 2.3 this has been fixed, and the insert
+performance of non-unique hash indexes has been improved significantly.
+The index insertion time now scales quite well with the number
+of indexed documents regardless of the cardinality of the indexed
+attribute.</p>
+
+<p>Following are a few measurements of non-unique hash index insertion
+times from ArangoDB 2.3, for different cardinalities of the indexed
+attribute.</p>
+
+<p>The times reported are the net non-unique hash index
+insertion times (the documents were present already, just the index
+was created on them and index creation time was measured).</p>
+
+<p>Let&rsquo;s start with a not too challenging case: indexing documents in
+a collection with 100,000 different index values (<em>cardinality 100,000</em>):</p>
+
+<p><code>text index insertion times for cardinality 100,000
+number of documents:    128,000    =&gt;    time:   0.144 s
+number of documents:    256,000    =&gt;    time:   0.231 s
+number of documents:    512,000    =&gt;    time:   0.347 s
+number of documents:  1,024,000    =&gt;    time:   0.694 s
+number of documents:  2,048,000    =&gt;    time:   1.379 s
+</code></p>
+
+<p>The picture doesn&rsquo;t change much when reducing the cardinality
+by a factor or 10 (i.e. <em>cardinality 10,000</em>):</p>
+
+<p><code>text index insertion times for cardinality 10,000
+number of documents:    128,000    =&gt;    time:   0.169 s
+number of documents:    256,000    =&gt;    time:   0.194 s
+number of documents:    512,000    =&gt;    time:   0.355 s
+number of documents:  1,024,000    =&gt;    time:   0.668 s
+number of documents:  2,048,000    =&gt;    time:   1.325 s
+</code></p>
+
+<p>Let&rsquo;s again divide cardinality by 10 (now <em>cardinality 1,000</em>):</p>
+
+<p><code>text index insertion times for cardinality 1,000
+number of documents:    128,000    =&gt;    time:   0.130 s
+number of documents:    256,000    =&gt;    time:   0.152 s
+number of documents:    512,000    =&gt;    time:   0.261 s
+number of documents:  1,024,000    =&gt;    time:   0.524 s
+number of documents:  2,048,000    =&gt;    time:   0.934 s
+</code></p>
+
+<p><em>Cardinality 100</em>:</p>
+
+<p><code>text index insertion times for cardinality 100
+number of documents:    128,000    =&gt;    time:   0.114 s
+number of documents:    256,000    =&gt;    time:   0.148 s
+number of documents:    512,000    =&gt;    time:   0.337 s
+number of documents:  1,024,000    =&gt;    time:   0.452 s
+number of documents:  2,048,000    =&gt;    time:   0.907 s
+</code></p>
+
+<p><em>Cardinality 10</em>:</p>
+
+<p><code>text index insertion times for cardinality 10
+number of documents:    128,000    =&gt;    time:   0.130 s
+number of documents:    256,000    =&gt;    time:   0.327 s
+number of documents:    512,000    =&gt;    time:   0.239 s
+number of documents:  1,024,000    =&gt;    time:   0.442 s
+number of documents:  2,048,000    =&gt;    time:   0.827 s
+</code></p>
+
+<p>Finally we get to <em>cardinality 1</em>, the definitive indicator
+for the index being absolutely useless.</p>
+
+<p>Let&rsquo;s create it anyway:</p>
+
+<p><code>text index insertion times for cardinality 1
+number of documents:    128,000    =&gt;    time:   0.130 s
+number of documents:    128,000    =&gt;    time:   0.095 s
+number of documents:    256,000    =&gt;    time:   0.146 s
+number of documents:    512,000    =&gt;    time:   0.246 s
+number of documents:  1,024,000    =&gt;    time:   0.445 s
+number of documents:  2,048,000    =&gt;    time:   0.925 s
+</code></p>
+
+<p>All indexed values were numeric. In absolute terms, indexing string
+values will be slower than indexing numbers, but insertion should still
+scale nicely with the number of documents as long as everything fits
+in RAM.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Setting Up Test Data]]></title>
@@ -596,189 +725,6 @@ The application can be downloaded <a href="/downloads/code/filelist-app.tar.gz">
 
 <p>Please note that the example application requires ArangoDB 2.3, which is currently
 in development.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Understanding Where Operations Are Executed]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed/"/>
-    <updated>2014-08-30T22:38:42+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed</id>
-    <content type="html"><![CDATA[<p>I recently had to deal with some data processing operation that took
-about 20 minutes to complete. When looking into this, I found that the
-easiest and most beneficial change to the whole setup was to make the
-operation a <em>server-side</em> operation instead of executing it <em>client-side</em>.</p>
-
-<p>This change reduced the operation&rsquo;s total execution time to a few seconds.</p>
-
-<!-- more -->
-
-
-<p>I can&rsquo;t show the original processing task here, so I&rsquo;ll start with a
-contrived example. Imagine the following <em>for</em> loop inserting 100K documents
-into a collection named <code>test</code>:
-<code>js inserting 100k documents
-for (i = 0; i &lt; 100000; ++i) {
-  db.test.save({ value: i });
-}
-</code>
-Now we only need a client application to execute the operation. As I don&rsquo;t
-have a presentable client application right now, I will use the ArangoShell as
-my client application.</p>
-
-<h2>What&rsquo;s in a for loop?</h2>
-
-<p>Running the above <em>for</em> loop inside the ArangoShell will lead to the loop being
-executed inside the <em>arangosh</em> process.</p>
-
-<p>In order to save a document in the collection, arangosh (our client) must make a
-call to the ArangoDB server. This means issuing an HTTP POST request
-to the server&rsquo;s REST API at <code>/_api/document/?collection=test</code>.
-The server process will receive this request, insert the document, and
-respond with an HTTP status code 201 or 202 to our client.
-The client will then continue the loop until all documents have been inserted.</p>
-
-<p>Now it&rsquo;s easy to see that the simple 3-line loop will issue 100,000 HTTP requests
-in total. This means lots of data being pushed through the network stack(s).
-It is pretty easy to imagine that this will come at a cost.</p>
-
-<p>If we instead execute the above loop directly inside the ArangoDB server, we
-can get rid of all the network overhead. The server has no need to send HTTP
-calls to itself. It can simply execute the 100K inserts and is then done.
-We therefore assume the loop to run somewhat faster when executed server-side.</p>
-
-<p>A quick test on a crap laptop produced the following execution times for running
-the loops:</p>
-
-<ul>
-<li>server-side execution (arangod): 1.34 seconds</li>
-<li>client-side execution (arangosh): 17.32 seconds</li>
-</ul>
-
-
-<p><strong>Ouch</strong>. It looks like the client-server request-response overhead matters.</p>
-
-<p>The following sections deal with how to get rid of some or even all the
-client-server ping pong.</p>
-
-<h2>Graph traversals</h2>
-
-<p>The above <em>for</em> loop example was contrived, but imagine running
-a client-side graph traversal instead. In fact, the original problem mentioned
-in the introduction has been a graph traversal.</p>
-
-<p>The problem of a graph traversal is that is often iterative and highly
-dynamic. Decisions are made during the traversal as nodes are encountered,
-leading to dynamic inclusion or exclusion etc. This means that it makes sense to
-process nodes and edges only when needed, at the point when they are visited.</p>
-
-<p>Even if the client can employ some sort of caching for already visited
-nodes, the client still needs to ask the server about each visited
-node&rsquo;s connections at least once. Otherwise it could not follow them.</p>
-
-<p>This normally means lots of requests and responses. Compare this to the
-<em>single</em> request-response alternative in which a client kicks off a server-side
-traversal, and finally receives the overal result once it is assembled.</p>
-
-<p><strong>Conclusion</strong>: traversals on anything but very small graphs should be run server-side.
-A server-side action (see below) is a good way to do this. Please note that
-running a server-side traversal does not mean giving up flexibility and
-control flow functionality. Server-side traversals remain highly configurable
-through custom JavaScript functions that allow implementation of user-defined
-business logic.</p>
-
-<h2>AQL queries</h2>
-
-<p>We won&rsquo;t have your application send a series of 100,000 individual
-insert statements to the relational database of our choice. We already
-know from the past that this is going to be rather slow, so we have
-learned to avoid this. In the relational context, we rather use SQL queries
-that create or modify many rows in one go, e.g. an <code>INSERT INTO ... SELECT ...</code>,
-bulk inserts etc.</p>
-
-<p>ArangoDB is no different. In general, you should try to avoid issuing lots
-of individual queries to the database from a client application. Instead and if
-the queries look alike, try converting multiple individual operations into a
-single AQL query. This will already save a lot of network overhead.</p>
-
-<p>AQL provides multi-document operations to insert, update, and remove data. An
-overview is given <a href="http://docs.arangodb.org/Aql/DataModification.html">here</a>.</p>
-
-<p>The above 100K inserts from the contrived example can easily be transformed
-into this single AQL query:
-<code>
-FOR i IN 1..100000 INSERT { value: i } INTO test
-</code></p>
-
-<h2>Bulk imports</h2>
-
-<p>For importing larger amounts of documents from files, there is the specialized
-<a href="http://docs.arangodb.org/Arangoimp/README.html">arangoimp</a> import tool. It can
-load data from JSON and CSV files into ArangoDB. The tool is shipped with
-ArangoDB.</p>
-
-<p>ArangoDB also provides a REST API for <a href="http://docs.arangodb.org/HttpBulkImports/README.html">bulk imports</a>
-of documents.</p>
-
-<h2>Joins</h2>
-
-<p>A special note about <em>joins</em>: the fact that several NoSQL databases do not
-provide join functionality has driven some people to emulate join functionality
-on the client-side, in their applications.</p>
-
-<p>This can be a recipe for disaster: client-side join implementation might lead
-to horrendous amounts of queries that might need to be sent to the database for
-fetching all the records. More than that, if data are queried individually,
-the overall result may lack consistency. By the way, the same is true for
-fetching referenced or linked documents.</p>
-
-<p>ArangoDB provides join functionality via AQL queries. Additionally, AQL queries
-can be used to fetch other documents with the original documents. Note that
-ArangoDB has no way of defining references or links between documents, but
-still AQL allows combining arbitrary documents in one query.</p>
-
-<p>In almost all cases it make more sense to use an AQL query that performs
-joins or reference-fetching server-side and close to the data than having to
-deal with that on the application-side of things.</p>
-
-<p>AQL joins are described <a href="http://docs.arangodb.org/AqlExamples/Join.html">here</a>.</p>
-
-<h2>Server-side actions</h2>
-
-<p>With <em>stored procedures</em>, relational databases provide another way for an
-application to trigger the execution of a large amount of queries. Stored
-procedures are executed server-side, too, so they allow avoiding a lot of
-request-response ping pong between the application and the database, at least
-for defined tasks. Additionally, stored procedures provide control flow
-functionality, which can also be handy when operations depend on each other.</p>
-
-<p>Coming back to ArangoDB: complex data-processing tasks that need to execute
-multiple operations or need control flow functionality might benefit if
-converted from multiple application-side operations into a single server-side
-action.</p>
-
-<p>Server-side actions run inside the ArangoDB server, closer to the data, and
-can be much faster than a series of client-side operations.
-A server-side action is called with just one HTTP request from the application,
-so it may lead to saving lots of request-response cycles and reduction in
-network overhead. Apart from that, server-side actions in ArangoDB can employ
-transactions and provide the necessary control over isolation and atomicity
-when executing a series of operations.</p>
-
-<p>Business logic and control flow functionality can be integrated
-easily because server-side actions in ArangoDB are JavaScript functions,
-with all of the language&rsquo;s programming features being available.</p>
-
-<p>But there&rsquo;s even more to it: a single server-side operation can be written
-to put together its result in a format most convenient for the client
-application. This can also lead to better encapsulation, because all an
-application needs to know about a server-side action is its API or contract.
-Any internals of the action can be hidden from the client application. Overall,
-this supports a service-oriented approach.</p>
-
-<p>To learn more about how to write server-side actions, please have a look
-at ArangoDB&rsquo;s <a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a>. It is all
-about making server-side actions available via REST APIs.</p>
 ]]></content>
   </entry>
   
