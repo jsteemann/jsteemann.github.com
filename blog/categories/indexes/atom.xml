@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Indexes | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/indexes/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-11-07T22:19:45+01:00</updated>
+  <updated>2014-11-07T22:23:07+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -122,9 +122,8 @@ number of documents:  2,048,000    =&gt;    time:   0.827 s
 </code></p>
 
 <p>Finally we get to <em>cardinality 1</em>, the definitive indicator
-for the index being absolutely useless.</p>
-
-<p>Let&rsquo;s create it anyway:</p>
+for the index being absolutely useless. Let&rsquo;s create it anyway,
+for the sake of completeness of this post:</p>
 
 <p><code>text index insertion times for cardinality 1
 number of documents:    128,000    =&gt;    time:   0.130 s
@@ -135,10 +134,10 @@ number of documents:  1,024,000    =&gt;    time:   0.445 s
 number of documents:  2,048,000    =&gt;    time:   0.925 s
 </code></p>
 
-<p>All indexed values were numeric. In absolute terms, indexing string
-values will be slower than indexing numbers, but insertion should still
-scale nicely with the number of documents as long as everything fits
-in RAM.</p>
+<p>On a side note: all indexed values were numeric. In absolute terms,
+indexing string values will be slower than indexing numbers, but insertion
+should still scale nicely with the number of documents as long as everything
+fits in RAM.</p>
 ]]></content>
   </entry>
   

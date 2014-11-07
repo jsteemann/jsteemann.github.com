@@ -233,9 +233,8 @@ by a factor or 10 (i.e. <em>cardinality 10,000</em>):</p>
 
 
 <p>Finally we get to <em>cardinality 1</em>, the definitive indicator
-for the index being absolutely useless.</p>
-
-<p>Let&rsquo;s create it anyway:</p>
+for the index being absolutely useless. Let&rsquo;s create it anyway,
+for the sake of completeness of this post:</p>
 
 <figure class='code'><figcaption><span>index insertion times for cardinality 1</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -252,10 +251,10 @@ for the index being absolutely useless.</p>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>All indexed values were numeric. In absolute terms, indexing string
-values will be slower than indexing numbers, but insertion should still
-scale nicely with the number of documents as long as everything fits
-in RAM.</p>
+<p>On a side note: all indexed values were numeric. In absolute terms,
+indexing string values will be slower than indexing numbers, but insertion
+should still scale nicely with the number of documents as long as everything
+fits in RAM.</p>
 </div>
 
 
