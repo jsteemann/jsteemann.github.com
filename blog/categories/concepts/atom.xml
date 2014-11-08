@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Concepts | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/concepts/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-11-08T02:16:58+01:00</updated>
+  <updated>2014-11-08T02:20:24+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -14,7 +14,7 @@
 
   
   <entry>
-    <title type="html"><![CDATA[A Tour Around the AQL Query Optimizer]]></title>
+    <title type="html"><![CDATA[A Tour Around the New AQL Query Optimizer]]></title>
     <link href="http://jsteemann.github.io/blog/2014/11/07/a-tour-around-the-aql-query-optimizer/"/>
     <updated>2014-11-07T22:30:10+01:00</updated>
     <id>http://jsteemann.github.io/blog/2014/11/07/a-tour-around-the-aql-query-optimizer</id>
