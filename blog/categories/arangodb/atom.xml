@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-11-07T22:23:07+01:00</updated>
+  <updated>2014-11-08T02:16:58+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,413 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[A Tour Around the AQL Query Optimizer]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/11/07/a-tour-around-the-aql-query-optimizer/"/>
+    <updated>2014-11-07T22:30:10+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/11/07/a-tour-around-the-aql-query-optimizer</id>
+    <content type="html"><![CDATA[<p>The major new feature in ArangoDB 2.3 is the shiny new
+AQL query optimizer and executor. These code parts have been
+rewritten in 2.3 to make AQL much better for our end users.</p>
+
+<!-- more -->
+
+
+<p>Since one of the initial releases, ArangoDB has been shipped with
+AQL, the <em>ArangoDB Query Language</em>. AQL has since then been ArangoDB&rsquo;s
+most versatile way of executing simple and also the not-so-simple
+queries.</p>
+
+<p>I&rsquo;ll start with an overview of query execution in previous versions
+of ArangoDB, and then explain the new engine and explain the differences.</p>
+
+<h2>History: query execution in pre-2.3</h2>
+
+<p>Previous versions of ArangoDB executed any AQL query in the following
+steps:</p>
+
+<ul>
+<li>tokenize and parse query string into an abstract syntax tree (AST)</li>
+<li>perform simple AST optimizations</li>
+<li>collect filter conditions in AST and look for index usage opportunities</li>
+<li>generate code</li>
+<li>execute code</li>
+</ul>
+
+
+<p>This approach was simple and has worked for a lot of queries, but it also
+had a few quirks:</p>
+
+<p>First of all, most of the steps were carried out directly on the
+abstract syntax tree, with the AST nodes being modified in place.
+There was also just the one AST per query, so the old AQL executor
+could not generate multiple, potentially very different execution
+plan candidates for a given query.</p>
+
+<p>The &ldquo;old&rdquo; optimizer was able to move AST nodes around during optimization
+and it was already able to consider multiple index candidates for a query,
+but it would not compare multiple plans and make a cost-based decision.
+It was also limited in the amount and scope of transformations it
+could safely apply to the AST.</p>
+
+<p>When it came to code generation and execution, the &ldquo;old&rdquo; executor
+fully relied on V8 to execute the queries. Result sets were created
+using V8&rsquo;s value objects. Documents from collections that queries
+needed to iterate over had to be made available to V8. While some
+optimization was used for this, the conversions could have summed up
+to significant overhead for certain kinds of queries.</p>
+
+<p>The representation of queries via an AST also made it hard to generate
+code that supported lazy evaluation during query execution.</p>
+
+<p>Finally, the AQL optimizer so far did not provide much support for
+queries that were to be executed in a distributed fashion inside a cluster
+of servers.</p>
+
+<h2>Query execution in ArangoDB 2.3</h2>
+
+<p>We wanted to address all these issues with a rewrite of the AQL
+infrastructure. Starting with ArangoDB 2.3, AQL queries are executed
+in these steps:</p>
+
+<ul>
+<li>tokenize and parse query string into an abstract syntax tree (AST)</li>
+<li>perform simple AST optimizations</li>
+<li>transform AST into execution plan</li>
+<li>optimize and permute execution plans</li>
+<li>estimate costs for execution plans and pick optimal plan</li>
+<li>instanciate execution engine from optimal plan</li>
+<li>(in cluster only) send execution plan parts to cluster nodes</li>
+<li>execute query</li>
+</ul>
+
+
+<p>Tokenization and parsing of AQL queries hasn&rsquo;t changed much in 2.3:
+query strings are still parsed using a Bison/Flex-based parser and
+lexer combo. The AST structure has proven to be good during the parsing
+stage, so the parser creates an initial AST from the query string first.</p>
+
+<p>After that, simple optimizations are performed directly on the AST,
+such as constant folding and constant propagation. Deterministic functions
+with constant operands will be executed already in this stage and the
+results be injected into the AST.</p>
+
+<p>A major change in 2.3 is that no further transformations will be
+carried out on the AST. Instead, the AST will be transformed into
+an initial <em>execution plan</em>.</p>
+
+<p>This execution plan is the starting point for the <em>query optimizer</em>.
+It will take the initial execution plan and apply transformations to
+it. Transformations will either update the existing plan in place or
+create a new, modified plan. The result of the transformations carried
+out will form the input for further transformations that can be carried
+out by query optimizer.</p>
+
+<p>The result of the query optimization stage is one or many execution
+plans. For each plan, the optimizer will estimate a cost value, and
+then finally pick the plan with the lowest total estimated cost.
+This plan is considered to be the <em>optimal plan</em>. All other execution
+plans will be discarded by the optimizer as it has considered them non-optimal.</p>
+
+<p>The optimal execution plan is then executed by the <em>execution engine</em>.
+For a single-server AQL query, this is straightforward: for each step
+in the execution plan, a C++ object is created that is supposed to
+execute the particular step. Query execution is then started by asking
+the first of these object for its results.</p>
+
+<p>The objects for multiple processing steps are linked in a pipelined fashion
+with lazy evaluation. Pulling data from the first object will eventually
+trigger pulling data from the second object etc., until there are no more
+results to produce.</p>
+
+<p>For a distributed query, this is a bit more complicated. The different
+execution steps will likely be shipped to different servers in the
+cluster, and the objects need to be instanciated in different servers, too.
+The different parts of the query may pull data from each other via HTTP
+calls between cluster nodes.</p>
+
+<h2>How execution plans work</h2>
+
+<p>An execution plan is a sequence of query execution steps. Let&rsquo;s
+start with a very simple example:</p>
+
+<p><code>
+FOR doc IN mycollection
+  RETURN doc._key
+</code></p>
+
+<p>This query will be transformed into the following execution plan:</p>
+
+<ul>
+<li><em>SingletonNode</em>: passes a single empty value to the following steps</li>
+<li><em>EnumerateCollectionNode</em>: iterates over all documents of a collection
+and provides the current document in an output variable. In our example,
+it will iterate over collection <code>mycollection</code> and provide each
+document in variable <code>doc</code></li>
+<li><em>CalculationNode</em>: evaluates an expression and returns its result.
+In the example, it will calculate <code>doc._key</code></li>
+<li><em>ReturnNode</em>: returns results to the caller</li>
+</ul>
+
+
+<p>If this plan is going to be executed, the execution engine will start
+pulling data from the node at the bottom, that is, the <em>ReturnNode</em>. The
+<em>ReturnNode</em> at this stage cannot provide any data, so it will ask its
+predecessor node, which in the example is the <em>CalculationNode</em>. The
+<em>CalculationNode</em> again does not have own data yet, so it must ask the
+node in front of it. The <em>EnumerateCollectionNode</em> will first ask the
+<em>SingletonNode</em> for input data. So the execution flow has bubbled up from
+the bottom of the sequence to the top.</p>
+
+<p>The <em>SingletonNode</em> will now produce a single empty return value. It will
+also internally set its processing status to <em>done</em>, so it will not produce
+any more values if asked again. This is all a <em>SingletonNode</em> will ever do.
+We&rsquo;ll see later why such a node may still be useful.</p>
+
+<p>The single empty value will be provided as input to the <em>EnumerateCollectionNode</em>.
+This node will now go through all the documents in the underlying collection,
+and return them once for each input value its got. As its input value was
+the singleton, it will return the documents of the collection just once.</p>
+
+<p>Processing is executed in blocks of size 1000 by default. The
+<em>EnumerateCollectionNode</em> will thus not return all documents to its successor
+node, but just 1,000. The return value will be a vector with 1,000 documents,
+stored under variable name <code>doc</code>.</p>
+
+<p>The <em>CalculationNode</em>, still waiting for input data, can now execute its
+expression <code>doc._key</code> on this input value. It will execute this expression
+1,000 times, once for each input value. The expression results will be
+stored in another variable. This variable is anonymous, as it hasn&rsquo;t been
+named explicitly in the original query. The vector of results produced by
+the <em>CalculationNode</em> is then returned to the <em>ReturnNode</em>, which will then
+return it to the caller.</p>
+
+<p>If the caller requests more documents, the procedure will repeat. Whenever
+a processing step cannot produce any more data, it will ask its predecessor
+step for more data. If the predecessor step already has status <em>done</em>, the
+current step will set itself to <em>done</em> as well, so a query will actually
+come to an end if there are no more results.</p>
+
+<p>As can be seen, steps are executed with batches of values. We thought this
+would be a good way to improve efficiency and reduce the number of hops
+between steps.</p>
+
+<h2>Joins</h2>
+
+<p>Let&rsquo;s say we want to join documents from two collections, based on common
+attribute values. Let&rsquo;s use <code>users</code> and <code>logins</code>, joined by their <code>id</code> and
+<code>userId</code> attributes:</p>
+
+<p>```
+FOR user IN users
+  FOR login IN logins</p>
+
+<pre><code>FILTER user.id == login.userId
+RETURN { user: user, login: login }
+</code></pre>
+
+<p>```</p>
+
+<p>Provided that there are no indexes, the query may be turned into this
+execution plan by the optimizer:</p>
+
+<ul>
+<li><em>SingletonNode</em>: passes a single empty value to the following steps</li>
+<li><em>EnumerateCollectionNode</em>: will iterate over all documents in collection
+<code>users</code> and produce a variable named <code>user</code></li>
+<li><em>EnumerateCollectionNode</em>: will iterate over all documents in collection
+<code>logins</code> and produce a variable named <code>login</code></li>
+<li><em>CalculationNode</em>: will calculate the result of the expression
+<code>user.id == login.userId</code></li>
+<li><em>FilterNode</em>: will let only documents pass that match the filter condition
+(calculated by the <em>CalculationNode</em> above it)</li>
+<li><em>CalculationNode</em>: will calculate the result of the expression
+<code>{ user: user, login: login }</code></li>
+<li><em>ReturnNode</em>: returns results to the caller</li>
+</ul>
+
+
+<p>Now we can see why the <em>SingletonNode</em> is useful: it can be used as an
+input to another node, telling this node to execute just once. Having the
+<em>SingletonNode</em> will ensure that the outermost <em>EnumerateCollection</em>
+will only iterate once over the documents in its underlying collection <code>users</code>.</p>
+
+<p>The inner <em>EnumerateCollectionNode</em> for collection <code>logins</code> is now fed by
+the outer <em>EnumerateCollectionNode</em> on <code>users</code>. Thus these two nodes will
+produce a cartesian product. This will be done lazily, as producing results
+will normally happen in chunks of 1,000 values each.</p>
+
+<p>The results of the cartesian product are then post-filtered by the <code>FilterNode</code>,
+which will only let those documents pass with match the filter condition of
+the query. The <code>FilterNode</code> employs its predecessor, the <code>CalculationNode</code>,
+to determine which values satisfy the condition.</p>
+
+<h2>Using indexes</h2>
+
+<p>Obviously creating cartesian products is not ideal. The optimizer will try
+to avoid generating such plans if it can, but it has no choice if there are
+no indexes present.</p>
+
+<p>If there are indexes on attributes that are used in <code>FILTER</code> conditions of
+a query, the optimizer will try to turn <code>EnumerateCollectionNode</code>s into
+<code>IndexRangeNode</code>s. The purpose of an <code>IndexRangeNode</code> is to iterate over a
+specific range in an index. This is normally more efficient than iterating
+over all documents of a collection.</p>
+
+<p>Let&rsquo;s assume there is an index on <code>logins.userId</code>. Then the optimizer might
+be able to generate a plan like this:</p>
+
+<ul>
+<li><em>SingletonNode</em>: passes a single empty value to the following steps</li>
+<li><em>EnumerateCollectionNode</em>: will iterate over all documents in collection
+<code>users</code> and produce a variable named <code>user</code></li>
+<li><em>IndexRangeNode</em>: will iterate over the values in index <code>logins.userId</code> that
+match the value of <code>users.id</code> and produce a variable named <code>login</code></li>
+<li><em>CalculationNode</em>: will calculate the result of the expression
+<code>user.id == login.userId</code></li>
+<li><em>FilterNode</em>: will let only documents pass that match the filter condition
+(calculated by the <em>CalculationNode</em> above it)</li>
+<li><em>CalculationNode</em>: will calculate the result of the expression
+<code>{ user: user, login: login }</code></li>
+<li><em>ReturnNode</em>: returns results to the caller</li>
+</ul>
+
+
+<p>To run this query, the execution engine must still iterate over all documents
+in collection <code>users</code>, but for each those, it must only find the documents
+in <code>logins</code> that match the join condition. Probably that means a lot less
+documents and thus much faster execution.</p>
+
+<h2>Permutation of loops</h2>
+
+<p>Now consider adding an extra <code>FILTER</code> statement to the original query so we
+end up with this:</p>
+
+<p>```
+FOR user IN users
+  FOR login IN logins</p>
+
+<pre><code>FILTER user.id == login.userId
+FILTER login.ts == 1415402319       /* added this one! */
+RETURN { user: user, login: login }
+</code></pre>
+
+<p>```</p>
+
+<p>The optimizer is free to permute the order of <code>FOR</code> loops as long as this
+won&rsquo;t change the results of a query. In our case, permutation of the two
+<code>FOR</code> loops is allowed. If the optimizer exchanges the two loops, it can
+also pull out the <code>FILTER</code> statement on <code>login.ts</code> out of the inner loop
+into the outer loop.</p>
+
+<p>It might come up with a plan like this, which may be more efficient if a
+lot of documents from <code>logins</code> can be filtered out early:</p>
+
+<p>```
+FOR login IN logins
+  FILTER login.ts == 1415402319
+  FOR user IN users</p>
+
+<pre><code>FILTER user.id == login.userId
+RETURN { user: user, login: login }
+</code></pre>
+
+<p>```</p>
+
+<p>Exchanging the order of <code>FOR</code> loops may also allow the optimizer to use
+additional indexes.</p>
+
+<p>A last note on indexes: the optimizer in 2.3 is able to use (sorted)
+skiplist indexes to eliminate extra <code>SORT</code> operations. For example, if
+there is a skiplist index on <code>login.ts</code>, the <code>SORT</code> in the following
+query can be removed by the optimizer:</p>
+
+<p><code>
+FOR login IN logins
+  FILTER login.ts &gt; 1415402319
+  SORT login.ts
+  RETURN login
+</code></p>
+
+<p>The AQL optimizer in 2.3 can optimize away a <code>SORT</code> even if the sort
+order is backwards or if no <code>FILTER</code> statement is used in the query at
+all.</p>
+
+<h2>Analyzing plans</h2>
+
+<p>One particular improvement over 2.2 is that in ArangoDB 2.3 the optimizer
+provides functionality for retrieving full execution plan information for
+queries <strong>without</strong> executing them. The execution plan information can be
+inspected by developers or DBAs, and, as it is JSON-encoded, can also be
+analyzed programmatically.</p>
+
+<p>Retrieving the execution plan for a query is straight-forward:</p>
+
+<p><code>
+arangosh&gt; db._createStatement({ query: &lt;query&gt; }).explain();
+</code></p>
+
+<p>By default, the optimizer will return just the <em>optimal plan</em>, containing
+all the plan&rsquo;s execution nodes with lots of extra information plus cost estimates.</p>
+
+<p>The optimizer is also able to return the alternative plans it produced but
+considered to be non-optimal:</p>
+
+<p><code>
+arangosh&gt; db._createStatement({ query: &lt;query&gt; }).explain({ allPlans: true });
+</code></p>
+
+<p>This will hopefully allow developers and DBAs to get a better idea of how an
+AQL query will be executed internally.</p>
+
+<p>Additionally, simple execution statistics are returned by default when executing
+a query. This statistics can also be used to get an idea of the runtime costs of
+a query <strong>after</strong> execution.</p>
+
+<h2>Writing optimizer rules</h2>
+
+<p>The AQL optimizer itself is dumb. It will simply try to apply all transformations
+from its rulebook to each input execution plan it is feeded with. This
+will produce output execution plans, on which further transformations
+may or may not be applied.</p>
+
+<p>The more interesting part of the AQL optimizer stage is thus the rulebook.
+Each rule in the rulebook is a C++ function that is executed for an input plan.</p>
+
+<p>Adding a new optimizer rule to the rulebook is intentionally simple. One of
+the design goals of the new AQL optimizer was to keep it flexible and extensible.
+All that&rsquo;s need to be to add an optimizer rule is to implement a C++ function
+with the following signature:</p>
+
+<p><code>cpp
+(Optimizer*, ExecutionPlan*, Optimizer::Rule const*) -&gt; int
+</code></p>
+
+<p>and register it once in the Optimizer&rsquo;s rulebook.</p>
+
+<p>An optimizer rule function is called with an instance of the query optimizer
+(it can use it to register a new plan), the current execution plan and some
+information about the rule itself (this is the information about the rule from
+the rulebook).</p>
+
+<p>The optimizer rule function can then analyze the input execution plan, modifiy
+it in place, and/or create additional plans. It must return a status code to
+the optimizer to indicate if something went wrong.</p>
+
+<h2>Outlook</h2>
+
+<p>Writing a perfect query optimizer is a never-ending endeavour. Other databases
+provide new optimizer features and fixes even decades after the initial version.</p>
+
+<p>Our plan is to ship 2.3 with several essential and useful optimizer rules. We
+will likely add more in future releases. We&rsquo;re also open to contributions.
+If you can think of rules that are missing but you would like to see in ArangoDB,
+please let us know. If you would like to contribute to the optimizer and write some
+rule code, consider sending a pull request or an email to
+<a href="hackers@arangodb.org">hackers@arangodb.org</a>.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Improved Non-unique Hash Indexes in 2.3]]></title>
@@ -624,106 +1031,6 @@ make
 can retrieve your previous options by typing <code>head config.log</code>.</p>
 
 <p>Enjoy!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Handling Binary Data in Foxx]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/10/15/handling-binary-data-in-foxx/"/>
-    <updated>2014-10-15T20:41:30+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/10/15/handling-binary-data-in-foxx</id>
-    <content type="html"><![CDATA[<p>Handling binary data in JavaScript applications is a bit
-tricky because JavaScript does not provide a data type for
-binary data. This post explains how to use binary data in
-JavaScript actions written using ArangoDB&rsquo;s <a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a>.</p>
-
-<!-- more -->
-
-
-<h1>Strings vs. binary data</h1>
-
-<p>Internally, JavaScript strings are <a href="http://ecma-international.org/ecma-262/5.1/#sec-4.3.16">sequences of 16 bit integer values</a>.
-Furthermore, the ECMAScript standard requires that a JavaScript
-implementation should interpret characters in conformance with the
-Unicode standard, using either UCS-2 or UTF-16 encoding.</p>
-
-<p>While this is fine for handling natural language, it becomes problematic
-when trying to work with arbitrary binary data. Binary data cannot be
-used safely in a JavaScript string because it may not be valid UTF-16
-data.</p>
-
-<p>To make it work anyway, binary data needs to be stored in a wrapper
-object. I won&rsquo;t go into details about ES6 typed arrays here, but will
-focus on <code>Buffer</code> objects.</p>
-
-<h1>Binary data in Foxx actions</h1>
-
-<p>A Foxx route that shall handle HTTP POST requests containing arbitrary
-(binary) body in the request body should not use <code>req.body()</code>. The
-reason is that <code>req.body()</code> will return the body as a JavaScript string,
-and this isn&rsquo;t going to work with arbitrary binary data.</p>
-
-<p>Instead, the <code>req.rawBodyBuffer()</code> should be used. This will return the
-request body inside a buffer.
-Here&rsquo;s an example that stores the received data in a file on the server:</p>
-
-<p>```js Foxx action that can handle binary input
-controller.post(&lsquo;/receive-binary&rsquo;, function (req, res) {
-  // fetch request body into the buffer
-  var body = req.rawBodyBuffer();
-  // create an absolute filename, local to the Foxx application directory
-  var filename = applicationContext.foxxFilename(&ldquo;body&rdquo;);</p>
-
-<p>  require(&ldquo;fs&rdquo;).write(filename, body);
-});
-```</p>
-
-<p>This action can be invoked as follows if the app is mounted with name <code>app</code>:</p>
-
-<pre><code>curl -X POST http://localhost:8529/app/receive-binary --data-binary @filename
-</code></pre>
-
-<p>This will send the contents of the file <code>filename</code> to the server. The Foxx
-action will then store the received data as is in a file name <code>body</code> in the
-application directory.</p>
-
-<p>Returning binary data from a Foxx action is simple, too. Here&rsquo;s a way that
-returns the contents of the file named <code>body</code> in the application&rsquo;s directory:
-<code>js Foxx action that returns contents of a file
-controller.get('/provide-binary-file', function (req, res) {
-  // create an absolute filename, local to the Foxx application directory
-  var filename = applicationContext.foxxFilename("body");
-  // send the contents, this will also set mime type "application/octet-stream"
-  res.sendFile(filename);
-});
-</code></p>
-
-<p>It is also possible to return data from an arbitrary buffer:
-```js Foxx action that returns data in a buffer
-controller.get(&lsquo;/provide-binary-buffer&rsquo;, function (req, res) {
-  // create an absolute filename, local to the Foxx application directory
-  var filename = applicationContext.foxxFilename(&ldquo;body&rdquo;);
-  // read the file content into a buffer
-  var fileContent = require(&ldquo;fs&rdquo;).readBuffer(filename);</p>
-
-<p>  // TODO: modify the contents of buffer here&hellip;</p>
-
-<p>  // send the contents, this will also set mime type &ldquo;application/octet-stream&rdquo;
-  res.send(fileContent);
-});
-```</p>
-
-<h1>Example application</h1>
-
-<p>I quickly put together an example application that shows how to handle arbitrary
-binary data in Foxx actions. The example app allows uploading files to the server.
-The server will then list these files and allows downloading them again.</p>
-
-<p>The application has no CSS at all. Its only purpose is to demo the server-side code.
-The application can be downloaded <a href="/downloads/code/filelist-app.tar.gz">here</a>.</p>
-
-<p>Please note that the example application requires ArangoDB 2.3, which is currently
-in development.</p>
 ]]></content>
   </entry>
   

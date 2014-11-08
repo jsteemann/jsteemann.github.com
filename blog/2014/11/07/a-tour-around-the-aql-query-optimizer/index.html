@@ -1,0 +1,646 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>A Tour Around the AQL Query Optimizer - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="The major new feature in ArangoDB 2.3 is the shiny new
+AQL query optimizer and executor. These code parts have been
+rewritten in 2.3 to make AQL much &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2014/11/07/a-tour-around-the-aql-query-optimizer">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>Notes on ArangoDB development</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">A Tour Around the AQL Query Optimizer</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-11-07T22:30:10+01:00" pubdate data-updated="true">Nov 7<span>th</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>The major new feature in ArangoDB 2.3 is the shiny new
+AQL query optimizer and executor. These code parts have been
+rewritten in 2.3 to make AQL much better for our end users.</p>
+
+<!-- more -->
+
+
+<p>Since one of the initial releases, ArangoDB has been shipped with
+AQL, the <em>ArangoDB Query Language</em>. AQL has since then been ArangoDB&rsquo;s
+most versatile way of executing simple and also the not-so-simple
+queries.</p>
+
+<p>I&rsquo;ll start with an overview of query execution in previous versions
+of ArangoDB, and then explain the new engine and explain the differences.</p>
+
+<h2>History: query execution in pre-2.3</h2>
+
+<p>Previous versions of ArangoDB executed any AQL query in the following
+steps:</p>
+
+<ul>
+<li>tokenize and parse query string into an abstract syntax tree (AST)</li>
+<li>perform simple AST optimizations</li>
+<li>collect filter conditions in AST and look for index usage opportunities</li>
+<li>generate code</li>
+<li>execute code</li>
+</ul>
+
+
+<p>This approach was simple and has worked for a lot of queries, but it also
+had a few quirks:</p>
+
+<p>First of all, most of the steps were carried out directly on the
+abstract syntax tree, with the AST nodes being modified in place.
+There was also just the one AST per query, so the old AQL executor
+could not generate multiple, potentially very different execution
+plan candidates for a given query.</p>
+
+<p>The &ldquo;old&rdquo; optimizer was able to move AST nodes around during optimization
+and it was already able to consider multiple index candidates for a query,
+but it would not compare multiple plans and make a cost-based decision.
+It was also limited in the amount and scope of transformations it
+could safely apply to the AST.</p>
+
+<p>When it came to code generation and execution, the &ldquo;old&rdquo; executor
+fully relied on V8 to execute the queries. Result sets were created
+using V8&rsquo;s value objects. Documents from collections that queries
+needed to iterate over had to be made available to V8. While some
+optimization was used for this, the conversions could have summed up
+to significant overhead for certain kinds of queries.</p>
+
+<p>The representation of queries via an AST also made it hard to generate
+code that supported lazy evaluation during query execution.</p>
+
+<p>Finally, the AQL optimizer so far did not provide much support for
+queries that were to be executed in a distributed fashion inside a cluster
+of servers.</p>
+
+<h2>Query execution in ArangoDB 2.3</h2>
+
+<p>We wanted to address all these issues with a rewrite of the AQL
+infrastructure. Starting with ArangoDB 2.3, AQL queries are executed
+in these steps:</p>
+
+<ul>
+<li>tokenize and parse query string into an abstract syntax tree (AST)</li>
+<li>perform simple AST optimizations</li>
+<li>transform AST into execution plan</li>
+<li>optimize and permute execution plans</li>
+<li>estimate costs for execution plans and pick optimal plan</li>
+<li>instanciate execution engine from optimal plan</li>
+<li>(in cluster only) send execution plan parts to cluster nodes</li>
+<li>execute query</li>
+</ul>
+
+
+<p>Tokenization and parsing of AQL queries hasn&rsquo;t changed much in 2.3:
+query strings are still parsed using a Bison/Flex-based parser and
+lexer combo. The AST structure has proven to be good during the parsing
+stage, so the parser creates an initial AST from the query string first.</p>
+
+<p>After that, simple optimizations are performed directly on the AST,
+such as constant folding and constant propagation. Deterministic functions
+with constant operands will be executed already in this stage and the
+results be injected into the AST.</p>
+
+<p>A major change in 2.3 is that no further transformations will be
+carried out on the AST. Instead, the AST will be transformed into
+an initial <em>execution plan</em>.</p>
+
+<p>This execution plan is the starting point for the <em>query optimizer</em>.
+It will take the initial execution plan and apply transformations to
+it. Transformations will either update the existing plan in place or
+create a new, modified plan. The result of the transformations carried
+out will form the input for further transformations that can be carried
+out by query optimizer.</p>
+
+<p>The result of the query optimization stage is one or many execution
+plans. For each plan, the optimizer will estimate a cost value, and
+then finally pick the plan with the lowest total estimated cost.
+This plan is considered to be the <em>optimal plan</em>. All other execution
+plans will be discarded by the optimizer as it has considered them non-optimal.</p>
+
+<p>The optimal execution plan is then executed by the <em>execution engine</em>.
+For a single-server AQL query, this is straightforward: for each step
+in the execution plan, a C++ object is created that is supposed to
+execute the particular step. Query execution is then started by asking
+the first of these object for its results.</p>
+
+<p>The objects for multiple processing steps are linked in a pipelined fashion
+with lazy evaluation. Pulling data from the first object will eventually
+trigger pulling data from the second object etc., until there are no more
+results to produce.</p>
+
+<p>For a distributed query, this is a bit more complicated. The different
+execution steps will likely be shipped to different servers in the
+cluster, and the objects need to be instanciated in different servers, too.
+The different parts of the query may pull data from each other via HTTP
+calls between cluster nodes.</p>
+
+<h2>How execution plans work</h2>
+
+<p>An execution plan is a sequence of query execution steps. Let&rsquo;s
+start with a very simple example:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN mycollection
+</span><span class='line'>  RETURN doc._key</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This query will be transformed into the following execution plan:</p>
+
+<ul>
+<li><em>SingletonNode</em>: passes a single empty value to the following steps</li>
+<li><em>EnumerateCollectionNode</em>: iterates over all documents of a collection
+and provides the current document in an output variable. In our example,
+it will iterate over collection <code>mycollection</code> and provide each
+document in variable <code>doc</code></li>
+<li><em>CalculationNode</em>: evaluates an expression and returns its result.
+In the example, it will calculate <code>doc._key</code></li>
+<li><em>ReturnNode</em>: returns results to the caller</li>
+</ul>
+
+
+<p>If this plan is going to be executed, the execution engine will start
+pulling data from the node at the bottom, that is, the <em>ReturnNode</em>. The
+<em>ReturnNode</em> at this stage cannot provide any data, so it will ask its
+predecessor node, which in the example is the <em>CalculationNode</em>. The
+<em>CalculationNode</em> again does not have own data yet, so it must ask the
+node in front of it. The <em>EnumerateCollectionNode</em> will first ask the
+<em>SingletonNode</em> for input data. So the execution flow has bubbled up from
+the bottom of the sequence to the top.</p>
+
+<p>The <em>SingletonNode</em> will now produce a single empty return value. It will
+also internally set its processing status to <em>done</em>, so it will not produce
+any more values if asked again. This is all a <em>SingletonNode</em> will ever do.
+We&rsquo;ll see later why such a node may still be useful.</p>
+
+<p>The single empty value will be provided as input to the <em>EnumerateCollectionNode</em>.
+This node will now go through all the documents in the underlying collection,
+and return them once for each input value its got. As its input value was
+the singleton, it will return the documents of the collection just once.</p>
+
+<p>Processing is executed in blocks of size 1000 by default. The
+<em>EnumerateCollectionNode</em> will thus not return all documents to its successor
+node, but just 1,000. The return value will be a vector with 1,000 documents,
+stored under variable name <code>doc</code>.</p>
+
+<p>The <em>CalculationNode</em>, still waiting for input data, can now execute its
+expression <code>doc._key</code> on this input value. It will execute this expression
+1,000 times, once for each input value. The expression results will be
+stored in another variable. This variable is anonymous, as it hasn&rsquo;t been
+named explicitly in the original query. The vector of results produced by
+the <em>CalculationNode</em> is then returned to the <em>ReturnNode</em>, which will then
+return it to the caller.</p>
+
+<p>If the caller requests more documents, the procedure will repeat. Whenever
+a processing step cannot produce any more data, it will ask its predecessor
+step for more data. If the predecessor step already has status <em>done</em>, the
+current step will set itself to <em>done</em> as well, so a query will actually
+come to an end if there are no more results.</p>
+
+<p>As can be seen, steps are executed with batches of values. We thought this
+would be a good way to improve efficiency and reduce the number of hops
+between steps.</p>
+
+<h2>Joins</h2>
+
+<p>Let&rsquo;s say we want to join documents from two collections, based on common
+attribute values. Let&rsquo;s use <code>users</code> and <code>logins</code>, joined by their <code>id</code> and
+<code>userId</code> attributes:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR user IN users
+</span><span class='line'>  FOR login IN logins
+</span><span class='line'>    FILTER user.id == login.userId
+</span><span class='line'>    RETURN { user: user, login: login }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Provided that there are no indexes, the query may be turned into this
+execution plan by the optimizer:</p>
+
+<ul>
+<li><em>SingletonNode</em>: passes a single empty value to the following steps</li>
+<li><em>EnumerateCollectionNode</em>: will iterate over all documents in collection
+<code>users</code> and produce a variable named <code>user</code></li>
+<li><em>EnumerateCollectionNode</em>: will iterate over all documents in collection
+<code>logins</code> and produce a variable named <code>login</code></li>
+<li><em>CalculationNode</em>: will calculate the result of the expression
+<code>user.id == login.userId</code></li>
+<li><em>FilterNode</em>: will let only documents pass that match the filter condition
+(calculated by the <em>CalculationNode</em> above it)</li>
+<li><em>CalculationNode</em>: will calculate the result of the expression
+<code>{ user: user, login: login }</code></li>
+<li><em>ReturnNode</em>: returns results to the caller</li>
+</ul>
+
+
+<p>Now we can see why the <em>SingletonNode</em> is useful: it can be used as an
+input to another node, telling this node to execute just once. Having the
+<em>SingletonNode</em> will ensure that the outermost <em>EnumerateCollection</em>
+will only iterate once over the documents in its underlying collection <code>users</code>.</p>
+
+<p>The inner <em>EnumerateCollectionNode</em> for collection <code>logins</code> is now fed by
+the outer <em>EnumerateCollectionNode</em> on <code>users</code>. Thus these two nodes will
+produce a cartesian product. This will be done lazily, as producing results
+will normally happen in chunks of 1,000 values each.</p>
+
+<p>The results of the cartesian product are then post-filtered by the <code>FilterNode</code>,
+which will only let those documents pass with match the filter condition of
+the query. The <code>FilterNode</code> employs its predecessor, the <code>CalculationNode</code>,
+to determine which values satisfy the condition.</p>
+
+<h2>Using indexes</h2>
+
+<p>Obviously creating cartesian products is not ideal. The optimizer will try
+to avoid generating such plans if it can, but it has no choice if there are
+no indexes present.</p>
+
+<p>If there are indexes on attributes that are used in <code>FILTER</code> conditions of
+a query, the optimizer will try to turn <code>EnumerateCollectionNode</code>s into
+<code>IndexRangeNode</code>s. The purpose of an <code>IndexRangeNode</code> is to iterate over a
+specific range in an index. This is normally more efficient than iterating
+over all documents of a collection.</p>
+
+<p>Let&rsquo;s assume there is an index on <code>logins.userId</code>. Then the optimizer might
+be able to generate a plan like this:</p>
+
+<ul>
+<li><em>SingletonNode</em>: passes a single empty value to the following steps</li>
+<li><em>EnumerateCollectionNode</em>: will iterate over all documents in collection
+<code>users</code> and produce a variable named <code>user</code></li>
+<li><em>IndexRangeNode</em>: will iterate over the values in index <code>logins.userId</code> that
+match the value of <code>users.id</code> and produce a variable named <code>login</code></li>
+<li><em>CalculationNode</em>: will calculate the result of the expression
+<code>user.id == login.userId</code></li>
+<li><em>FilterNode</em>: will let only documents pass that match the filter condition
+(calculated by the <em>CalculationNode</em> above it)</li>
+<li><em>CalculationNode</em>: will calculate the result of the expression
+<code>{ user: user, login: login }</code></li>
+<li><em>ReturnNode</em>: returns results to the caller</li>
+</ul>
+
+
+<p>To run this query, the execution engine must still iterate over all documents
+in collection <code>users</code>, but for each those, it must only find the documents
+in <code>logins</code> that match the join condition. Probably that means a lot less
+documents and thus much faster execution.</p>
+
+<h2>Permutation of loops</h2>
+
+<p>Now consider adding an extra <code>FILTER</code> statement to the original query so we
+end up with this:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR user IN users
+</span><span class='line'>  FOR login IN logins
+</span><span class='line'>    FILTER user.id == login.userId
+</span><span class='line'>    FILTER login.ts == 1415402319       /* added this one! */
+</span><span class='line'>    RETURN { user: user, login: login }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The optimizer is free to permute the order of <code>FOR</code> loops as long as this
+won&rsquo;t change the results of a query. In our case, permutation of the two
+<code>FOR</code> loops is allowed. If the optimizer exchanges the two loops, it can
+also pull out the <code>FILTER</code> statement on <code>login.ts</code> out of the inner loop
+into the outer loop.</p>
+
+<p>It might come up with a plan like this, which may be more efficient if a
+lot of documents from <code>logins</code> can be filtered out early:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR login IN logins
+</span><span class='line'>  FILTER login.ts == 1415402319
+</span><span class='line'>  FOR user IN users
+</span><span class='line'>    FILTER user.id == login.userId
+</span><span class='line'>    RETURN { user: user, login: login }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Exchanging the order of <code>FOR</code> loops may also allow the optimizer to use
+additional indexes.</p>
+
+<p>A last note on indexes: the optimizer in 2.3 is able to use (sorted)
+skiplist indexes to eliminate extra <code>SORT</code> operations. For example, if
+there is a skiplist index on <code>login.ts</code>, the <code>SORT</code> in the following
+query can be removed by the optimizer:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR login IN logins
+</span><span class='line'>  FILTER login.ts &gt; 1415402319
+</span><span class='line'>  SORT login.ts
+</span><span class='line'>  RETURN login</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The AQL optimizer in 2.3 can optimize away a <code>SORT</code> even if the sort
+order is backwards or if no <code>FILTER</code> statement is used in the query at
+all.</p>
+
+<h2>Analyzing plans</h2>
+
+<p>One particular improvement over 2.2 is that in ArangoDB 2.3 the optimizer
+provides functionality for retrieving full execution plan information for
+queries <strong>without</strong> executing them. The execution plan information can be
+inspected by developers or DBAs, and, as it is JSON-encoded, can also be
+analyzed programmatically.</p>
+
+<p>Retrieving the execution plan for a query is straight-forward:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>arangosh&gt; db._createStatement({ query: &lt;query&gt; }).explain();</span></code></pre></td></tr></table></div></figure>
+
+
+<p>By default, the optimizer will return just the <em>optimal plan</em>, containing
+all the plan&rsquo;s execution nodes with lots of extra information plus cost estimates.</p>
+
+<p>The optimizer is also able to return the alternative plans it produced but
+considered to be non-optimal:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>arangosh&gt; db._createStatement({ query: &lt;query&gt; }).explain({ allPlans: true });</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will hopefully allow developers and DBAs to get a better idea of how an
+AQL query will be executed internally.</p>
+
+<p>Additionally, simple execution statistics are returned by default when executing
+a query. This statistics can also be used to get an idea of the runtime costs of
+a query <strong>after</strong> execution.</p>
+
+<h2>Writing optimizer rules</h2>
+
+<p>The AQL optimizer itself is dumb. It will simply try to apply all transformations
+from its rulebook to each input execution plan it is feeded with. This
+will produce output execution plans, on which further transformations
+may or may not be applied.</p>
+
+<p>The more interesting part of the AQL optimizer stage is thus the rulebook.
+Each rule in the rulebook is a C++ function that is executed for an input plan.</p>
+
+<p>Adding a new optimizer rule to the rulebook is intentionally simple. One of
+the design goals of the new AQL optimizer was to keep it flexible and extensible.
+All that&rsquo;s need to be to add an optimizer rule is to implement a C++ function
+with the following signature:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="p">(</span><span class="n">Optimizer</span><span class="o">*</span><span class="p">,</span> <span class="n">ExecutionPlan</span><span class="o">*</span><span class="p">,</span> <span class="n">Optimizer</span><span class="o">::</span><span class="n">Rule</span> <span class="k">const</span><span class="o">*</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kt">int</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>and register it once in the Optimizer&rsquo;s rulebook.</p>
+
+<p>An optimizer rule function is called with an instance of the query optimizer
+(it can use it to register a new plan), the current execution plan and some
+information about the rule itself (this is the information about the rule from
+the rulebook).</p>
+
+<p>The optimizer rule function can then analyze the input execution plan, modifiy
+it in place, and/or create additional plans. It must return a status code to
+the optimizer to indicate if something went wrong.</p>
+
+<h2>Outlook</h2>
+
+<p>Writing a perfect query optimizer is a never-ending endeavour. Other databases
+provide new optimizer features and fixes even decades after the initial version.</p>
+
+<p>Our plan is to ship 2.3 with several essential and useful optimizer rules. We
+will likely add more in future releases. We&rsquo;re also open to contributions.
+If you can think of rules that are missing but you would like to see in ArangoDB,
+please let us know. If you would like to contribute to the optimizer and write some
+rule code, consider sending a pull request or an email to
+<a href="hackers@arangodb.org">hackers@arangodb.org</a>.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-11-07T22:30:10+01:00" pubdate data-updated="true">Nov 7<span>th</span>, 2014</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/concepts/'>Concepts</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2014/11/07/a-tour-around-the-aql-query-optimizer/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2014/11/07/a-tour-around-the-aql-query-optimizer/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2014/11/07/improved-non-unique-hash-indexes/" title="Previous Post: Improved non-unique hash indexes in 2.3">&laquo; Improved non-unique hash indexes in 2.3</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    
+<section>
+	<span>
+		<img src="http://www.gravatar.com/avatar/ecea2672d02faabcfdcc3400ce7e713a" alt="Gravatar of jsteemann " title="Gravatar of jsteemann" />
+	</span>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2014/11/07/a-tour-around-the-aql-query-optimizer/">A Tour Around the AQL Query Optimizer</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/11/07/improved-non-unique-hash-indexes/">Improved Non-unique Hash Indexes in 2.3</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/11/04/setting-up-test-data/">Setting Up Test Data</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/">Getting Core Dumps of Failed TravisCI Builds</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/">What I Most Like About C++11</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (1)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (12)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (3)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (4)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
