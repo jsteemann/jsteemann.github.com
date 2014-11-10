@@ -10,8 +10,8 @@
 
   
   <meta name="description" content="The major new feature in ArangoDB 2.3 is the shiny new
-AQL query optimizer and executor. These code parts have been
-rewritten in 2.3 to make AQL much &hellip;">
+AQL query optimizer and executor. These parts of ArangoDB have been
+rewritten in 2.3 to make &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -106,7 +106,7 @@ rewritten in 2.3 to make AQL much &hellip;">
 
 
 <div class="entry-content"><p>The major new feature in ArangoDB 2.3 is the shiny new
-AQL query optimizer and executor. These code parts have been
+AQL query optimizer and executor. These parts of ArangoDB have been
 rewritten in 2.3 to make AQL much better for our end users.</p>
 
 <!-- more -->
@@ -212,7 +212,7 @@ plans will be discarded by the optimizer as it has considered them non-optimal.<
 For a single-server AQL query, this is straightforward: for each step
 in the execution plan, a C++ object is created that is supposed to
 execute the particular step. Query execution is then started by asking
-the first of these object for its results.</p>
+the first of these objects for its results.</p>
 
 <p>The objects for multiple processing steps are linked in a pipelined fashion
 with lazy evaluation. Pulling data from the first object will eventually
@@ -338,7 +338,7 @@ produce a cartesian product. This will be done lazily, as producing results
 will normally happen in chunks of 1,000 values each.</p>
 
 <p>The results of the cartesian product are then post-filtered by the <code>FilterNode</code>,
-which will only let those documents pass with match the filter condition of
+which will only let those documents pass that match the filter condition of
 the query. The <code>FilterNode</code> employs its predecessor, the <code>CalculationNode</code>,
 to determine which values satisfy the condition.</p>
 
@@ -374,9 +374,9 @@ match the value of <code>users.id</code> and produce a variable named <code>logi
 
 
 <p>To run this query, the execution engine must still iterate over all documents
-in collection <code>users</code>, but for each those, it must only find the documents
-in <code>logins</code> that match the join condition. Probably that means a lot less
-documents and thus much faster execution.</p>
+in collection <code>users</code>, but for each of those, it only needs to find the documents
+in <code>logins</code> that match the join condition. This most likely means a lot less
+lookups and thus much faster execution.</p>
 
 <h2>Permutation of loops</h2>
 
@@ -397,11 +397,12 @@ end up with this:</p>
 
 <p>The optimizer is free to permute the order of <code>FOR</code> loops as long as this
 won&rsquo;t change the results of a query. In our case, permutation of the two
-<code>FOR</code> loops is allowed. If the optimizer exchanges the two loops, it can
-also pull out the <code>FILTER</code> statement on <code>login.ts</code> out of the inner loop
-into the outer loop.</p>
+<code>FOR</code> loops is allowed (the query does not contain a <code>SORT</code> instruction so
+the order of results is not guaranteed).</p>
 
-<p>It might come up with a plan like this, which may be more efficient if a
+<p>If the optimizer exchanges the two loops, it can also pull out the <code>FILTER</code>
+statement on <code>login.ts</code> out of the inner loop, and move up into the outer loop.
+It might come up with a plan like this, which may be more efficient if a
 lot of documents from <code>logins</code> can be filtered out early:</p>
 
 <figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>

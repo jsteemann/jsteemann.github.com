@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-11-08T02:21:50+01:00</updated>
+  <updated>2014-11-10T12:31:59+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -19,7 +19,7 @@
     <updated>2014-11-07T22:30:10+01:00</updated>
     <id>http://jsteemann.github.io/blog/2014/11/07/a-tour-around-the-aql-query-optimizer</id>
     <content type="html"><![CDATA[<p>The major new feature in ArangoDB 2.3 is the shiny new
-AQL query optimizer and executor. These code parts have been
+AQL query optimizer and executor. These parts of ArangoDB have been
 rewritten in 2.3 to make AQL much better for our end users.</p>
 
 <!-- more -->
@@ -125,7 +125,7 @@ plans will be discarded by the optimizer as it has considered them non-optimal.<
 For a single-server AQL query, this is straightforward: for each step
 in the execution plan, a C++ object is created that is supposed to
 execute the particular step. Query execution is then started by asking
-the first of these object for its results.</p>
+the first of these objects for its results.</p>
 
 <p>The objects for multiple processing steps are linked in a pipelined fashion
 with lazy evaluation. Pulling data from the first object will eventually
@@ -251,7 +251,7 @@ produce a cartesian product. This will be done lazily, as producing results
 will normally happen in chunks of 1,000 values each.</p>
 
 <p>The results of the cartesian product are then post-filtered by the <code>FilterNode</code>,
-which will only let those documents pass with match the filter condition of
+which will only let those documents pass that match the filter condition of
 the query. The <code>FilterNode</code> employs its predecessor, the <code>CalculationNode</code>,
 to determine which values satisfy the condition.</p>
 
@@ -287,9 +287,9 @@ match the value of <code>users.id</code> and produce a variable named <code>logi
 
 
 <p>To run this query, the execution engine must still iterate over all documents
-in collection <code>users</code>, but for each those, it must only find the documents
-in <code>logins</code> that match the join condition. Probably that means a lot less
-documents and thus much faster execution.</p>
+in collection <code>users</code>, but for each of those, it only needs to find the documents
+in <code>logins</code> that match the join condition. This most likely means a lot less
+lookups and thus much faster execution.</p>
 
 <h2>Permutation of loops</h2>
 
@@ -310,11 +310,12 @@ end up with this:</p>
 
 <p>The optimizer is free to permute the order of <code>FOR</code> loops as long as this
 won&rsquo;t change the results of a query. In our case, permutation of the two
-<code>FOR</code> loops is allowed. If the optimizer exchanges the two loops, it can
-also pull out the <code>FILTER</code> statement on <code>login.ts</code> out of the inner loop
-into the outer loop.</p>
+<code>FOR</code> loops is allowed (the query does not contain a <code>SORT</code> instruction so
+the order of results is not guaranteed).</p>
 
-<p>It might come up with a plan like this, which may be more efficient if a
+<p>If the optimizer exchanges the two loops, it can also pull out the <code>FILTER</code>
+statement on <code>login.ts</code> out of the inner loop, and move up into the outer loop.
+It might come up with a plan like this, which may be more efficient if a
 lot of documents from <code>logins</code> can be filtered out early:</p>
 
 <figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
@@ -1578,9 +1579,8 @@ available. For 4 parallel <code>make</code> processes, use <code>make -j4</code>
 or not an error occurred, can be found in its last line of its output. If
 it does <strong>not</strong> say something like this, <code>make</code> has probably succeeded:</p>
 
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>make: *** [all] Error 2</span></code></pre></td></tr></table></div></figure>
-
+<pre><code>make: *** [all] Error 2
+</code></pre>
 
 <h2>Starting ArangoDB</h2>
 
@@ -1619,21 +1619,14 @@ instance.</p>
 <p>Time to make some changes in the code. A good place to start is usually
 <code>main</code>. Here are a few places to get you started:</p>
 
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>~/ArangoDB$ grep -r "int main" arangod/ arangosh/
-</span><span class='line'>arangod/RestServer/arango.cpp:int main (int argc, char* argv[]) {
-</span><span class='line'>arangosh/Benchmark/arangob.cpp:int main (int argc, char* argv[]) {
-</span><span class='line'>arangosh/V8Client/arangorestore.cpp:int main (int argc, char* argv[]) {
-</span><span class='line'>arangosh/V8Client/arangodump.cpp:int main (int argc, char* argv[]) {
-</span><span class='line'>arangosh/V8Client/arangoimp.cpp:int main (int argc, char* argv[]) {
-</span><span class='line'>arangosh/V8Client/arangosh.cpp:int main (int argc, char* argv[]) {</span></code></pre></td></tr></table></div></figure>
-
+<pre><code>~/ArangoDB$ grep -r "int main" arangod/ arangosh/
+arangod/RestServer/arango.cpp:int main (int argc, char* argv[]) {
+arangosh/Benchmark/arangob.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangorestore.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangodump.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangoimp.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangosh.cpp:int main (int argc, char* argv[]) {
+</code></pre>
 
 <p>Once you&rsquo;re done with your changes, you need to re-compile and run:</p>
 
@@ -1658,11 +1651,20 @@ make
 </code></pre>
 
 <p>If <code>make</code> complains about files not found etc., the <code>Makefile</code> may have
-changed. Then it&rsquo;s time for a rebuild:</p>
+changed. Then it&rsquo;s time for a full rebuild:</p>
 
 <pre><code>make clean
+make setup
 ./configure --enable-all-in-one-icu --enable-all-in-one-v8 --enable-relative 
 make
+</code></pre>
+
+<p>Sometimes <code>make clean</code> isn&rsquo;t enough. <code>make</code> creates cache files for the
+object files, and if they are too outdated, it will complain about files which
+have been renamed already etc. In this case, you can forcefully delete its
+caches by running an additional</p>
+
+<pre><code>make superclean
 </code></pre>
 
 <p>By the way, if you used special configure options and forgot them, you

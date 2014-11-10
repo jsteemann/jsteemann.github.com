@@ -224,9 +224,8 @@ available. For 4 parallel <code>make</code> processes, use <code>make -j4</code>
 or not an error occurred, can be found in its last line of its output. If
 it does <strong>not</strong> say something like this, <code>make</code> has probably succeeded:</p>
 
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>make: *** [all] Error 2</span></code></pre></td></tr></table></div></figure>
-
+<pre><code>make: *** [all] Error 2
+</code></pre>
 
 <h2>Starting ArangoDB</h2>
 
@@ -265,21 +264,14 @@ instance.</p>
 <p>Time to make some changes in the code. A good place to start is usually
 <code>main</code>. Here are a few places to get you started:</p>
 
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>~/ArangoDB$ grep -r "int main" arangod/ arangosh/
-</span><span class='line'>arangod/RestServer/arango.cpp:int main (int argc, char* argv[]) {
-</span><span class='line'>arangosh/Benchmark/arangob.cpp:int main (int argc, char* argv[]) {
-</span><span class='line'>arangosh/V8Client/arangorestore.cpp:int main (int argc, char* argv[]) {
-</span><span class='line'>arangosh/V8Client/arangodump.cpp:int main (int argc, char* argv[]) {
-</span><span class='line'>arangosh/V8Client/arangoimp.cpp:int main (int argc, char* argv[]) {
-</span><span class='line'>arangosh/V8Client/arangosh.cpp:int main (int argc, char* argv[]) {</span></code></pre></td></tr></table></div></figure>
-
+<pre><code>~/ArangoDB$ grep -r "int main" arangod/ arangosh/
+arangod/RestServer/arango.cpp:int main (int argc, char* argv[]) {
+arangosh/Benchmark/arangob.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangorestore.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangodump.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangoimp.cpp:int main (int argc, char* argv[]) {
+arangosh/V8Client/arangosh.cpp:int main (int argc, char* argv[]) {
+</code></pre>
 
 <p>Once you&rsquo;re done with your changes, you need to re-compile and run:</p>
 
@@ -304,11 +296,20 @@ make
 </code></pre>
 
 <p>If <code>make</code> complains about files not found etc., the <code>Makefile</code> may have
-changed. Then it&rsquo;s time for a rebuild:</p>
+changed. Then it&rsquo;s time for a full rebuild:</p>
 
 <pre><code>make clean
+make setup
 ./configure --enable-all-in-one-icu --enable-all-in-one-v8 --enable-relative 
 make
+</code></pre>
+
+<p>Sometimes <code>make clean</code> isn&rsquo;t enough. <code>make</code> creates cache files for the
+object files, and if they are too outdated, it will complain about files which
+have been renamed already etc. In this case, you can forcefully delete its
+caches by running an additional</p>
+
+<pre><code>make superclean
 </code></pre>
 
 <p>By the way, if you used special configure options and forgot them, you

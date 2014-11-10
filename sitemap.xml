@@ -34,7 +34,7 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/</loc>
-        <lastmod>2014-10-30T21:06:12+01:00</lastmod>
+        <lastmod>2014-11-10T12:31:29+01:00</lastmod>
     </url>
     <url>
         <loc>
@@ -72,11 +72,11 @@
         <loc>
             http://jsteemann.github.io/blog/2014/11/07/a-tour-around-the-aql-query-optimizer/
         </loc>
-        <lastmod>2014-11-08T02:21:45+01:00</lastmod>
+        <lastmod>2014-11-10T12:26:31+01:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2014-11-08T02:21:45+01:00</lastmod>
+        <lastmod>2014-11-10T12:31:29+01:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -84,6 +84,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2014-11-08T02:21:45+01:00</lastmod>
+        <lastmod>2014-11-10T12:31:29+01:00</lastmod>
     </url>
 </urlset>
