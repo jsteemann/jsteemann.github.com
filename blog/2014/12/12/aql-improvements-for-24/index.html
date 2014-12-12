@@ -1,0 +1,424 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>AQL Improvements for 2.4 - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="While on a retreat in Belgium, we found some spare time to
+work on improvements for AQL. These will be shipped with
+ArangoDB version 2.4, and are &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2014/12/12/aql-improvements-for-24">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>Notes on ArangoDB development</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">AQL Improvements for 2.4</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-12-12T23:35:08+01:00" pubdate data-updated="true">Dec 12<span>th</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>While on a retreat in Belgium, we found some spare time to
+work on improvements for AQL. These will be shipped with
+ArangoDB version 2.4, and are already available in the devel
+version for testing from now on.</p>
+
+<p>Here&rsquo;s a short overview of the improvements:</p>
+
+<!-- more -->
+
+
+<h1>COLLECT WITH COUNT</h1>
+
+<p>A common use case in query languages is to count the number of
+documents returned by a query. The AQL solution for this has been
+to use the <code>LENGTH</code> function and a subquery:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN LENGTH((
+</span><span class='line'>  FOR doc IN collection 
+</span><span class='line'>    FILTER doc.someAttribute == someValue
+</span><span class='line'>    RETURN doc
+</span><span class='line'>  ))</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This is quite long and probably unintuitive for people which have
+used SQL for years.</p>
+
+<p>We therefore now allow using the following alternative version:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  FILTER doc.someAttribute == someValue
+</span><span class='line'>  COLLECT WITH COUNT INTO length
+</span><span class='line'>  RETURN length</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This query returns just the total number of matches, but not the
+matches themselves. As this query is made for counting only, it
+enables the optimizer to execute this query more efficiently.
+The documents found by the filter can be discarded
+instantly after the filter condition is evaluated, and do not need
+to shipped around inside the query.</p>
+
+<p>As a bonus, there is no need to use a subquery anymore, though the
+former variant is still fully supported and will be.</p>
+
+<p><code>COLLECT WITH COUNT</code> also works with groups:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  COLLECT value = doc.someAttribute WITH COUNT INTO length
+</span><span class='line'>  RETURN { value: value, length : length }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This returns the number of matches for each distinct <code>value</code>.</p>
+
+<p>A quick unscientific benchmark reveals that the specialized
+<code>WITH COUNT</code> clause seems to be faster than the old variant.
+The following results show the differences for a collection with
+500,000 small documents:</p>
+
+<p>The old variant that counts the number of documents by age runs
+in 4.75 seconds on my laptop:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  FILTER doc.age &lt; 20 
+</span><span class='line'>  COLLECT age = doc.age INTO g 
+</span><span class='line'>  RETURN { age: age, length: LENGTH(g) }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The new variant does the same, but runs in 0.6 seconds locally:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
+</span><span class='line'>  COLLECT age = doc.age WITH COUNT INTO length 
+</span><span class='line'>  RETURN { age: age, length: length }
+</span><span class='line'>0.6001598834991455</span></code></pre></td></tr></table></div></figure>
+
+
+<p>A notable speedup can also be observed if only a fraction of the
+groups is built (here: 1/8). The old variant for this runs in 0.6
+seconds:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  FILTER doc.age &lt; 20 
+</span><span class='line'>  COLLECT age = doc.age INTO g 
+</span><span class='line'>  RETURN { age: age, length: LENGTH(g) }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The new variants runs in 0.12 seconds:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
+</span><span class='line'>  FILTER doc.age &lt; 20 
+</span><span class='line'>  COLLECT age = doc.age WITH COUNT INTO length 
+</span><span class='line'>  RETURN { age: age, length: length }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The absolute times may vary greatly depending on the documents and
+the hardware used, but in general the new variant should provide a
+speedup.</p>
+
+<h1>Removing filters covered by indexes</h1>
+
+<p><code>FILTER</code> conditions which are completely covered by indexes will
+now be removed from the execution plan if it is safe to do so.
+Dropping the <code>FILTER</code> statements allows the optimizer to get rid
+of not only the <em>FilterNode</em>, but also its corresponding <em>CalculationNode</em>.
+This will save a lot of computation if many documents match the
+<code>FILTER</code> condition.</p>
+
+<p>For example, imagine the following query:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  FILTER doc.value &lt; 10 
+</span><span class='line'>  RETURN doc</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If there is a (skiplist) index on <code>doc.value</code>, the optimizer may
+decide to use this index. It will insert an <em>IndexRangeNode</em> instead
+of a full collection scan. The <em>IndexRangeNode</em> will scan the index
+on <code>doc.value</code> for the range [-inf, 10).</p>
+
+<p>Following that, the optimizer rule <code>remove-filter-covered-by-index</code>
+should fire and detect that the <code>FILTER</code> condition is already covered
+by the <em>IndexRangeNode</em>, and remove the <em>FilterNode</em>. This makes the
+<em>CalculationNode</em> of the <em>FilterNode</em> obsolete, so these two nodes will
+be removed.</p>
+
+<h1>Removing brackets for subquery function call parameters</h1>
+
+<p>Since the beginning of AQL, the parser required the user the put
+subqueries that were used as function parameters inside two pairs of
+brackets.</p>
+
+<p>For example, the following query did not parse in 2.3 and before:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN LENGTH(FOR doc IN collection RETURN doc)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Instead, it needed to be written as:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN LENGTH((FOR doc IN collection RETURN doc))</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This has caused several support questions over time, and I have to
+admit the double brackets were not intuitive. In fact, they were an
+artifact required by the AQL parser in order to parse the query
+correctly.</p>
+
+<p>For 2.4, the AQL grammar has now been cleaned up in this respect.
+Double brackets are still allowed in 2.4 but are not required anymore.
+This should make the first steps with AQL a bit easier.</p>
+
+<p>We&rsquo;re 1.5 days into our retreat now. Maybe there&rsquo;ll be some more
+AQL-related improvements in the end. Let&rsquo;s see.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-12-12T23:35:08+01:00" pubdate data-updated="true">Dec 12<span>th</span>, 2014</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2014/12/12/aql-improvements-for-24/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2014/12/12/aql-improvements-for-24/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2014/11/07/a-tour-around-the-aql-query-optimizer/" title="Previous Post: A tour around the new AQL query optimizer">&laquo; A tour around the new AQL query optimizer</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    
+<section>
+	<span>
+		<img src="http://www.gravatar.com/avatar/ecea2672d02faabcfdcc3400ce7e713a" alt="Gravatar of jsteemann " title="Gravatar of jsteemann" />
+	</span>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2014/12/12/aql-improvements-for-24/">AQL Improvements for 2.4</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/11/07/a-tour-around-the-aql-query-optimizer/">A Tour Around the New AQL Query Optimizer</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/11/07/improved-non-unique-hash-indexes/">Improved Non-unique Hash Indexes in 2.3</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/11/04/setting-up-test-data/">Setting Up Test Data</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/">Getting Core Dumps of Failed TravisCI Builds</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (2)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (13)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (1)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (3)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (4)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

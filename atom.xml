@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-11-10T12:31:59+01:00</updated>
+  <updated>2014-12-13T00:25:11+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,198 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[AQL Improvements for 2.4]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/12/12/aql-improvements-for-24/"/>
+    <updated>2014-12-12T23:35:08+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/12/12/aql-improvements-for-24</id>
+    <content type="html"><![CDATA[<p>While on a retreat in Belgium, we found some spare time to
+work on improvements for AQL. These will be shipped with
+ArangoDB version 2.4, and are already available in the devel
+version for testing from now on.</p>
+
+<p>Here&rsquo;s a short overview of the improvements:</p>
+
+<!-- more -->
+
+
+<h1>COLLECT WITH COUNT</h1>
+
+<p>A common use case in query languages is to count the number of
+documents returned by a query. The AQL solution for this has been
+to use the <code>LENGTH</code> function and a subquery:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN LENGTH((
+</span><span class='line'>  FOR doc IN collection 
+</span><span class='line'>    FILTER doc.someAttribute == someValue
+</span><span class='line'>    RETURN doc
+</span><span class='line'>  ))</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This is quite long and probably unintuitive for people which have
+used SQL for years.</p>
+
+<p>We therefore now allow using the following alternative version:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  FILTER doc.someAttribute == someValue
+</span><span class='line'>  COLLECT WITH COUNT INTO length
+</span><span class='line'>  RETURN length</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This query returns just the total number of matches, but not the
+matches themselves. As this query is made for counting only, it
+enables the optimizer to execute this query more efficiently.
+The documents found by the filter can be discarded
+instantly after the filter condition is evaluated, and do not need
+to shipped around inside the query.</p>
+
+<p>As a bonus, there is no need to use a subquery anymore, though the
+former variant is still fully supported and will be.</p>
+
+<p><code>COLLECT WITH COUNT</code> also works with groups:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  COLLECT value = doc.someAttribute WITH COUNT INTO length
+</span><span class='line'>  RETURN { value: value, length : length }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This returns the number of matches for each distinct <code>value</code>.</p>
+
+<p>A quick unscientific benchmark reveals that the specialized
+<code>WITH COUNT</code> clause seems to be faster than the old variant.
+The following results show the differences for a collection with
+500,000 small documents:</p>
+
+<p>The old variant that counts the number of documents by age runs
+in 4.75 seconds on my laptop:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  FILTER doc.age &lt; 20 
+</span><span class='line'>  COLLECT age = doc.age INTO g 
+</span><span class='line'>  RETURN { age: age, length: LENGTH(g) }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The new variant does the same, but runs in 0.6 seconds locally:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
+</span><span class='line'>  COLLECT age = doc.age WITH COUNT INTO length 
+</span><span class='line'>  RETURN { age: age, length: length }
+</span><span class='line'>0.6001598834991455</span></code></pre></td></tr></table></div></figure>
+
+
+<p>A notable speedup can also be observed if only a fraction of the
+groups is built (here: 1/8). The old variant for this runs in 0.6
+seconds:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  FILTER doc.age &lt; 20 
+</span><span class='line'>  COLLECT age = doc.age INTO g 
+</span><span class='line'>  RETURN { age: age, length: LENGTH(g) }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The new variants runs in 0.12 seconds:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
+</span><span class='line'>  FILTER doc.age &lt; 20 
+</span><span class='line'>  COLLECT age = doc.age WITH COUNT INTO length 
+</span><span class='line'>  RETURN { age: age, length: length }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The absolute times may vary greatly depending on the documents and
+the hardware used, but in general the new variant should provide a
+speedup.</p>
+
+<h1>Removing filters covered by indexes</h1>
+
+<p><code>FILTER</code> conditions which are completely covered by indexes will
+now be removed from the execution plan if it is safe to do so.
+Dropping the <code>FILTER</code> statements allows the optimizer to get rid
+of not only the <em>FilterNode</em>, but also its corresponding <em>CalculationNode</em>.
+This will save a lot of computation if many documents match the
+<code>FILTER</code> condition.</p>
+
+<p>For example, imagine the following query:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  FILTER doc.value &lt; 10 
+</span><span class='line'>  RETURN doc</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If there is a (skiplist) index on <code>doc.value</code>, the optimizer may
+decide to use this index. It will insert an <em>IndexRangeNode</em> instead
+of a full collection scan. The <em>IndexRangeNode</em> will scan the index
+on <code>doc.value</code> for the range [-inf, 10).</p>
+
+<p>Following that, the optimizer rule <code>remove-filter-covered-by-index</code>
+should fire and detect that the <code>FILTER</code> condition is already covered
+by the <em>IndexRangeNode</em>, and remove the <em>FilterNode</em>. This makes the
+<em>CalculationNode</em> of the <em>FilterNode</em> obsolete, so these two nodes will
+be removed.</p>
+
+<h1>Removing brackets for subquery function call parameters</h1>
+
+<p>Since the beginning of AQL, the parser required the user the put
+subqueries that were used as function parameters inside two pairs of
+brackets.</p>
+
+<p>For example, the following query did not parse in 2.3 and before:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN LENGTH(FOR doc IN collection RETURN doc)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Instead, it needed to be written as:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN LENGTH((FOR doc IN collection RETURN doc))</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This has caused several support questions over time, and I have to
+admit the double brackets were not intuitive. In fact, they were an
+artifact required by the AQL parser in order to parse the query
+correctly.</p>
+
+<p>For 2.4, the AQL grammar has now been cleaned up in this respect.
+Double brackets are still allowed in 2.4 but are not required anymore.
+This should make the first steps with AQL a bit easier.</p>
+
+<p>We&rsquo;re 1.5 days into our retreat now. Maybe there&rsquo;ll be some more
+AQL-related improvements in the end. Let&rsquo;s see.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[A Tour Around the New AQL Query Optimizer]]></title>

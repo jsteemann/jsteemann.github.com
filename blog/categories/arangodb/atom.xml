@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-11-10T12:31:59+01:00</updated>
+  <updated>2014-12-13T00:25:11+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,176 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[AQL Improvements for 2.4]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/12/12/aql-improvements-for-24/"/>
+    <updated>2014-12-12T23:35:08+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/12/12/aql-improvements-for-24</id>
+    <content type="html"><![CDATA[<p>While on a retreat in Belgium, we found some spare time to
+work on improvements for AQL. These will be shipped with
+ArangoDB version 2.4, and are already available in the devel
+version for testing from now on.</p>
+
+<p>Here&rsquo;s a short overview of the improvements:</p>
+
+<!-- more -->
+
+
+<h1>COLLECT WITH COUNT</h1>
+
+<p>A common use case in query languages is to count the number of
+documents returned by a query. The AQL solution for this has been
+to use the <code>LENGTH</code> function and a subquery:</p>
+
+<p>```
+RETURN LENGTH((
+  FOR doc IN collection</p>
+
+<pre><code>FILTER doc.someAttribute == someValue
+RETURN doc
+</code></pre>
+
+<p>  ))
+```</p>
+
+<p>This is quite long and probably unintuitive for people which have
+used SQL for years.</p>
+
+<p>We therefore now allow using the following alternative version:</p>
+
+<p><code>
+FOR doc IN collection
+  FILTER doc.someAttribute == someValue
+  COLLECT WITH COUNT INTO length
+  RETURN length
+</code></p>
+
+<p>This query returns just the total number of matches, but not the
+matches themselves. As this query is made for counting only, it
+enables the optimizer to execute this query more efficiently.
+The documents found by the filter can be discarded
+instantly after the filter condition is evaluated, and do not need
+to shipped around inside the query.</p>
+
+<p>As a bonus, there is no need to use a subquery anymore, though the
+former variant is still fully supported and will be.</p>
+
+<p><code>COLLECT WITH COUNT</code> also works with groups:</p>
+
+<p><code>
+FOR doc IN collection
+  COLLECT value = doc.someAttribute WITH COUNT INTO length
+  RETURN { value: value, length : length }
+</code></p>
+
+<p>This returns the number of matches for each distinct <code>value</code>.</p>
+
+<p>A quick unscientific benchmark reveals that the specialized
+<code>WITH COUNT</code> clause seems to be faster than the old variant.
+The following results show the differences for a collection with
+500,000 small documents:</p>
+
+<p>The old variant that counts the number of documents by age runs
+in 4.75 seconds on my laptop:</p>
+
+<p><code>
+FOR doc IN collection
+  FILTER doc.age &lt; 20
+  COLLECT age = doc.age INTO g
+  RETURN { age: age, length: LENGTH(g) }
+</code></p>
+
+<p>The new variant does the same, but runs in 0.6 seconds locally:</p>
+
+<p><code>
+FOR doc IN collection
+  COLLECT age = doc.age WITH COUNT INTO length
+  RETURN { age: age, length: length }
+0.6001598834991455
+</code></p>
+
+<p>A notable speedup can also be observed if only a fraction of the
+groups is built (here: 1/8). The old variant for this runs in 0.6
+seconds:</p>
+
+<p><code>
+FOR doc IN collection
+  FILTER doc.age &lt; 20
+  COLLECT age = doc.age INTO g
+  RETURN { age: age, length: LENGTH(g) }
+</code></p>
+
+<p>The new variants runs in 0.12 seconds:</p>
+
+<p><code>
+FOR doc IN collection
+  FILTER doc.age &lt; 20
+  COLLECT age = doc.age WITH COUNT INTO length
+  RETURN { age: age, length: length }
+</code></p>
+
+<p>The absolute times may vary greatly depending on the documents and
+the hardware used, but in general the new variant should provide a
+speedup.</p>
+
+<h1>Removing filters covered by indexes</h1>
+
+<p><code>FILTER</code> conditions which are completely covered by indexes will
+now be removed from the execution plan if it is safe to do so.
+Dropping the <code>FILTER</code> statements allows the optimizer to get rid
+of not only the <em>FilterNode</em>, but also its corresponding <em>CalculationNode</em>.
+This will save a lot of computation if many documents match the
+<code>FILTER</code> condition.</p>
+
+<p>For example, imagine the following query:</p>
+
+<p><code>
+FOR doc IN collection
+  FILTER doc.value &lt; 10
+  RETURN doc
+</code></p>
+
+<p>If there is a (skiplist) index on <code>doc.value</code>, the optimizer may
+decide to use this index. It will insert an <em>IndexRangeNode</em> instead
+of a full collection scan. The <em>IndexRangeNode</em> will scan the index
+on <code>doc.value</code> for the range [-inf, 10).</p>
+
+<p>Following that, the optimizer rule <code>remove-filter-covered-by-index</code>
+should fire and detect that the <code>FILTER</code> condition is already covered
+by the <em>IndexRangeNode</em>, and remove the <em>FilterNode</em>. This makes the
+<em>CalculationNode</em> of the <em>FilterNode</em> obsolete, so these two nodes will
+be removed.</p>
+
+<h1>Removing brackets for subquery function call parameters</h1>
+
+<p>Since the beginning of AQL, the parser required the user the put
+subqueries that were used as function parameters inside two pairs of
+brackets.</p>
+
+<p>For example, the following query did not parse in 2.3 and before:
+<code>
+RETURN LENGTH(FOR doc IN collection RETURN doc)
+</code></p>
+
+<p>Instead, it needed to be written as:
+<code>
+RETURN LENGTH((FOR doc IN collection RETURN doc))
+</code></p>
+
+<p>This has caused several support questions over time, and I have to
+admit the double brackets were not intuitive. In fact, they were an
+artifact required by the AQL parser in order to parse the query
+correctly.</p>
+
+<p>For 2.4, the AQL grammar has now been cleaned up in this respect.
+Double brackets are still allowed in 2.4 but are not required anymore.
+This should make the first steps with AQL a bit easier.</p>
+
+<p>We&rsquo;re 1.5 days into our retreat now. Maybe there&rsquo;ll be some more
+AQL-related improvements in the end. Let&rsquo;s see.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[A Tour Around the New AQL Query Optimizer]]></title>
@@ -825,225 +995,6 @@ completions script to your <code>.bashrc</code> file:
 <code>bash adding completions to .bashrc
 echo ". ~/arangodb-completions-2.2" &gt;&gt; ~/.bashrc
 </code></p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[How to Compile ArangoDB From Source]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/"/>
-    <updated>2014-10-16T22:24:48+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source</id>
-    <content type="html"><![CDATA[<p>Though we provide a lot of pre-built packages for the stable
-versions of ArangoDB <a href="https://www.arangodb.org/install">here</a>, it
-is often more interesting to play with the bleeding edge development
-version. New ArangoDB features are normally added to the <em>devel</em>
-branch, where they can be tested, documented and improved. When a
-feature matures, it is either backported to a stable branch or will
-eventually be released when the next stable branch is forked from
-<em>devel</em>.</p>
-
-<p>Contributing to the core of ArangoDB is also much easier with a
-ready-to-go <em>devel</em> version. This post explains how to set one up
-from scratch.</p>
-
-<!-- more -->
-
-
-<p>The following instructions are for Ubuntu 14.04 LTS, which seems to
-be quite popular at the moment. Other flavors of Linux are probably
-quite similar, though package manager and packages names will likely
-be somewhat different.</p>
-
-<h2>Using Vagrant</h2>
-
-<p>If you don&rsquo;t have an Ubuntu 14 installation yet, you can easily
-install one using <a href="http://www.vagrantup.com">Vagrant</a>. If you happen
-to have a Linux installation already and are familiar with it, just
-skip this section.</p>
-
-<p>After installing Vagrant on your system, pick a suitable Vagrant box from
-<a href="http://www.vagrantbox.es">here</a>. For example, I picked this 32 bit
-box from the list:</p>
-
-<pre><code>vagrant box add ubuntu-14.04-32 https://cloud-images.ubuntu.com/vagrant/trusty/current/trusty-server-cloudimg-i386-vagrant-disk1.box
-</code></pre>
-
-<p>After downloading the box, it can be made available via these commands:</p>
-
-<pre><code>mkdir temp
-cd temp
-vagrant init ubuntu-14.04-32
-vagrant up
-</code></pre>
-
-<p>After the VM is booted, connect to it via SSH:</p>
-
-<pre><code>vagrant ssh
-</code></pre>
-
-<h2>Cloning the repository</h2>
-
-<p>You&rsquo;re now on the Ubuntu VM. Next step is fetch the ArangoDB source
-code from Github. Cloning the repository from there requires <code>git</code>. Let&rsquo;s
-install it and clone the <em>devel</em> branch of the repository into a
-directory named <em>devel</em> on the VM:</p>
-
-<pre><code>sudo apt-get install git 
-git clone -b devel https://github.com/triAGENS/ArangoDB.git
-</code></pre>
-
-<p>The repository contains a lot of history so cloning may take a while.
-In case you don&rsquo;t need the full history, you can create a shallow
-clone like this:</p>
-
-<pre><code>git clone -b devel --single-branch --depth 1 https://github.com/triAGENS/ArangoDB.git 
-</code></pre>
-
-<p>This will reduce the download size from (currently) 375 MB to 56 MB
-and should be much faster. The downside of using a shallow copy is
-that there is no history and pushing and merging won&rsquo;t work most of
-the time. So it&rsquo;s better used for throw-away tests only.</p>
-
-<h2>Installing build tools and libraries</h2>
-
-<p>Now that the repository has been cloned into directory <em>ArangoDB</em>,
-we can install the required tools and libraries we need to build
-from source:</p>
-
-<pre><code>sudo apt-get install automake g++ libssl-dev libreadline-dev
-</code></pre>
-
-<p>If you prefer to install a different C++ compiler, please make sure it
-has proper support for C++11.</p>
-
-<p>Go 1.2 is also required. The official list of downloadable Go
-versions can be found <a href="https://golang.org/dl/">here</a>. In the example,
-I am using the 32 bit version in this example:</p>
-
-<pre><code>wget https://storage.googleapis.com/golang/go1.2.2.linux-386.tar.gz
-sudo tar -C /usr/local -xzf go1.2.2.linux-386.tar.gz
-export PATH=$PATH:/usr/local/go/bin
-echo "export PATH=\$PATH:/usr/local/go/bin" &gt;&gt; $HOME/.profile
-</code></pre>
-
-<h2>Compiling ArangoDB</h2>
-
-<p>With all prerequisites set up, it&rsquo;s now time to compile ArangoDB.</p>
-
-<p>You probably noticed that no <code>configure</code> file is shipped with ArangoDB
-in the <code>devel</code> branch. To create it, we need to execute <code>make setup</code>
-once. After that, <code>configure</code> can be executed to create the <code>Makefile</code>.
-The <code>Makefile</code> finally contains the stuff that <code>make</code> needs:</p>
-
-<pre><code>make setup
-./configure --enable-all-in-one-icu --enable-all-in-one-v8 --enable-relative 
-make
-</code></pre>
-
-<p>There first <code>make</code> run will take a while as it will compile all support
-libraries (ICU, V8, libev, zlib) before it will actually compile ArangoDB.
-Further invocations of <code>make</code> will not build these libraries again.
-Only any changed code will be rebuilt.</p>
-
-<p>Note that <code>make</code> can be parallelized if you have multiple processors
-available. For 4 parallel <code>make</code> processes, use <code>make -j4</code>.</p>
-
-<p><code>make</code> will produce a lot of output. The most important information, whether
-or not an error occurred, can be found in its last line of its output. If
-it does <strong>not</strong> say something like this, <code>make</code> has probably succeeded:</p>
-
-<pre><code>make: *** [all] Error 2
-</code></pre>
-
-<h2>Starting ArangoDB</h2>
-
-<p>When finished, <code>make</code> should have created all binaries in the <code>bin</code>
-subdirectory. We can now start <code>arangod</code> and the binaries directly from
-there without running a <code>make install</code>. In fact, <code>make install</code> is
-awkward to do if you do many change-compile-test cycles.</p>
-
-<pre><code>mkdir data          # creates a data directory
-bin/arangod data    # starts the server
-</code></pre>
-
-<p>The server will be started as a foreground process (which is ideal
-when developing the server). To stop the server, simply press CTRL-C.</p>
-
-<h2>Connecting to ArangoDB</h2>
-
-<p>To verify ArangoDB is actually working, open a separate terminal and
-connect to it with the ArangoShell.</p>
-
-<p>Note that if you used Vagrant, you will first need to connect to the
-Vagrant box in the other terminal using <code>vagrant ssh</code> from the directory
-you ran the <code>vagrant init</code> in. When connect to the Vagrant box, don&rsquo;t
-forget to switch into the <code>ArangoDB</code> directory.</p>
-
-<p>Once you&rsquo;re in the correct directory, just issue this:</p>
-
-<pre><code>bin/arangosh
-</code></pre>
-
-<p>This should bring up the ArangoShell connected to your devel ArangoDB
-instance.</p>
-
-<h2>Making changes</h2>
-
-<p>Time to make some changes in the code. A good place to start is usually
-<code>main</code>. Here are a few places to get you started:</p>
-
-<pre><code>~/ArangoDB$ grep -r "int main" arangod/ arangosh/
-arangod/RestServer/arango.cpp:int main (int argc, char* argv[]) {
-arangosh/Benchmark/arangob.cpp:int main (int argc, char* argv[]) {
-arangosh/V8Client/arangorestore.cpp:int main (int argc, char* argv[]) {
-arangosh/V8Client/arangodump.cpp:int main (int argc, char* argv[]) {
-arangosh/V8Client/arangoimp.cpp:int main (int argc, char* argv[]) {
-arangosh/V8Client/arangosh.cpp:int main (int argc, char* argv[]) {
-</code></pre>
-
-<p>Once you&rsquo;re done with your changes, you need to re-compile and run:</p>
-
-<pre><code>make
-bin/arangod data
-</code></pre>
-
-<p>Don&rsquo;t worry, <code>make</code> will only recompile what you changed plus what
-depends on it and finally link it all together. This won&rsquo;t take as long
-as on the previous run.</p>
-
-<p>If you are serious about contributing to the server code, please let us
-know <a href="https://groups.google.com/forum/#!forum/arangodb">here</a> so we can assist you.</p>
-
-<h2>Getting updates</h2>
-
-<p>We keep developing ArangoDB! To keep up to date and retrieve the latest
-changes from our repository, issue the following commands:</p>
-
-<pre><code>git pull origin devel
-make
-</code></pre>
-
-<p>If <code>make</code> complains about files not found etc., the <code>Makefile</code> may have
-changed. Then it&rsquo;s time for a full rebuild:</p>
-
-<pre><code>make clean
-make setup
-./configure --enable-all-in-one-icu --enable-all-in-one-v8 --enable-relative 
-make
-</code></pre>
-
-<p>Sometimes <code>make clean</code> isn&rsquo;t enough. <code>make</code> creates cache files for the
-object files, and if they are too outdated, it will complain about files which
-have been renamed already etc. In this case, you can forcefully delete its
-caches by running an additional</p>
-
-<pre><code>make superclean
-</code></pre>
-
-<p>By the way, if you used special configure options and forgot them, you
-can retrieve your previous options by typing <code>head config.log</code>.</p>
-
-<p>Enjoy!</p>
 ]]></content>
   </entry>
   
