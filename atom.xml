@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-12-13T00:25:11+01:00</updated>
+  <updated>2014-12-14T13:21:10+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,69 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[99 Bottles of Beer]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/12/14/99-bottles-of-beer/"/>
+    <updated>2014-12-14T13:14:28+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/12/14/99-bottles-of-beer</id>
+    <content type="html"><![CDATA[<p><a href="http://www.99-bottles-of-beer.net/">99 bottles of beer</a> in AQL:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR quant IN 99..0 
+</span><span class='line'>  LET toPrint = (
+</span><span class='line'>    quant &gt; 1 ? 
+</span><span class='line'>      CONCAT(TO_STRING(quant), " bottles of beer on the wall, ", TO_STRING(quant), " bottles of beer.") : 
+</span><span class='line'>      (quant == 1 ? 
+</span><span class='line'>        "1 bottle of beer on the wall, 1 bottle of beer." :
+</span><span class='line'>        "No more bottles of beer on the wall, no more bottles of beer."
+</span><span class='line'>      )
+</span><span class='line'>  )
+</span><span class='line'> 
+</span><span class='line'>  LET suffix = (
+</span><span class='line'>    quant &gt; 2 ? 
+</span><span class='line'>      CONCAT(TO_STRING(quant - 1), " bottles of beer on the wall.") :
+</span><span class='line'>      (quant == 2 ? 
+</span><span class='line'>        "1 bottle of beer on the wall." :
+</span><span class='line'>        "no more bottles of beer on the wall."
+</span><span class='line'>      )
+</span><span class='line'>  )
+</span><span class='line'> 
+</span><span class='line'>  LET result = (
+</span><span class='line'>    quant &gt; 0 ? 
+</span><span class='line'>      CONCAT(toPrint, "\nTake one down, pass it around, ", suffix) : 
+</span><span class='line'>      CONCAT(toPrint, "\nGo to the store and buy some more, 99 bottles of beer on the wall.")
+</span><span class='line'>  )
+</span><span class='line'>
+</span><span class='line'>  RETURN result</span></code></pre></td></tr></table></div></figure>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Improvements for 2.4]]></title>

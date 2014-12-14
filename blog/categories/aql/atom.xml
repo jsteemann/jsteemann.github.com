@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-12-13T00:25:11+01:00</updated>
+  <updated>2014-12-14T13:21:10+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,53 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[99 Bottles of Beer]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/12/14/99-bottles-of-beer/"/>
+    <updated>2014-12-14T13:14:28+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/12/14/99-bottles-of-beer</id>
+    <content type="html"><![CDATA[<p><a href="http://www.99-bottles-of-beer.net/">99 bottles of beer</a> in AQL:</p>
+
+<p>```
+FOR quant IN 99..0
+  LET toPrint = (</p>
+
+<pre><code>quant &gt; 1 ? 
+  CONCAT(TO_STRING(quant), " bottles of beer on the wall, ", TO_STRING(quant), " bottles of beer.") : 
+  (quant == 1 ? 
+    "1 bottle of beer on the wall, 1 bottle of beer." :
+    "No more bottles of beer on the wall, no more bottles of beer."
+  )
+</code></pre>
+
+<p>  )</p>
+
+<p>  LET suffix = (</p>
+
+<pre><code>quant &gt; 2 ? 
+  CONCAT(TO_STRING(quant - 1), " bottles of beer on the wall.") :
+  (quant == 2 ? 
+    "1 bottle of beer on the wall." :
+    "no more bottles of beer on the wall."
+  )
+</code></pre>
+
+<p>  )</p>
+
+<p>  LET result = (</p>
+
+<pre><code>quant &gt; 0 ? 
+  CONCAT(toPrint, "\nTake one down, pass it around, ", suffix) : 
+  CONCAT(toPrint, "\nGo to the store and buy some more, 99 bottles of beer on the wall.")
+</code></pre>
+
+<p>  )</p>
+
+<p>  RETURN result
+```</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Improvements for 2.4]]></title>
