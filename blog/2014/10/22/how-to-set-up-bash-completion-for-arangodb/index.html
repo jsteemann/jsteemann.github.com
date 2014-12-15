@@ -163,7 +163,7 @@ is initialized.</p>
 </span><span class='line'>    <span class="k">fi</span>
 </span><span class='line'><span class="o">}</span>
 </span><span class='line'>
-</span><span class='line'><span class="nb">complete</span> -F _arangosh arangosh
+</span><span class='line'><span class="nb">complete</span> -o default -F _arangosh arangosh
 </span></code></pre></td></tr></table></div></figure>
 
 
@@ -200,10 +200,11 @@ source, this should already be the case.</p>
 
 <p>This will write the completions script for all binaries into the file <code>arangodb</code>.
 An already generated version for devel can be found <a href="/downloads/code/completions-devel">here</a>.
-Completions for current 2.2 can be found <a href="/downloads/code/completions-2.2">here</a>.</p>
+Completions for 2.3 can be found <a href="/downloads/code/completions-2.3">here</a>, the ones for 2.2
+are <a href="/downloads/code/completions-2.2">here</a>.</p>
 
 <p>To activate completions, copy the appropriate file into <code>/etc/bash_completion.d/arangodb</code>.
-Note that completion may need to be re-initialized once in order for it to work:</p>
+Note that completion may need to be re-initialized once in order to make work:</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 </pre></td><td class='code'><pre><code class='bash'><span class='line'>. /etc/bash_completion.d/arangodb
@@ -212,15 +213,29 @@ Note that completion may need to be re-initialized once in order for it to work:
 
 <h2>Quick setup</h2>
 
-<p>For the impatient: the following command should install the completions for
-2.2 and activate them:</p>
+<p>The following command should install the completions for 2.3 and activate them:</p>
 
-<figure class='code'><figcaption><span>activate completion for ArangoDB 2.2 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span>activate completions for ArangoDB 2.3 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
+<span class='line-number'>4</span>
 </pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo <span class="se">\</span>
 </span><span class='line'>  wget -O /etc/bash_completion.d/arangodb <span class="se">\</span>
-</span><span class='line'>    https://jsteemann.github.io/downloads/code/completions-2.2 <span class="o">&amp;&amp;</span> . /etc/bash_completion.d/arangodb
+</span><span class='line'>    https://jsteemann.github.io/downloads/code/completions-2.3 <span class="o">&amp;&amp;</span> <span class="se">\</span>
+</span><span class='line'>  . /etc/bash_completion.d/arangodb
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The command for 2.2 is:</p>
+
+<figure class='code'><figcaption><span>activate completions for ArangoDB 2.2 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo <span class="se">\</span>
+</span><span class='line'>  wget -O /etc/bash_completion.d/arangodb <span class="se">\</span>
+</span><span class='line'>    https://jsteemann.github.io/downloads/code/completions-2.2 <span class="o">&amp;&amp;</span> <span class="se">\</span>
+</span><span class='line'>  . /etc/bash_completion.d/arangodb
 </span></code></pre></td></tr></table></div></figure>
 
 
@@ -237,9 +252,9 @@ of them. For such environments, downloading and sourcing the completions script 
 <figure class='code'><figcaption><span>activate completion without bash_completion.d</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/arangodb-completions-2.2 <span class="se">\</span>
-</span><span class='line'>    https://jsteemann.github.io/downloads/code/completions-2.2
-</span><span class='line'>. ~/arangodb-completions-2.2
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/arangodb-completions-2.3 <span class="se">\</span>
+</span><span class='line'>    https://jsteemann.github.io/downloads/code/completions-2.3
+</span><span class='line'>. ~/arangodb-completions-2.3
 </span></code></pre></td></tr></table></div></figure>
 
 
@@ -247,7 +262,7 @@ of them. For such environments, downloading and sourcing the completions script 
 completions script to your <code>.bashrc</code> file:</p>
 
 <figure class='code'><figcaption><span>adding completions to .bashrc</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">echo</span> <span class="s2">&quot;. ~/arangodb-completions-2.2&quot;</span> &gt;&gt; ~/.bashrc
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">echo</span> <span class="s2">&quot;. ~/arangodb-completions-2.3&quot;</span> &gt;&gt; ~/.bashrc
 </span></code></pre></td></tr></table></div></figure>
 
 

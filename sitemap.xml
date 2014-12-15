@@ -46,7 +46,7 @@
         <loc>
             http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/
         </loc>
-        <lastmod>2014-10-23T22:34:55+02:00</lastmod>
+        <lastmod>2014-12-15T22:19:02+01:00</lastmod>
     </url>
     <url>
         <loc>
@@ -84,7 +84,7 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2014-12-14T13:20:46+01:00</lastmod>
+        <lastmod>2014-12-15T22:19:02+01:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -92,6 +92,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2014-12-14T13:20:46+01:00</lastmod>
+        <lastmod>2014-12-15T22:19:02+01:00</lastmod>
     </url>
 </urlset>

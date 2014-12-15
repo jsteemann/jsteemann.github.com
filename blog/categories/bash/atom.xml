@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Bash | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/bash/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-12-14T13:21:10+01:00</updated>
+  <updated>2014-12-15T22:19:44+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -65,7 +65,7 @@ fi
 
 <p>}</p>
 
-<p>complete -F _arangosh arangosh
+<p>complete -o default -F _arangosh arangosh
 ```</p>
 
 <p>As can be seen, the variable <code>opts</code> should be filled with the list of possible
@@ -96,26 +96,38 @@ build-completions.sh arangodb
 </code>
 This will write the completions script for all binaries into the file <code>arangodb</code>.
 An already generated version for devel can be found <a href="/downloads/code/completions-devel">here</a>.
-Completions for current 2.2 can be found <a href="/downloads/code/completions-2.2">here</a>.</p>
+Completions for 2.3 can be found <a href="/downloads/code/completions-2.3">here</a>, the ones for 2.2
+are <a href="/downloads/code/completions-2.2">here</a>.</p>
 
 <p>To activate completions, copy the appropriate file into <code>/etc/bash_completion.d/arangodb</code>.
-Note that completion may need to be re-initialized once in order for it to work:
+Note that completion may need to be re-initialized once in order to make work:
 <code>bash
 . /etc/bash_completion.d/arangodb
 </code></p>
 
 <h2>Quick setup</h2>
 
-<p>For the impatient: the following command should install the completions for
-2.2 and activate them:
-```bash activate completion for ArangoDB 2.2
+<p>The following command should install the completions for 2.3 and activate them:
+```bash activate completions for ArangoDB 2.3
 sudo \
   wget -O /etc/bash_completion.d/arangodb \</p>
 
-<pre><code>https://jsteemann.github.io/downloads/code/completions-2.2 &amp;&amp; . /etc/bash_completion.d/arangodb
+<pre><code>https://jsteemann.github.io/downloads/code/completions-2.3 &amp;&amp; \
 </code></pre>
 
-<p>```</p>
+<p>  . /etc/bash_completion.d/arangodb
+```</p>
+
+<p>The command for 2.2 is:
+```bash activate completions for ArangoDB 2.2
+sudo \
+  wget -O /etc/bash_completion.d/arangodb \</p>
+
+<pre><code>https://jsteemann.github.io/downloads/code/completions-2.2 &amp;&amp; \
+</code></pre>
+
+<p>  . /etc/bash_completion.d/arangodb
+```</p>
 
 <p>To see it in action, type <code>arangosh --</code> and then press <strong>TAB</strong>.</p>
 
@@ -125,20 +137,21 @@ sudo \
 with other Linux distributions let alone other shells.</em></p>
 
 <p>Some Linux/Unix distros do not have <code>/etc/bash_completion.d</code> at all. I was told MacOS is one
-of them. For such environments, downloading and sourcing the completions script should work:
-```bash activate completion without bash_completion.d
-wget -O ~/arangodb-completions-2.2 \</p>
+of them. For such environments, downloading and sourcing the completions script should work:</p>
 
-<pre><code>https://jsteemann.github.io/downloads/code/completions-2.2
+<p>```bash activate completion without bash_completion.d
+wget -O ~/arangodb-completions-2.3 \</p>
+
+<pre><code>https://jsteemann.github.io/downloads/code/completions-2.3
 </code></pre>
 
-<p>. ~/arangodb-completions-2.2
+<p>. ~/arangodb-completions-2.3
 ```</p>
 
 <p>This will enable the completions in the current shell. To enable them permanently, add the
 completions script to your <code>.bashrc</code> file:
 <code>bash adding completions to .bashrc
-echo ". ~/arangodb-completions-2.2" &gt;&gt; ~/.bashrc
+echo ". ~/arangodb-completions-2.3" &gt;&gt; ~/.bashrc
 </code></p>
 ]]></content>
   </entry>
