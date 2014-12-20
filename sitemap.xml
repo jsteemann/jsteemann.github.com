@@ -76,7 +76,7 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/12/12/aql-improvements-for-24/</loc>
-        <lastmod>2014-12-13T00:24:52+01:00</lastmod>
+        <lastmod>2014-12-20T17:56:14+01:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/12/14/99-bottles-of-beer/</loc>
@@ -84,11 +84,11 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/12/19/using-es6-features-in-arangodb/</loc>
-        <lastmod>2014-12-20T04:03:57+01:00</lastmod>
+        <lastmod>2014-12-20T19:11:08+01:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2014-12-20T04:03:57+01:00</lastmod>
+        <lastmod>2014-12-20T19:11:08+01:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -96,6 +96,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2014-12-20T04:03:57+01:00</lastmod>
+        <lastmod>2014-12-20T19:11:08+01:00</lastmod>
     </url>
 </urlset>

@@ -133,10 +133,11 @@ to use the <code>LENGTH</code> function and a subquery:</p>
 </span><span class='line'>  ))</span></code></pre></td></tr></table></div></figure>
 
 
-<p>This is quite long and probably unintuitive for people which have
+<p>This works but is probably unintuitive for people which have
 used SQL for years.</p>
 
-<p>We therefore now allow using the following alternative version:</p>
+<p>We therefore now allow using the following alternative syntax,
+using the new <code>COLLECT ... WITH COUNT INTO ...</code> clause:</p>
 
 <figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -150,15 +151,18 @@ used SQL for years.</p>
 
 <p>This query returns just the total number of matches, but not the
 matches themselves. As this query is made for counting only, it
-enables the optimizer to execute this query more efficiently.
-The documents found by the filter can be discarded
-instantly after the filter condition is evaluated, and do not need
+can be executed more efficiently than the original query.
+In the query with the <code>COUNT INTO ...</code> clause, the documents found
+by the filter condition will only be counted and then instantly
+discarded. They will not be shipped around inside the query, from
+the subquery to the top level into the <code>LENGTH()</code> function.
 to shipped around inside the query.</p>
 
 <p>As a bonus, there is no need to use a subquery anymore, though the
-former variant is still fully supported and will be.</p>
+subquery variant is still fully supported and will be.</p>
 
-<p><code>COLLECT WITH COUNT</code> also works with groups:</p>
+<p><code>COLLECT ... WITH COUNT</code> also works for counting the number of items
+per group:</p>
 
 <figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -175,7 +179,7 @@ former variant is still fully supported and will be.</p>
 The following results show the differences for a collection with
 500,000 small documents:</p>
 
-<p>The old variant that counts the number of documents by age runs
+<p>The old variant that counts the number of documents per age runs
 in 4.75 seconds on my laptop:</p>
 
 <figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
@@ -188,16 +192,14 @@ in 4.75 seconds on my laptop:</p>
 </span><span class='line'>  RETURN { age: age, length: LENGTH(g) }</span></code></pre></td></tr></table></div></figure>
 
 
-<p>The new variant does the same, but runs in 0.6 seconds locally:</p>
+<p>The new variant produces the same result, but runs in 0.6 seconds locally:</p>
 
 <figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
-<span class='line-number'>4</span>
 </pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
 </span><span class='line'>  COLLECT age = doc.age WITH COUNT INTO length 
-</span><span class='line'>  RETURN { age: age, length: length }
-</span><span class='line'>0.6001598834991455</span></code></pre></td></tr></table></div></figure>
+</span><span class='line'>  RETURN { age: age, length: length }</span></code></pre></td></tr></table></div></figure>
 
 
 <p>A notable speedup can also be observed if only a fraction of the
@@ -226,9 +228,45 @@ seconds:</p>
 </span><span class='line'>  RETURN { age: age, length: length }</span></code></pre></td></tr></table></div></figure>
 
 
-<p>The absolute times may vary greatly depending on the documents and
+<p>The absolute times may vary greatly depending on the type of documents and
 the hardware used, but in general the new variant should provide a
 speedup.</p>
+
+<h1>COLLECT with group expression</h1>
+
+<p>Finally, <code>COLLECT ... INTO</code> has been extended to support just another variant
+that can reduce the amount of copying inside a query.</p>
+
+<p>Let&rsquo;s have a look at this example query:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
+</span><span class='line'>  COLLECT age = doc.age INTO g
+</span><span class='line'>  RETURN { age: age, maxDate: MAX(g[*].doc.dateRegistered) }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In the above query, for each distinct <code>age</code> value, all documents are collected
+into variable <code>g</code>. When the collecting phase is over, there will be an iteration
+over all the collected documents again, to extract their <code>dateRegistered</code> value.
+After that, the <code>dateRegistered</code> values will be passed into the <code>MAX()</code> function.</p>
+
+<p>This query can be made more efficient now as follows:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
+</span><span class='line'>  COLLECT age = doc.age INTO g = doc.dateRegistered
+</span><span class='line'>  RETURN { age: age, maxDate: MAX(g) }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The new thing about this variant is the expression following the <code>INTO</code>.
+Having an expression there allows controlling what values are collected for
+each group. Using a projection expression here can greatly reduce the
+amount of copying afterwards, and thus make the query more efficient than if
+it had to copy the entire documents.</p>
 
 <h1>Removing filters covered by indexes</h1>
 
@@ -236,8 +274,8 @@ speedup.</p>
 now be removed from the execution plan if it is safe to do so.
 Dropping the <code>FILTER</code> statements allows the optimizer to get rid
 of not only the <em>FilterNode</em>, but also its corresponding <em>CalculationNode</em>.
-This will save a lot of computation if many documents match the
-<code>FILTER</code> condition.</p>
+This will save a lot of computation if the condition needs to be checked
+for many documents.</p>
 
 <p>For example, imagine the following query:</p>
 
@@ -250,15 +288,15 @@ This will save a lot of computation if many documents match the
 
 
 <p>If there is a (skiplist) index on <code>doc.value</code>, the optimizer may
-decide to use this index. It will insert an <em>IndexRangeNode</em> instead
-of a full collection scan. The <em>IndexRangeNode</em> will scan the index
+decide to use this index. It will replace the query&rsquo;s <em>EnumerateCollectionNode</em>
+with an <em>IndexRangeNode</em> instead first. The <em>IndexRangeNode</em> will scan the index
 on <code>doc.value</code> for the range [-inf, 10).</p>
 
 <p>Following that, the optimizer rule <code>remove-filter-covered-by-index</code>
 should fire and detect that the <code>FILTER</code> condition is already covered
-by the <em>IndexRangeNode</em>, and remove the <em>FilterNode</em>. This makes the
-<em>CalculationNode</em> of the <em>FilterNode</em> obsolete, so these two nodes will
-be removed.</p>
+by the <em>IndexRangeNode</em> alone. It can thus remove the <em>FilterNode</em>.
+This also makes the <em>CalculationNode</em> of the <em>FilterNode</em> obsolete,
+so these two nodes will be removed and computation is saved.</p>
 
 <h1>Removing brackets for subquery function call parameters</h1>
 
@@ -278,14 +316,18 @@ brackets.</p>
 </pre></td><td class='code'><pre><code class=''><span class='line'>RETURN LENGTH((FOR doc IN collection RETURN doc))</span></code></pre></td></tr></table></div></figure>
 
 
-<p>This has caused several support questions over time, and I have to
-admit the double brackets were not intuitive. In fact, they were an
-artifact required by the AQL parser in order to parse the query
-correctly.</p>
+<p>If you didn&rsquo;t notice the difference, the latter version of the query had
+duplicate parentheses. The requirement to use duplicate parentheses has
+caused several support questions over time, and this can be taken as a
+proof that it was not intuitive.</p>
 
-<p>For 2.4, the AQL grammar has now been cleaned up in this respect.
-Double brackets are still allowed in 2.4 but are not required anymore.
-This should make the first steps with AQL a bit easier.</p>
+<p>The requirement for duplicate parentheses was an artifact required by the
+AQL parser grammar in order to parse the query correctly.</p>
+
+<p>For 2.4, the AQL grammar has been cleaned up in this respect.
+Duplicate parentheses are still allowed and work fine in 2.4 but they are not
+required anymore. This should make the first steps with AQL a bit easier
+and more intuitive.</p>
 
 <p>We&rsquo;re 1.5 days into our retreat now. Maybe there&rsquo;ll be some more
 AQL-related improvements in the end. Let&rsquo;s see.</p>
