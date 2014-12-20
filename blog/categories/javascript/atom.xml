@@ -4,7 +4,7 @@
   <title><![CDATA[Category: JavaScript | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/javascript/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-12-15T22:19:44+01:00</updated>
+  <updated>2014-12-20T04:04:27+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,547 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Using ES6 Features in ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/12/19/using-es6-features-in-arangodb/"/>
+    <updated>2014-12-19T19:12:06+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/12/19/using-es6-features-in-arangodb</id>
+    <content type="html"><![CDATA[<p>Among other things, ArangoDB 2.4 will be shipped with an <em>updated version of V8</em>.</p>
+
+<p>The V8 version included in 2.4 will be 3.29.59. This version will replace the
+almost two year old 3.16.14. A lot of things happened in V8 since then, and a lot
+of ES6 features have been added to it.</p>
+
+<p>In this blog post, I&rsquo;ll summarize a few select ES6 features that will be usable in
+ArangoDB from 2.4 on.</p>
+
+<!-- more -->
+
+
+<p>ES6, also dubbed <em>Harmony</em>, is <strong>not finalized yet</strong>. Additionally, V8 does not yet
+provide all suggested ES6 features, and the ones implemented are partly experimental.
+But this is also true for other environments that implement ES6 features (e.g. Firefox
+and other browsers contain lots of experimental ES6 features, too).</p>
+
+<h1>Activating ES6 features</h1>
+
+<p>Most ES6 features are turned off in V8 by default. However, there are several
+command-line options to turn them on explicitly. The V8 version we&rsquo;ll use provides
+the following harmony-related switches:</p>
+
+<ul>
+<li><code>--harmony_scoping</code> (enable harmony block scoping)</li>
+<li><code>--harmony_modules</code> (enable harmony modules (implies block scoping))</li>
+<li><code>--harmony_proxies</code> (enable harmony proxies)</li>
+<li><code>--harmony_generators</code> (enable harmony generators)</li>
+<li><code>--harmony_numeric_literals</code> (enable harmony numeric literals (0o77, 0b11))</li>
+<li><code>--harmony_strings</code> (enable harmony string)</li>
+<li><code>--harmony_arrays</code> (enable harmony arrays)</li>
+<li><code>--harmony_arrow_functions</code> (enable harmony arrow functions)</li>
+<li><code>--harmony_classes</code> (enable harmony classes)</li>
+<li><code>--harmony_object_literals</code> (enable harmony object literal extensions)</li>
+<li><code>--harmony</code> (enable all harmony features (except proxies))</li>
+</ul>
+
+
+<p>These switches are all off by default. To turn on features for either arangod
+or arangosh, start it with the V8 option(s) wrapped into the ArangoDB option
+<code>--javascript.v8-options</code>, e.g.:</p>
+
+<pre><code>arangosh --javascript.v8-options="--harmony_proxies --harmony_generators --harmony_array"
+</code></pre>
+
+<p>Note that the V8 options can only be set for the entire process, and not just for specific
+scripts or applications. This shouldn&rsquo;t be too problematic in reality as the vast majority
+of ES6 features is downwards-compatible to ES5.1.</p>
+
+<h1>ES6 features by example</h1>
+
+<p>Following I have listed a few select ES6 features that are usable in ArangoDB 2.4,
+in no particular order. I have omitted the ES6 features that aren&rsquo;t supported in bundled
+V8 version, and also omitted <em>classes</em> and <em>modules</em> due to lack of time.</p>
+
+<h2>Arrow functions</h2>
+
+<p>ES6 provides an optional arrow function syntax. The arrow function syntax is a shorthand for
+writing a full-blown function, e.g.:</p>
+
+<p>```js a simple arrow function
+/<em> defines function pow </em>/
+var pow = (value => value * value);</p>
+
+<p>/<em> calls pow </em>/
+pow(15);  /<em> 225 </em>/
+```</p>
+
+<p>Arrow functions can also take multiple parameters. The syntax then is:
+```js arrow function with multiple parameters
+/<em> defines function sum </em>/
+var sum = (a, b) => a + b;</p>
+
+<p>/<em> calls sum </em>/
+sum(3, 7);  /<em> 10 </em>/
+```</p>
+
+<p>So far we have only seen arrow functions with simple expressions, but arrow function bodies
+can also be more complex and contain multiple statements:
+```js more complex arrow functions
+var translations = {
+  &ldquo;en&rdquo; : &ldquo;English&rdquo;,
+  &ldquo;fr&rdquo; : &ldquo;French&rdquo;,
+  &ldquo;de&rdquo; : &ldquo;German&rdquo;
+};</p>
+
+<p>/<em> using multiple statements </em>/
+[&ldquo;en&rdquo;, &ldquo;fr&rdquo;, &ldquo;xx&rdquo;].map(value => {
+  if (translations.hasOwnProperty(value)) {</p>
+
+<pre><code>return translations[value];
+</code></pre>
+
+<p>  }
+  return &ldquo;unknown!&rdquo;;
+});
+```</p>
+
+<p>Arrow functions are turned off by default. To enable them in arangod or arangosh, start them
+with the option <code>--javascript.v8-options="--harmony_arrow_functions"</code>.</p>
+
+<h2>Maps and sets</h2>
+
+<p>ES6 maps provide a specialized alternative to regular objects in case a <em>lookup-by-key</em>
+functionality is required.</p>
+
+<p>When no maps are available, storing keys mapped to objects is normally done using a plain
+object. With ES6, the same use case can be handled with using a <strong>Map</strong> object:
+<code>js using an ES6 Map object
+var m = new Map();
+/* set 5M keys */
+for (var i = 0; i &lt; 5000000; ++i) {
+  m.set("test" + i, i);
+}
+</code></p>
+
+<p>ES6 maps can be more efficient than plain objects in some cases. For the above case of
+storing 5M entries, an ES6 map is about twice as fast as a plain object on my laptop.
+Though there might be cases we are plain objects are still faster.</p>
+
+<p>There&rsquo;s more to ES6 maps than just efficiency:</p>
+
+<ul>
+<li>ES6 maps provide a member <code>size</code> which keeps track of the number of objects in the map.
+This is hard to achieve with a plain object.</li>
+<li>Objects only have string keys, whereas map keys can have different key types.</li>
+<li>They don&rsquo;t inherit keys from the prototype, so there is no <code>hasOwnProperty</code> hassle.</li>
+</ul>
+
+
+<p>ES6 also comes with a specialized <strong>Set</strong> object, that makes everything more intuitive,
+efficient, and potentially requires less memory:</p>
+
+<p><code>js using an ES6 Set object
+var s = new Set(); /* our "set" object */
+/* set 5M values */
+for (var i = 0; i &lt; 5000000; ++i) {
+  s.add("test" + i);
+}
+</code></p>
+
+<p>Maps and sets are enabled by default in arangod and arangosh. No special configuration is needed
+to use them in your code.</p>
+
+<h2>Proxy objects</h2>
+
+<p>Proxy objects can be used to intercept object property accesses at runtime. This can be used
+in many situations, e.g.:</p>
+
+<ul>
+<li>preventing, auditing and logging property accesses</li>
+<li>calculated / derived properties</li>
+<li>adding a compatibility layer on top of an object</li>
+</ul>
+
+
+<p>Here&rsquo;s an example that logs property accesses on a proxied object:
+```js using a Proxy object
+var proxy = Proxy.create({
+  get: function (obj, name) {</p>
+
+<pre><code>console.log("read-accessing property '%s'", name);
+</code></pre>
+
+<p>  },
+  set: function (obj, name) {</p>
+
+<pre><code>console.log("write-accessing property '%s'", name);
+</code></pre>
+
+<p>  }
+});</p>
+
+<p>proxy.foo = &ldquo;bar&rdquo;;   /<em> write-accessing property &lsquo;foo&rsquo; </em>/
+proxy.foo;           /<em> read-accessing property &lsquo;foo&rsquo; </em>/
+```</p>
+
+<p>Proxy objects are not available by default. To enable them in arangod or arangosh, start them
+with the option <code>--javascript.v8-options="--harmony_proxies"</code>.</p>
+
+<h2>Iterators and generators</h2>
+
+<p>ES6 provides generators and iterators. They can be used individually or in combination.</p>
+
+<p>Let&rsquo;s start with a simple example of a generator:
+```js a simple generator that generates two values
+function* generate () {
+  yield 23;
+  yield 42;
+}</p>
+
+<p>var values = generate();
+console.log(values.next());  /<em> { &ldquo;value&rdquo; : 23, &ldquo;done&rdquo; : false } </em>/
+console.log(values.next());  /<em> { &ldquo;value&rdquo; : 42, &ldquo;done&rdquo; : false } </em>/
+console.log(values.next());  /<em> { &ldquo;value&rdquo; : undefined, &ldquo;done&rdquo; : true } </em>/
+```</p>
+
+<p>A generator can also produce a never-ending sequence:
+```js a generator producing an endless sequence
+function* sequence () {
+  var i = 0;
+  while (true) {</p>
+
+<pre><code>yield ++i;
+</code></pre>
+
+<p>  }
+}</p>
+
+<p>var sequencer = sequence();</p>
+
+<p>/<em> note: this will not terminate </em>/
+for (var value of sequencer) {
+  console.log(value);
+}
+```</p>
+
+<p>The previous example also demoed an iterator. Objects values can be iterated
+using the <code>of</code> operator. Apart from generators, a few other built-in types
+also provide ready-to-use iterators. The most prominent are <code>String</code> and <code>Array</code>:
+<code>js iterating over the characters of a string
+var text = "this is a test string";
+for (var value of text) {
+  console.log(value);
+}
+</code></p>
+
+<p>The following example iterates over the values of an array. It produces
+<code>"this"</code>, <code>"is"</code>, <code>"a"</code>, <code>"test"</code> and not <code>0</code>, <code>1</code>, <code>2</code>, <code>3</code> as the <code>in</code>
+operator would:
+<code>js iterating over the values of an array
+var values = [ "this", "is", "a", "test" ];
+for (var value of values) {
+  console.log(value);
+}
+</code></p>
+
+<p>Maps and Sets also implement iterators:
+```js iterating over the contents of a Map
+var m = new Map();
+m.set(&ldquo;Sweden&rdquo;, &ldquo;Europe&rdquo;);
+m.set(&ldquo;China&rdquo;, &ldquo;Asia&rdquo;);
+m.set(&ldquo;Bolivia&rdquo;, &ldquo;South America&rdquo;);
+m.set(&ldquo;Australia&rdquo;, &ldquo;Australia&rdquo;);
+m.set(&ldquo;South Africa&rdquo;, &ldquo;Africa&rdquo;);</p>
+
+<p>for (var value of m) {
+  console.log(value);
+}
+```</p>
+
+<p>Note that Maps also provide dedicated iterators for just the keys or the values:
+```js iterating over keys and values of a Map
+for (var country of m.keys()) {
+  console.log(country);
+}</p>
+
+<p>for (var continent of m.values()) {
+  console.log(continent);
+}
+```</p>
+
+<p>Rolling an iterator for your own object is also possible by implementing the method
+<code>Symbol.iterator</code> for an object:
+```js creating an own iterator
+function Sentence (text) {
+  this.text = text;
+}</p>
+
+<p>/<em> create the actual iterator method </em>/
+/<em> note that the iterator uses a generator function here </em>/
+Sentence.prototype[Symbol.iterator] = function*() {
+  var regex = /\S+/g;
+  var text = this.text;
+  var match;
+  while (match = regex.exec(text)) {</p>
+
+<pre><code>yield match[0]; 
+</code></pre>
+
+<p>  }
+};</p>
+
+<p>var sentence = new Sentence(&ldquo;The quick brown fox jumped over the lazy dog&rdquo;);
+/<em> invoke the iterator </em>/
+for (var word of sentence) {
+  console.log(word);
+}
+```</p>
+
+<p>Generators and iterators are not available by default. To enable them in arangod
+or arangosh, start them with the option <code>--javascript.v8-options="--harmony_generators"</code>.</p>
+
+<h2>String enhancements</h2>
+
+<p>ES6 provides the following convenience string functions:</p>
+
+<ul>
+<li>string.startsWith(what)</li>
+<li>string.endsWith(what)</li>
+<li>string.contains(what)</li>
+<li>string.repeat(count)</li>
+<li>string.normalize(method)</li>
+<li>string.codePointAt(position)</li>
+<li>String.fromCodePoint(codePoint)</li>
+</ul>
+
+
+<p>These functions are turned off by default. To enable them in arangod or arangosh,
+start them with the option <code>--javascript.v8-options="--harmony_strings"</code>.</p>
+
+<h2>Array enhancements</h2>
+
+<p>ES6 provides the following enhancements for the <code>Array</code> object:</p>
+
+<ul>
+<li>array.find(function)</li>
+<li>array.keys()</li>
+<li>array.values()</li>
+<li>Array.observe(what, function)</li>
+</ul>
+
+
+<p>Here are a few examples demoing these functions:
+```js Array enhancements
+var values = [ 1, 2, 9, 23, 42 ];</p>
+
+<p>/<em> returns the first array element for which the function returns true </em>/
+values.find(function (value) {
+  return value === 23;
+});</p>
+
+<p>/<em> iterate over the keys of the array </em>/
+for (var key of values.keys()) {
+  console.log(key);
+}</p>
+
+<p>/<em> iterate over the values of the array </em>/
+for (var key of values.values()) {
+  console.log(key);
+}</p>
+
+<p>/<em> observe all changes to an array </em>/
+Array.observe(values, function (changes) {
+  console.log(changes);
+});</p>
+
+<p>/<em> trigger a change to the observed array </em>/
+values.push(117);
+```</p>
+
+<p>The array enhancements are turned off by default. To enable them in arangod or
+arangosh, start them with the option <code>--javascript.v8-options="--harmony_arrays"</code>.</p>
+
+<h2>Number enhancements</h2>
+
+<p>The <code>Number</code> object is extended in ES6 with the following functions:</p>
+
+<ul>
+<li>Number.isInteger(value)</li>
+<li>Number.isSafeInteger(value)</li>
+</ul>
+
+
+<p>There are also <code>Number.MIN_SAFE_INTEGER</code> and <code>Number.MAX_SAFE_INTEGER</code> so applications
+can programmatically check whether a numeric value can still be stored without precision
+loss in the range of -2<sup>53</sup> to +2<sup>53</sup>.</p>
+
+<h2>Constants</h2>
+
+<p>The <code>const</code> keyword can be used to define a read-only constant. The constant must be
+initialized and a variable of the same name should not be redeclared in the same scope.</p>
+
+<p>Here is an example of using <code>const</code>:
+<code>js using const to create a read-only variable
+function calculate (value) {
+  const magicPrime = 23;
+  return magicPrime ^ value;
+}
+</code></p>
+
+<p>In non-strict mode, <code>const</code> variables behave non-intuitively. Re-assigning a value
+to a variable declared <code>const</code> does not throw an exception, but the assignment will
+not be carried out either. The variable will keep its original value:</p>
+
+<p><code>js re-assigning a value to a const variable
+function mystery () {
+  const life = 42;
+  life = 23;        /* does not throw! */
+  return life;      /* will return 42 */
+}
+</code></p>
+
+<p><code>js re-assigning a value to a const variable, using strict mode
+function mystery () {
+  "use strict";
+  const life = 42;
+  life = 23;        /* will throw SyntaxError "assignment to constant variable" */
+}
+</code></p>
+
+<p>The <code>const</code> keyword is disabled by default. To enable it in arangod or arangosh,
+start them with the option <code>--javascript.v8-options="--harmony_scoping"</code>.</p>
+
+<h2>Enhanced object literals</h2>
+
+<p>ES6 provides a shorthand for defining methods in object literals.</p>
+
+<p>The following example creates a normal method named <code>save</code> in <code>myObject</code>:</p>
+
+<p>```js shorthand method declaration
+var myObject = {
+  type: &ldquo;myType&rdquo;,
+  save () {</p>
+
+<pre><code>console.log("save");
+</code></pre>
+
+<p>  }
+};
+```</p>
+
+<p>Interestingly, the object literals seem to work for method declarations only.
+I did not get them to work for non-method object properties, though ES6 allows that.</p>
+
+<p>Enhanced object literals are turned off by default. To enable them in arangod
+or arangosh, start them with the option <code>--javascript.v8-options="--harmony_object_literals"</code>.</p>
+
+<h2>Enhanced numeric literals</h2>
+
+<p>For the ones that love working with binary- or octal-encoded numbers, ES6 has
+support for this too:
+<code>js numeric literals
+var life = 0b101010;          /* binary, 42 in decimal */
+var filePermissions = 0o777;  /* octal, 511 in decimal */
+</code></p>
+
+<p>Enhanced numeric literals are turned off by default. To enable them in arangod
+or arangosh, start them with the option <code>--javascript.v8-options="--harmony_numeric_literals"</code>.</p>
+
+<h2>Symbols</h2>
+
+<p>ES6 also provides a Symbol type. Symbols are created using the global <code>Symbol()</code> function.
+Each time this function is called, a new Symbol object will be created.
+A Symbol can be given an optional name, but this name cannot be used to identify the
+Symbol later. However, Symbols can be compared by identity.</p>
+
+<p>```js using Symbols
+var typeAttribute = Symbol.for(&ldquo;type&rdquo;);
+var carType = Symbol.for(&ldquo;car&rdquo;);
+var trainType = Symbol.for(&ldquo;train&rdquo;);</p>
+
+<p>var object1 = { };
+object1[typeAttribute] = carType;</p>
+
+<p>var object2 = { };
+object2[typeAttribute] = trainType;</p>
+
+<p>/<em> check if the objects have the same type </em>/
+object1[typeAttribute] === object2[typeAttribute];  /<em> false </em>/
+object1[typeAttribute] === carType;                 /<em> true </em>/
+object2[typeAttribute] === carType;                 /<em> false </em>/
+object2[typeAttribute] === trainType;               /<em> true </em>/
+```</p>
+
+<p>Symbol object properties are not enumerated by default, so they can be used to implement
+&ldquo;hidden&rdquo; or internal properties.</p>
+
+<p>Symbols can be used by default in arangod and arangosh. No special configuration is required.</p>
+
+<h2>TypedArrays</h2>
+
+<p>TypedArrays are arrays whose members all have the same type and size. They are more
+specialized (read: limit but efficient) than the all-purpose <code>Array</code> type.</p>
+
+<p>TypedArrays look and feel a bit like C arrays, and they are often used as an array-like
+view into binary data for which JavaScript has no native support.</p>
+
+<p>A TypedArray is created (and all of its memory is allocated) by invoking the appropriate
+TypedArray constructor:</p>
+
+<ul>
+<li>Int8Array</li>
+<li>Uint8Array</li>
+<li>Uint8ClampedArray</li>
+<li>Int16Array</li>
+<li>Uint16Array</li>
+<li>Int32Array</li>
+<li>Uint32Array</li>
+<li>Float32Array</li>
+<li>Float64Array</li>
+</ul>
+
+
+<p>```js using an array of unsigned 8 bit integers
+var data = new Uint8Array(2);
+data[0] = 0b00010101;  /<em> 23 </em>/
+data[1] = 0b00101010;  /<em> 42 </em>/</p>
+
+<p>console.log(data[0]);  /<em> 23 </em>/
+console.log(data.length * data.BYTES_PER_ELEMENT); /<em> 2 bytes </em>/
+```</p>
+
+<p>```js using an array of 64 bit floating point values
+var data = new Float64Array(2);
+data[0] = 23.23;</p>
+
+<p>console.log(data[0]);  /<em> 23.23 </em>/
+console.log(data[1]);  /<em> 0.0 </em>/
+console.log(data.length * data.BYTES_PER_ELEMENT); /<em> 16 bytes </em>/
+```</p>
+
+<p>TypedArrays can be used in arangod and arangosh by default. No special
+configuration is required to activate them.</p>
+
+<h1>Unsupported ES6 features</h1>
+
+<p>The shipped version of V8 does not support every proposed ES6 feature yet.
+For example, the following ES6 features are missing in this version:</p>
+
+<ul>
+<li>template strings</li>
+<li>function default parameters</li>
+<li>rest function parameter</li>
+<li>spread operator</li>
+<li>destructuring</li>
+<li>array comprehension</li>
+<li><code>let</code></li>
+</ul>
+
+
+<p>I strongly hope these features will make it into the final version of ES6 and will be
+implemented by the V8 team in future versions of V8.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Handling Binary Data in Foxx]]></title>
