@@ -126,11 +126,13 @@ to use the <code>LENGTH</code> function and a subquery:</p>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
 <span class='line-number'>5</span>
+<span class='line-number'>6</span>
 </pre></td><td class='code'><pre><code class=''><span class='line'>RETURN LENGTH((
 </span><span class='line'>  FOR doc IN collection 
 </span><span class='line'>    FILTER doc.someAttribute == someValue
 </span><span class='line'>    RETURN doc
-</span><span class='line'>  ))</span></code></pre></td></tr></table></div></figure>
+</span><span class='line'>  )
+</span><span class='line'>)</span></code></pre></td></tr></table></div></figure>
 
 
 <p>This works but is probably unintuitive for people which have
@@ -155,8 +157,13 @@ can be executed more efficiently than the original query.
 In the query with the <code>COUNT INTO ...</code> clause, the documents found
 by the filter condition will only be counted and then instantly
 discarded. They will not be shipped around inside the query, from
-the subquery to the top level into the <code>LENGTH()</code> function.
-to shipped around inside the query.</p>
+the subquery to the top level into the <code>LENGTH()</code> function.</p>
+
+<p>This new variant will be drastically faster than the old variant
+if there is no filter condition at all. When there is a filter
+condition, evaluating the filter condition might be the most computationally
+expensive part of the query. But even then, the new variant should
+be faster than the old one and use less memory.</p>
 
 <p>As a bonus, there is no need to use a subquery anymore, though the
 subquery variant is still fully supported and will be.</p>
@@ -216,7 +223,7 @@ seconds:</p>
 </span><span class='line'>  RETURN { age: age, length: LENGTH(g) }</span></code></pre></td></tr></table></div></figure>
 
 
-<p>The new variants runs in 0.12 seconds:</p>
+<p>The new variant runs in 0.12 seconds:</p>
 
 <figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>

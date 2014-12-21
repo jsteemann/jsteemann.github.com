@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Foxx | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/foxx/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-12-20T19:11:15+01:00</updated>
+  <updated>2014-12-21T19:26:38+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -37,6 +37,38 @@ week. Time to play with some ES6 features!</p>
 
 <!-- more -->
 
+
+<h1>Summary for the impatient</h1>
+
+<p>The following ES6 features are available in ArangoDB 2.4 by default:</p>
+
+<ul>
+<li>iterators</li>
+<li>the <code>of</code> operator</li>
+<li>symbols</li>
+<li>predefined collections types (Map, Set etc.)</li>
+<li>typed arrays</li>
+</ul>
+
+
+<p>Many other ES6 features are disabled by default, but can be made available by
+starting arangod or arangosh with the appropriate options:</p>
+
+<ul>
+<li>arrow functions</li>
+<li>proxies</li>
+<li>generators</li>
+<li>String, Array, and Number enhancements</li>
+<li>constants</li>
+<li>enhanced object and numeric literals</li>
+</ul>
+
+
+<p>To activate all these ES6 features, start arangod or arangosh with the following
+options:</p>
+
+<pre><code>arangosh --javascript.v8-options="--harmony --harmony_generators"
+</code></pre>
 
 <h1>Activating ES6 features</h1>
 

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-12-20T19:11:15+01:00</updated>
+  <updated>2014-12-21T19:26:38+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -89,7 +89,8 @@ RETURN LENGTH((
 RETURN doc
 </code></pre>
 
-<p>  ))
+<p>  )
+)
 ```</p>
 
 <p>This works but is probably unintuitive for people which have
@@ -111,8 +112,13 @@ can be executed more efficiently than the original query.
 In the query with the <code>COUNT INTO ...</code> clause, the documents found
 by the filter condition will only be counted and then instantly
 discarded. They will not be shipped around inside the query, from
-the subquery to the top level into the <code>LENGTH()</code> function.
-to shipped around inside the query.</p>
+the subquery to the top level into the <code>LENGTH()</code> function.</p>
+
+<p>This new variant will be drastically faster than the old variant
+if there is no filter condition at all. When there is a filter
+condition, evaluating the filter condition might be the most computationally
+expensive part of the query. But even then, the new variant should
+be faster than the old one and use less memory.</p>
 
 <p>As a bonus, there is no need to use a subquery anymore, though the
 subquery variant is still fully supported and will be.</p>
@@ -162,7 +168,7 @@ FOR doc IN collection
   RETURN { age: age, length: LENGTH(g) }
 </code></p>
 
-<p>The new variants runs in 0.12 seconds:</p>
+<p>The new variant runs in 0.12 seconds:</p>
 
 <p><code>
 FOR doc IN collection
