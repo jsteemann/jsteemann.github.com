@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Development | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/development/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-12-21T19:26:38+01:00</updated>
+  <updated>2014-12-22T12:35:39+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -555,7 +555,7 @@ once. After that, <code>configure</code> can be executed to create the <code>Mak
 The <code>Makefile</code> finally contains the stuff that <code>make</code> needs:</p>
 
 <pre><code>make setup
-./configure --enable-all-in-one-icu --enable-all-in-one-v8 --enable-relative 
+./configure --enable-relative 
 make
 </code></pre>
 
@@ -573,6 +573,14 @@ it does <strong>not</strong> say something like this, <code>make</code> has prob
 
 <pre><code>make: *** [all] Error 2
 </code></pre>
+
+<p>You can also execute the following command directly after <code>make</code> to check
+the exit status of the <code>make</code> process:</p>
+
+<pre><code>echo $?
+</code></pre>
+
+<p>This will print <code>0</code> if <code>make</code> was successful, and a non-zero value otherwise.</p>
 
 <h2>Starting ArangoDB</h2>
 
@@ -612,7 +620,7 @@ instance.</p>
 <code>main</code>. Here are a few places to get you started:</p>
 
 <pre><code>~/ArangoDB$ grep -r "int main" arangod/ arangosh/
-arangod/RestServer/arango.cpp:int main (int argc, char* argv[]) {
+arangod/RestServer/arangod.cpp:int main (int argc, char* argv[]) {
 arangosh/Benchmark/arangob.cpp:int main (int argc, char* argv[]) {
 arangosh/V8Client/arangorestore.cpp:int main (int argc, char* argv[]) {
 arangosh/V8Client/arangodump.cpp:int main (int argc, char* argv[]) {
@@ -643,13 +651,20 @@ make
 </code></pre>
 
 <p>If <code>make</code> complains about files not found etc., the <code>Makefile</code> may have
-changed. Then it&rsquo;s time for a full rebuild:</p>
+changed. Then it&rsquo;s time for a cleanup:</p>
 
 <pre><code>make clean
 make setup
-./configure --enable-all-in-one-icu --enable-all-in-one-v8 --enable-relative 
+./configure --enable-relative 
 make
 </code></pre>
+
+<p>By the way, if you used special configure options and forgot them, you
+can retrieve your previous options by typing <code>head config.log</code>.
+Note: as of December 2014 (ArangoDB 2.4), most configure options starting
+with <code>--enable-all-in-one-</code> have been removed. If your <code>config.log</code> still
+contains them, you can safely omit them in any future invocations of
+<code>configure</code>.</p>
 
 <p>Sometimes <code>make clean</code> isn&rsquo;t enough. <code>make</code> creates cache files for the
 object files, and if they are too outdated, it will complain about files which
@@ -659,8 +674,37 @@ caches by running an additional</p>
 <pre><code>make superclean
 </code></pre>
 
-<p>By the way, if you used special configure options and forgot them, you
-can retrieve your previous options by typing <code>head config.log</code>.</p>
+<p>This also cleans already built libraries in the 3rdParty directory. It
+also removes the <code>configure</code> file, so after <code>make superclean</code> everything
+will need to be built from again. This may take a long time, so you should
+only run <code>make superclean</code> if after a <code>make clean</code> run there are still linker
+errors or complaints about missing files.</p>
+
+<h2>Debugging</h2>
+
+<p>If you are making changes in the ArangoDB C++ code and want to test them,
+it will be sensible to install debugging tools such as <em>gdb</em> and <em>valgrind</em>:</p>
+
+<pre><code>sudo apt-get install gdb valgrind   
+</code></pre>
+
+<p>Additionally, you may want to enable core files. This can be done by executing</p>
+
+<pre><code>ulimit -c unlimited
+</code></pre>
+
+<p>in the shell, and by putting the above line in your home directory&rsquo;s <code>.bashrc</code>
+file to make it a permanent setting.</p>
+
+<p>Additionally, you may want to set environment variables in your <code>.bashrc</code> that
+control compilation options. For development, I&rsquo;d recommend using the following
+options:</p>
+
+<pre><code>export CFLAGS="-g -O0"
+export CXXFLAGS="-g -O0"
+</code></pre>
+
+<p>This will turn off all optimizations and also generate debug symbols.</p>
 
 <p>Enjoy!</p>
 ]]></content>
