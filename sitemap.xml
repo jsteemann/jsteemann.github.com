@@ -87,8 +87,14 @@
         <lastmod>2014-12-21T19:25:47+01:00</lastmod>
     </url>
     <url>
+        <loc>
+            http://jsteemann.github.io/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations/
+        </loc>
+        <lastmod>2015-01-14T01:37:54+01:00</lastmod>
+    </url>
+    <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2014-12-22T12:35:17+01:00</lastmod>
+        <lastmod>2015-01-14T01:37:54+01:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -96,6 +102,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2014-12-22T12:35:17+01:00</lastmod>
+        <lastmod>2015-01-14T01:37:54+01:00</lastmod>
     </url>
 </urlset>

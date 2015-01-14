@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2014-12-22T12:35:39+01:00</updated>
+  <updated>2015-01-14T01:39:31+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,171 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Returning Results From AQL INSERT/REMOVE/REPLACE Operations]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations/"/>
+    <updated>2015-01-13T22:53:40+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations</id>
+    <content type="html"><![CDATA[<p>ArangoDB provides many options for finding and modifying data. Though there are
+several more specialized operation, data-modification AQL queries are the most
+general solution in ArangoDB. They allow to find documents using arbitrary filter
+criteria, and to modify or remove the documents once found.</p>
+
+<p>Such <em>find-and-modify</em> operations can be executed with multiple queries (one for
+the find step, one for the modification step), or with a single query. Putting
+both steps into a single query will often save roundtrips between the application
+and the database and thus may be preferred over executing the steps separately.
+Putting both the find and the modify step into the same query also prevents other
+operations from interfering in between and tampering with the underlying data.</p>
+
+<p>Now what if the application not only requires the data to be updated, but also needs
+to keep track of which documents were found and modified by a <em>find-and-modify</em>
+query? This is often required when an application needs to keep database
+data in sync with data in some other datastore (e.g. the filesystem or a remote
+service).</p>
+
+<p>The pattern I would dub <em>find-modify-return</em> would be useful for this.</p>
+
+<!-- more -->
+
+
+<p>Unfortunately it hasn&rsquo;t been supported in AQL until very recently.
+We have been asked for this so many times that I stopped counting.</p>
+
+<p>I am glad that this got better with ArangoDB 2.4. Finding, modifying and returning
+documents is now possible from the same AQL query. The solution is not yet perfect,
+but at least it provides basic <em>find-modify-return</em> functionality for a lot of
+use cases, including multi-document, multi-collection queries.</p>
+
+<h2>INSERT</h2>
+
+<p>Let&rsquo;s start with an <code>INSERT</code> operation as it is the most simple to explain:</p>
+
+<p><code>plain insert query, not returning anything
+FOR i IN 1..10
+  INSERT { name: CONCAT("user", i), someValue: RAND() } IN testAccounts
+</code></p>
+
+<p>The above query does not explicitly specify the <code>_key</code> attribute for the inserted
+documents, meaning the database will create the documents keys automatically.
+Additionally, the query assigns a random value to an attribute <code>someValue</code>.
+Getting to know the created keys or random values required an extra lookup query
+before 2.4. Extra queries are something one wants to avoid for efficiency
+reasons.</p>
+
+<p>With 2.4, adding two lines at the end of the query will solve the problem so
+that everything can be done in one query:</p>
+
+<p><code>plain insert query, returning the inserted documents
+FOR i IN 1..10
+  INSERT { name: CONCAT("user", i), someValue: RAND() } IN testAccounts
+  LET inserted = NEW
+  RETURN inserted
+</code></p>
+
+<p>Using a <code>LET</code> with the pseudo-value of <code>NEW</code> after the <code>INSERT</code> together with
+a final <code>RETURN</code> statement will make the inserted documents appear in the query
+result. Note that the full documents will be returned and not just the specified
+attributes. This allows the application to track of all document attributes,
+even the auto-generated ones.</p>
+
+<h2>REMOVE</h2>
+
+<p>The mechanism works for <code>REMOVE</code> statements, too.</p>
+
+<p>Time to use a different example for this. Let&rsquo;s assume session metadata are
+stored in the database, and some bigger session files are stored somewhere
+in the filesystem. If the application needs to remove expired sessions, it
+will need to clean up in both places. It will first query the database to
+find the expired sessions, only to remove them from the filesystem (if the
+filesystem sessions were organized by session id from the database) and to
+finally remove the sessions from database itself.</p>
+
+<p>The following query could be used to find removal candidates:</p>
+
+<p><code>plain query for finding removal candidates
+FOR session IN sessions
+  FILTER session.dateExpires &lt; DATE_NOW()
+  LIMIT 1000
+  RETURN session._key
+</code></p>
+
+<p>The results of this query can be used for cleaning up sessions in the filesystem,
+and for finally removing the sessions from the database. However, this would require
+an extra <code>REMOVE</code> query. And didn&rsquo;t we say we would like to avoid extra queries?</p>
+
+<p>The good news is that in 2.4 we can by putting at least the database part into a
+single query:</p>
+
+<p><code>plain query for removing and returning expired sessions
+FOR session IN sessions
+  FILTER session.dateExpires &lt; DATE_NOW()
+  LIMIT 1000
+  REMOVE session IN sessions
+  LET removed = OLD
+  RETURN removed
+</code></p>
+
+<p>The last two lines of the above query make sure the removed sessions are
+returned to the application, so the application can perform any filesystem
+cleanup using the session ids from the database.</p>
+
+<p>Note that in case of <code>REMOVE</code> one has to use the pseudo-value <code>OLD</code> because
+<code>REMOVE</code> can only return documents before removal. In the case of <code>INSERT</code>
+we can only refer to the pseudo-value <code>NEW</code>.</p>
+
+<h2>UPDATE and REPLACE</h2>
+
+<p>So far we saw <code>INSERT</code> and <code>REMOVE</code>, but there are also <code>UPDATE</code> and <code>REPLACE</code>.
+I will handle <code>UPDATE</code> and <code>REPLACE</code> in one go. All the following refers to
+<code>UPDATE</code>, but does apply to <code>REPLACE</code> as well.</p>
+
+<p>The mechanism to return documents from a query is the same as
+already demonstrated: simply append the <code>LET ... RETURN</code> sequence to the end
+of the original query.</p>
+
+<p>In addition, <code>UPDATE</code> allows to return either the <em>old</em> document revisions
+(before modification) or the <em>new</em> document revisions (after modification).
+This can be expressed by using either <code>OLD</code> or <code>NEW</code> in the final <code>LET</code>
+statement.</p>
+
+<p>Following is a more complex example for an <code>UPDATE</code> query that aggregates data
+from one collection (<code>phraseOccurrences</code>) in order to find and modify matching
+documents in another collection (<code>phrases</code>). It will return the documents from
+<code>phrases</code> before they got modified:</p>
+
+<p><code>plain update query returning "old" documents
+FOR po IN phraseOccurrences
+  FILTER ! po.isSuspicious
+  FILTER po.dateMentioned &gt;= '2015-01-01' &amp;&amp; po.dateMentioned &lt;= '2015-01-09'
+  COLLECT phrase = po.phrase WITH COUNT INTO occurrences
+  FILTER occurrences % 42 != 23
+  LIMIT 13
+  UPDATE phrase WITH { isSuspicious: true } IN phrases
+  LET previous = OLD  /* returns document revisions before UPDATE */
+  RETURN previous
+</code></p>
+
+<p>If we are interested in what the documents in <code>phrases</code> look like with the
+<code>UPDATE</code> applied, we can use <code>NEW</code> instead:</p>
+
+<p><code>plain update query returning "new" documents
+FOR po IN phraseOccurrences
+  FILTER ! po.isSuspicious
+  FILTER po.dateMentioned &gt;= '2015-01-01' &amp;&amp; po.dateMentioned &lt;= '2015-01-09'
+  COLLECT phrase = po.phrase WITH COUNT INTO occurrences
+  FILTER occurrences % 42 != 23
+  LIMIT 13
+  UPDATE phrase WITH { isSuspicious: true } IN phrases
+  LET modified = NEW  /* returns document revisions after UPDATE */
+  RETURN modified
+</code></p>
+
+<p>Note that the full documents will be returned here, and not just the attributes
+specified in or modified by the <code>UPDATE</code> operation.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[99 Bottles of Beer]]></title>

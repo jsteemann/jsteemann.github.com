@@ -9,8 +9,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="ArangoDB 2.4 will be shipped with an updated version of V8. The V8 version included in 2.4 will be 3.29.59. This version will replace the
-almost two &hellip;">
+  <meta name="description" content="ArangoDB provides many options for finding and modifying data. Though there are
+several more specialized operation, data-modification AQL queries are &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -78,6 +78,65 @@ almost two &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations/">Returning Results From AQL INSERT/REMOVE/REPLACE Operations</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-01-13T22:53:40+01:00" pubdate data-updated="true">Jan 13<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>ArangoDB provides many options for finding and modifying data. Though there are
+several more specialized operation, data-modification AQL queries are the most
+general solution in ArangoDB. They allow to find documents using arbitrary filter
+criteria, and to modify or remove the documents once found.</p>
+
+<p>Such <em>find-and-modify</em> operations can be executed with multiple queries (one for
+the find step, one for the modification step), or with a single query. Putting
+both steps into a single query will often save roundtrips between the application
+and the database and thus may be preferred over executing the steps separately.
+Putting both the find and the modify step into the same query also prevents other
+operations from interfering in between and tampering with the underlying data.</p>
+
+<p>Now what if the application not only requires the data to be updated, but also needs
+to keep track of which documents were found and modified by a <em>find-and-modify</em>
+query? This is often required when an application needs to keep database
+data in sync with data in some other datastore (e.g. the filesystem or a remote
+service).</p>
+
+<p>The pattern I would dub <em>find-modify-return</em> would be useful for this.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -557,52 +616,6 @@ for ArangoDB and all its client tools!</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">Using Travis CI for a C++11 Project</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-10-17T19:36:57+02:00" pubdate data-updated="true">Oct 17<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p><a href="http://travis-ci.com">TravisCI</a> is a very useful cloud service
-for continous integration. It can be integrated with Github, with each
-commit triggering a new build and reporting back when it broke something.</p>
-
-<p>Travis has support for many programming languages, among them C++.
-But it lacks support for C++11 features.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -624,6 +637,10 @@ But it lacks support for C++11 features.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations/">Returning Results From AQL INSERT/REMOVE/REPLACE Operations</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2014/12/19/using-es6-features-in-arangodb/">Using ES6 Features in ArangoDB</a>
       </li>
     
@@ -639,10 +656,6 @@ But it lacks support for C++11 features.</p>
         <a href="/blog/2014/11/07/a-tour-around-the-aql-query-optimizer/">A Tour Around the New AQL Query Optimizer</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2014/11/07/improved-non-unique-hash-indexes/">Improved Non-unique Hash Indexes in 2.3</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -651,7 +664,7 @@ But it lacks support for C++11 features.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (3)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (14)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (2)</a></li><li><a href='/blog/categories/indexes/'>Indexes (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (4)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (4)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (4)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (15)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (2)</a></li><li><a href='/blog/categories/indexes/'>Indexes (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (4)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (4)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 
   
@@ -660,7 +673,7 @@ But it lacks support for C++11 features.</p>
     </div>
   </div>
   <footer role="contentinfo"><p>
-  Copyright &copy; 2014 - jsteemann -
+  Copyright &copy; 2015 - jsteemann -
   <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
 </p>
 
