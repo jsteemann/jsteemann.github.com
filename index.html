@@ -9,8 +9,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="ArangoDB provides many options for finding and modifying data. Though there are
-several more specialized operation, data-modification AQL queries are &hellip;">
+  <meta name="description" content="I have been looking at many AQL queries during the last few weeks. Looking back, I can say that the JSON query execution plans provided by
+the &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -78,6 +78,66 @@ several more specialized operation, data-modification AQL queries are &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/01/23/explaining-aql-queries-the-fancy-way/">Explaining AQL Queries the Fancier Way</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-01-23T01:00:03+01:00" pubdate data-updated="true">Jan 23<span>rd</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>I have been looking at many AQL queries during the last few weeks.</p>
+
+<p>Looking back, I can say that the JSON query execution plans provided by
+the <code>explain()</code> method have provided me with a lot of useful information
+about how the AQL optimizer had transformed a given query. This has
+helped testing and improving the query optimizer a great deal.</p>
+
+<p>However, the JSON output produced by <code>explain()</code> is so detailed that even
+for the simplest cases queries it will span multiple screens. This is far
+too much for quicking assesing what a query will be doing and how it will
+be executed.</p>
+
+<p>I therefore quickly put together a function that provides a much more
+compact explain output. Its input parameter is a query string, which it
+will send to the ArangoDB server to have it explained.</p>
+
+<p>But it doesn&rsquo;t print a voluminous JSON object. This one is for developers
+with a full schedule.</p>
+
+<p><img src="/downloads/screenshots/explainer.png"></p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/01/23/explaining-aql-queries-the-fancy-way/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -572,50 +632,6 @@ of improvements in C++11 that solve common problems.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/">How to Set Up Bash Completion for ArangoDB</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-10-22T23:10:32+02:00" pubdate data-updated="true">Oct 22<span>nd</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>I was interested in how bash auto-completion works and how to write
-a custom completer. After about an hour of work, I came up with a
-solution that at least seems to work on Ubuntu. I now have auto-completion
-for ArangoDB and all its client tools!</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -637,6 +653,10 @@ for ArangoDB and all its client tools!</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/01/23/explaining-aql-queries-the-fancy-way/">Explaining AQL Queries the Fancier Way</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations/">Returning Results From AQL INSERT/REMOVE/REPLACE Operations</a>
       </li>
     
@@ -652,10 +672,6 @@ for ArangoDB and all its client tools!</p>
         <a href="/blog/2014/12/12/aql-improvements-for-24/">AQL Improvements for 2.4</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2014/11/07/a-tour-around-the-aql-query-optimizer/">A Tour Around the New AQL Query Optimizer</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -664,7 +680,7 @@ for ArangoDB and all its client tools!</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (4)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (15)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (2)</a></li><li><a href='/blog/categories/indexes/'>Indexes (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (4)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (4)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (5)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (16)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (2)</a></li><li><a href='/blog/categories/indexes/'>Indexes (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (4)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (4)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 
   

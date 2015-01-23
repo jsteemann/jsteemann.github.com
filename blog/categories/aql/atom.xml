@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-01-14T01:39:31+01:00</updated>
+  <updated>2015-01-23T02:27:00+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,78 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Explaining AQL Queries the Fancier Way]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/01/23/explaining-aql-queries-the-fancy-way/"/>
+    <updated>2015-01-23T01:00:03+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/01/23/explaining-aql-queries-the-fancy-way</id>
+    <content type="html"><![CDATA[<p>I have been looking at many AQL queries during the last few weeks.</p>
+
+<p>Looking back, I can say that the JSON query execution plans provided by
+the <code>explain()</code> method have provided me with a lot of useful information
+about how the AQL optimizer had transformed a given query. This has
+helped testing and improving the query optimizer a great deal.</p>
+
+<p>However, the JSON output produced by <code>explain()</code> is so detailed that even
+for the simplest cases queries it will span multiple screens. This is far
+too much for quicking assesing what a query will be doing and how it will
+be executed.</p>
+
+<p>I therefore quickly put together a function that provides a much more
+compact explain output. Its input parameter is a query string, which it
+will send to the ArangoDB server to have it explained.</p>
+
+<p>But it doesn&rsquo;t print a voluminous JSON object. This one is for developers
+with a full schedule.</p>
+
+<p><img src="/downloads/screenshots/explainer.png"></p>
+
+<!-- more -->
+
+
+<p>It prints the original query, the generated query execution plan, the
+applied optimizer rules plus the list of indexes that will be used. This
+is often the key information that one is interested in.</p>
+
+<p>It works best when the execution plan fits on a single screen and
+the execution plan is not nested too much. Subqueries are supported though.
+I have tried it with several queries this night and the results were quite
+promising from my point of view.</p>
+
+<p>For example, a poor man&rsquo;s graph query (using a subquery to join connected
+edges) still prints nicely:</p>
+
+<p><img src="/downloads/screenshots/explainer-inv.png"></p>
+
+<p>As usual, your mileage may vary. If you&rsquo;re inspecting complex queries
+with it, the lines printed may get too long and wrap. The output won&rsquo;t be
+very legible then, but it may still be helpful.</p>
+
+<p>I have added the feature to 2.4 and devel. Anyone compiling from source
+can use it by pulling the latest changes, compiling, and then typing the
+following on the ArangoShell or in the web interface:</p>
+
+<p><code>js
+var explain = require("org/arangodb/aql/explainer").explain;
+explain("FOR doc IN myCollection FILTER doc.value &lt; 23 RETURN doc");
+</code></p>
+
+<p>The feature will also be included in the next 2.4 package.</p>
+
+<p>Anyone on 2.3 or 2.4 users that can&rsquo;t wait until the next package can give
+it a try, too. The code for the explain function is contained in a single file,
+and it can be downloaded from
+<a href="https://github.com/triAGENS/ArangoDB/blob/2.4/js/common/modules/org/arangodb/aql/explainer.js">Github</a>.
+and then be copied into the appropriate location inside ArangoDB&rsquo;s <code>js</code> directory.
+This should make it work from the ArangoShell (but not from the web interface).</p>
+
+<p>On a side note: I would also like to have some functionality like this in
+the web interface, but as a backend developer, I am not able to do any
+serious UI work. I also put this together in my leisure time, and have to
+come to an end with it.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Returning Results From AQL INSERT/REMOVE/REPLACE Operations]]></title>

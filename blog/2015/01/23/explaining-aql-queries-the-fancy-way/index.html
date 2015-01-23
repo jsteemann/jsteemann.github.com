@@ -5,13 +5,12 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>Using Travis CI for a C++11 Project - J@ArangoDB</title>
+  <title>Explaining AQL Queries the Fancier Way - J@ArangoDB</title>
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="TravisCI is a very useful cloud service
-for continous integration. It can be integrated with Github, with each
-commit triggering a new build and &hellip;">
+  <meta name="description" content="I have been looking at many AQL queries during the last few weeks. Looking back, I can say that the JSON query execution plans provided by
+the &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -20,7 +19,7 @@ commit triggering a new build and &hellip;">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project">
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/01/23/explaining-aql-queries-the-fancy-way">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
@@ -82,7 +81,7 @@ commit triggering a new build and &hellip;">
   
   <header>
     
-      <h1 class="entry-title">Using Travis CI for a C++11 Project</h1>
+      <h1 class="entry-title">Explaining AQL Queries the Fancier Way</h1>
     
     
       <p class="meta">
@@ -98,66 +97,79 @@ commit triggering a new build and &hellip;">
   
 
 
-<time datetime="2014-10-17T19:36:57+02:00" pubdate data-updated="true">Oct 17<span>th</span>, 2014</time>
+<time datetime="2015-01-23T01:00:03+01:00" pubdate data-updated="true">Jan 23<span>rd</span>, 2015</time>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p><a href="http://travis-ci.com">TravisCI</a> is a very useful cloud service
-for continous integration. It can be integrated with Github, with each
-commit triggering a new build and reporting back when it broke something.</p>
+<div class="entry-content"><p>I have been looking at many AQL queries during the last few weeks.</p>
 
-<p>Travis has support for many programming languages, among them C++.
-But it lacks support for C++11 features.</p>
+<p>Looking back, I can say that the JSON query execution plans provided by
+the <code>explain()</code> method have provided me with a lot of useful information
+about how the AQL optimizer had transformed a given query. This has
+helped testing and improving the query optimizer a great deal.</p>
+
+<p>However, the JSON output produced by <code>explain()</code> is so detailed that even
+for the simplest cases queries it will span multiple screens. This is far
+too much for quicking assesing what a query will be doing and how it will
+be executed.</p>
+
+<p>I therefore quickly put together a function that provides a much more
+compact explain output. Its input parameter is a query string, which it
+will send to the ArangoDB server to have it explained.</p>
+
+<p>But it doesn&rsquo;t print a voluminous JSON object. This one is for developers
+with a full schedule.</p>
+
+<p><img src="/downloads/screenshots/explainer.png"></p>
 
 <!-- more -->
 
 
-<p>Travis provides basic support for C++ projects. <a href="http://docs.travis-ci.com/user/languages/cpp/">It comes with gcc, clang,
-the autotools, make, cmake and scons</a>.</p>
+<p>It prints the original query, the generated query execution plan, the
+applied optimizer rules plus the list of indexes that will be used. This
+is often the key information that one is interested in.</p>
 
-<p>While writing this post, Travis CI build machines run on Ubuntu 12.04
-LTS 64 bit. This version of Ubuntu is rather old already, and does not bring
-too many packages for C++11 development. For example, the default
-C++ compiler installed on TravisCI is g++-4.6.3. This version
-doesn&rsquo;t even understand the compile option <code>-std=c++11</code>.</p>
+<p>It works best when the execution plan fits on a single screen and
+the execution plan is not nested too much. Subqueries are supported though.
+I have tried it with several queries this night and the results were quite
+promising from my point of view.</p>
 
-<p>Official C++11 support <a href="https://gcc.gnu.org/projects/cxx0x.html">started in g++ 4.7</a>,
-though C++0x features were supported way earlier. But to get decent C++11 support
-in g++, it is best to use g++4.8 or higher.</p>
+<p>For example, a poor man&rsquo;s graph query (using a subquery to join connected
+edges) still prints nicely:</p>
 
-<p>Fortunately TravisCI allows installing other software. To get
-a more recent C++ compiler, it can simply be added from a PPA.
-This can be achieved by putting the PPA in the <code>.travis.yml</code> file of your
-Github repository, e.g.</p>
+<p><img src="/downloads/screenshots/explainer-inv.png"></p>
+
+<p>As usual, your mileage may vary. If you&rsquo;re inspecting complex queries
+with it, the lines printed may get too long and wrap. The output won&rsquo;t be
+very legible then, but it may still be helpful.</p>
+
+<p>I have added the feature to 2.4 and devel. Anyone compiling from source
+can use it by pulling the latest changes, compiling, and then typing the
+following on the ArangoShell or in the web interface:</p>
 
 <figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">language</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">cpp</span>
-</span><span class='line'><span class="l-Scalar-Plain">compiler</span><span class="p-Indicator">:</span> <span class="l-Scalar-Plain">g++</span>
-</span><span class='line'>
-</span><span class='line'><span class="l-Scalar-Plain">before_install</span><span class="p-Indicator">:</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">sudo apt-get update -qq</span>
-</span><span class='line'>
-</span><span class='line'><span class="l-Scalar-Plain">install</span><span class="p-Indicator">:</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">sudo apt-get install -qq g++-4.8</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">export CXX=&quot;g++-4.8&quot;</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">explain</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/explainer&quot;</span><span class="p">).</span><span class="nx">explain</span><span class="p">;</span>
+</span><span class='line'><span class="nx">explain</span><span class="p">(</span><span class="s2">&quot;FOR doc IN myCollection FILTER doc.value &lt; 23 RETURN doc&quot;</span><span class="p">);</span>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>I have set up an <a href="https://github.com/jsteemann/travis-cxx11">example project on Github</a>
-that demonstrates how to use it.</p>
+<p>The feature will also be included in the next 2.4 package.</p>
+
+<p>Anyone on 2.3 or 2.4 users that can&rsquo;t wait until the next package can give
+it a try, too. The code for the explain function is contained in a single file,
+and it can be downloaded from
+<a href="https://github.com/triAGENS/ArangoDB/blob/2.4/js/common/modules/org/arangodb/aql/explainer.js">Github</a>.
+and then be copied into the appropriate location inside ArangoDB&rsquo;s <code>js</code> directory.
+This should make it work from the ArangoShell (but not from the web interface).</p>
+
+<p>On a side note: I would also like to have some functionality like this in
+the web interface, but as a backend developer, I am not able to do any
+serious UI work. I also put this together in my leisure time, and have to
+come to an end with it.</p>
 </div>
 
 
@@ -180,12 +192,12 @@ that demonstrates how to use it.</p>
   
 
 
-<time datetime="2014-10-17T19:36:57+02:00" pubdate data-updated="true">Oct 17<span>th</span>, 2014</time>
+<time datetime="2015-01-23T01:00:03+01:00" pubdate data-updated="true">Jan 23<span>rd</span>, 2015</time>
       
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>, <a class='category' href='/blog/categories/travisci/'>TravisCI</a>
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>
   
 </span>
 
@@ -194,7 +206,7 @@ that demonstrates how to use it.</p>
     
       <div class="sharing">
   
-  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/" >Tweet</a>
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/01/23/explaining-aql-queries-the-fancy-way/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/01/23/explaining-aql-queries-the-fancy-way/" >Tweet</a>
   
   
   
@@ -203,10 +215,8 @@ that demonstrates how to use it.</p>
     
     <p class="meta">
       
-        <a class="basic-alignment left" href="/blog/2014/10/16/how-to-compile-arangodb-from-source/" title="Previous Post: How to compile ArangoDB from source">&laquo; How to compile ArangoDB from source</a>
+        <a class="basic-alignment left" href="/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations/" title="Previous Post: Returning results from AQL INSERT/REMOVE/REPLACE operations">&laquo; Returning results from AQL INSERT/REMOVE/REPLACE operations</a>
       
-      
-        <a class="basic-alignment right" href="/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/" title="Next Post: How to set up bash completion for ArangoDB">How to set up bash completion for ArangoDB &raquo;</a>
       
     </p>
   </footer>
