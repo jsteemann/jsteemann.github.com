@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Development | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/development/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-01-29T01:57:52+01:00</updated>
+  <updated>2015-01-30T00:13:40+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -508,14 +508,14 @@ install it and clone the <em>devel</em> branch of the repository into a
 directory named <em>devel</em> on the VM:</p>
 
 <pre><code>sudo apt-get install git 
-git clone -b devel https://github.com/triAGENS/ArangoDB.git
+git clone -b devel https://github.com/arangodb/arangodb.git
 </code></pre>
 
 <p>The repository contains a lot of history so cloning may take a while.
 In case you don&rsquo;t need the full history, you can create a shallow
 clone like this:</p>
 
-<pre><code>git clone -b devel --single-branch --depth 1 https://github.com/triAGENS/ArangoDB.git 
+<pre><code>git clone -b devel --single-branch --depth 1 https://github.com/arangodb/arangodb.git 
 </code></pre>
 
 <p>This will reduce the download size from (currently) 375 MB to 56 MB

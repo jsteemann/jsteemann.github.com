@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-01-29T01:57:52+01:00</updated>
+  <updated>2015-01-30T00:13:40+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -720,7 +720,7 @@ explain("FOR doc IN myCollection FILTER doc.value &lt; 23 RETURN doc");
 <p>Anyone on 2.3 or 2.4 users that can&rsquo;t wait until the next package can give
 it a try, too. The code for the explain function is contained in a single file,
 and it can be downloaded from
-<a href="https://github.com/triAGENS/ArangoDB/blob/2.4/js/common/modules/org/arangodb/aql/explainer.js">Github</a>.
+<a href="https://github.com/arangodb/arangodb/blob/2.4/js/common/modules/org/arangodb/aql/explainer.js">Github</a>.
 and then be copied into the appropriate location inside ArangoDB&rsquo;s <code>js</code> directory.
 This should make it work from the ArangoShell (but not from the web interface).</p>
 
