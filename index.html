@@ -9,8 +9,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="I have been looking at many AQL queries during the last few weeks. Looking back, I can say that the JSON query execution plans provided by
-the &hellip;">
+  <meta name="description" content="This post is about some recent extensions for the AQL graph traversal functionality
+in ArangoDB. These extensions allow invoking user-defined &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -78,6 +78,60 @@ the &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/01/28/using-custom-visitors-in-aql-graph-traversals/">Using Custom Visitors in AQL Graph Traversals</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-01-28T22:21:35+01:00" pubdate data-updated="true">Jan 28<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>This post is about some recent extensions for the AQL graph traversal functionality
+in ArangoDB.</p>
+
+<p>These extensions allow invoking user-defined JavaScript code for filtering
+and results generation in AQL queries that contain traversals.</p>
+
+<p>This should make AQL graph traversals much more powerful than before.
+Additionally, AQL graph traversals get more configurable, allowing to write
+traversal functions with control-flow logic and complex filtering. As a
+side-effect, this change facilitates writing specialized traversal functions
+with much higher efficiency than the general-purpose, cover-all-cases default
+ones.</p>
+
+<p>The extensions are currently available in the devel branch of ArangoDB, but will</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/01/28/using-custom-visitors-in-aql-graph-traversals/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -582,56 +636,6 @@ out and set up.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/">What I Most Like About C++11</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-10-23T23:02:12+02:00" pubdate data-updated="true">Oct 23<span>rd</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>About half a year ago we started compiling our code with <code>-std=c++11</code>.</p>
-
-<p>We had to fix a few, but not too many code parts for this. That was
-the easy part.</p>
-
-<p>Getting C++11 to work on all supported platforms, build and testing
-environments was a bit more challenging, but we finally managed to do it.</p>
-
-<p>Having used C++11 for some time now, I think it&rsquo;s time to share a few
-of improvements in C++11 that solve common problems.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -653,6 +657,10 @@ of improvements in C++11 that solve common problems.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/01/28/using-custom-visitors-in-aql-graph-traversals/">Using Custom Visitors in AQL Graph Traversals</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/01/23/explaining-aql-queries-the-fancy-way/">Explaining AQL Queries the Fancier Way</a>
       </li>
     
@@ -668,10 +676,6 @@ of improvements in C++11 that solve common problems.</p>
         <a href="/blog/2014/12/14/99-bottles-of-beer/">99 Bottles of Beer</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2014/12/12/aql-improvements-for-24/">AQL Improvements for 2.4</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -680,7 +684,7 @@ of improvements in C++11 that solve common problems.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (5)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (16)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (2)</a></li><li><a href='/blog/categories/indexes/'>Indexes (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (4)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (4)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (6)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (17)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (2)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (4)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (4)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 
   
