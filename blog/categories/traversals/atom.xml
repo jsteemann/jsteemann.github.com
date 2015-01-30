@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Traversals | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/traversals/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-01-30T01:27:58+01:00</updated>
+  <updated>2015-01-30T11:45:19+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -31,8 +31,8 @@ side-effect, this change facilitates writing specialized traversal functions
 with much higher efficiency than the general-purpose, cover-all-cases default
 ones.</p>
 
-<p>The extensions are currently available in the devel branch of ArangoDB, but will
-be backported to 2.4 soon.</p>
+<p>The extensions are currently available in the devel branch of ArangoDB on in the
+2.4 branch (with 2.4.2 being the first release to include them).</p>
 
 <!-- more -->
 
@@ -98,7 +98,7 @@ by running the following code from the ArangoShell:</p>
 var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
 
 <p>aqlfunctions.register(&ldquo;myfunctions::structurePrinter&rdquo;, function (config, result, vertex, path) {
-  var indentation = Array(path.vertices.length).join(&ldquo;  &rdquo;);
+  var indentation = new Array(path.vertices.length).join(&ldquo;  &rdquo;);
   var label       = &ldquo;&ndash; &rdquo; + vertex.name + &ldquo; (&rdquo; + vertex.type + &ldquo;)&rdquo;;
   return indentation + label;
 });
@@ -256,7 +256,7 @@ root vertex, which does not have a parent:</p>
 var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
 
 <p>aqlfunctions.register(&ldquo;myfunctions::structurePrinter&rdquo;, function (config, result, vertex, path) {
-  var result = {</p>
+  var res = {</p>
 
 <pre><code>name: vertex.name, 
 type: vertex.type, 
@@ -266,14 +266,14 @@ level: path.vertices.length
 <p>  };
   if (path.vertices.length > 1) {</p>
 
-<pre><code>result.parent = { 
+<pre><code>res.parent = { 
   name: path.vertices[path.vertices.length - 2].name, 
   type: path.vertices[path.vertices.length - 2].type
 }; 
 </code></pre>
 
 <p>  }
-  return result;
+  return res;
 });
 ```</p>
 
@@ -552,7 +552,7 @@ vertices that passed our <em>filterVertices</em> function.</p>
 <p>```js registering a visitor that counts the number of vertices visited
 var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
 
-<p>aqlfunctions.register(&ldquo;myfunctions::vertexCounter&rdquo;, function (config, result, vertex) {
+<p>aqlfunctions.register(&ldquo;myfunctions::vertexCounter&rdquo;, function (config, result) {
   if (result.length === 0) {</p>
 
 <pre><code>result.push(0);
@@ -657,6 +657,74 @@ LET params = {
 FOR result IN TRAVERSAL(v, e, "v/world", "inbound", params)
   RETURN result
 </code></p>
+
+<h1>Accessing components from the path</h1>
+
+<p>Visitors are allowed to peek into the <code>paths</code> variable to check how the currently visited
+vertex is linked to others.</p>
+
+<p>The paths variable is an object with a <code>vertices</code> sub-attribute and an <code>edges</code> sub-attribute.
+<code>vertices</code> is an array including all vertices in the path from the start vertex up to the
+currently visited vertex. The currently visited vertex is included in this array.
+<code>edges</code> is an array including all connections (edges) between the start vertex and the
+currently visited vertex. This array might be empty, in case the visitor is called for the
+start vertex.</p>
+
+<p>The following visitor function demonstrates how to peek into <code>paths</code>: it will produce a
+stringified version of the path for all leaf vertices:</p>
+
+<p>```js registering a visitor that accesses components from the path
+var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
+
+<p>aqlfunctions.register(&ldquo;myfunctions::leafNodePathVisitor&rdquo;, function (config, result, vertex, path, connected) {
+  if (connected &amp;&amp; connected.length === 0) {</p>
+
+<pre><code>var res = "";
+path.vertices.forEach(function(v, i) {
+  if (i &gt; 0 &amp;&amp; i &lt;= path.edges.length) {
+    res += " &lt;--[" + path.edges[i - 1].type + "]-- ";
+  }
+  res += v.name;
+});
+return res;
+</code></pre>
+
+<p>  }
+});
+```</p>
+
+<p>It can be invoked as follows:</p>
+
+<p><code>plain using the visitor that accesses path components
+LET params = {
+  order : "preorder-expander",
+  visitor : "myfunctions::leafNodePathVisitor",
+  visitorReturnsResults : true
+}
+FOR result IN TRAVERSAL(v, e, "v/world", "inbound", params)
+  RETURN result
+</code></p>
+
+<p>It will return something like the following:
+<code>js query result
+[
+  "World &lt;--[is-in]-- Africa &lt;--[is-in]-- Algeria &lt;--[is-in]-- Algiers",
+  "World &lt;--[is-in]-- Africa &lt;--[is-in]-- Angola &lt;--[is-in]-- Luanda",
+  "World &lt;--[is-in]-- Africa &lt;--[is-in]-- Botswana &lt;--[is-in]-- Gaborone",
+  "World &lt;--[is-in]-- Africa &lt;--[is-in]-- Burkina Faso &lt;--[is-in]-- Ouagadougou",
+  "World &lt;--[is-in]-- Africa &lt;--[is-in]-- Burundi &lt;--[is-in]-- Bujumbura",
+  "World &lt;--[is-in]-- Africa &lt;--[is-in]-- Cameroon &lt;--[is-in]-- Yaounde",
+  "World &lt;--[is-in]-- Africa &lt;--[is-in]-- Chad &lt;--[is-in]-- N'Djamena",
+  ...
+]
+</code></p>
+
+<p>Note: the contents of the <code>path</code> variable will change between calls to the
+visitor function. Therefore is it not safe to reference arrays or objects from <code>path</code>
+in the result for visitors that modify the <code>result</code> variable in place (i.e. when
+<em>visitorReturnsResults</em> is set to <em>false</em>). The safe way to put path components
+into the result of such visitors is to clone the parts of the path before putting
+them into <code>result</code>.</p>
 
 <h1>Passing parameters into visitors and filters</h1>
 

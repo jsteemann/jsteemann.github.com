@@ -117,8 +117,8 @@ side-effect, this change facilitates writing specialized traversal functions
 with much higher efficiency than the general-purpose, cover-all-cases default
 ones.</p>
 
-<p>The extensions are currently available in the devel branch of ArangoDB, but will
-be backported to 2.4 soon.</p>
+<p>The extensions are currently available in the devel branch of ArangoDB on in the
+2.4 branch (with 2.4.2 being the first release to include them).</p>
 
 <!-- more -->
 
@@ -192,7 +192,7 @@ by running the following code from the ArangoShell:</p>
 </pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">aqlfunctions</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/functions&quot;</span><span class="p">);</span>
 </span><span class='line'>
 </span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::structurePrinter&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">,</span> <span class="nx">path</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">indentation</span> <span class="o">=</span> <span class="nb">Array</span><span class="p">(</span><span class="nx">path</span><span class="p">.</span><span class="nx">vertices</span><span class="p">.</span><span class="nx">length</span><span class="p">).</span><span class="nx">join</span><span class="p">(</span><span class="s2">&quot;  &quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">indentation</span> <span class="o">=</span> <span class="k">new</span> <span class="nb">Array</span><span class="p">(</span><span class="nx">path</span><span class="p">.</span><span class="nx">vertices</span><span class="p">.</span><span class="nx">length</span><span class="p">).</span><span class="nx">join</span><span class="p">(</span><span class="s2">&quot;  &quot;</span><span class="p">);</span>
 </span><span class='line'>  <span class="kd">var</span> <span class="nx">label</span>       <span class="o">=</span> <span class="s2">&quot;- &quot;</span> <span class="o">+</span> <span class="nx">vertex</span><span class="p">.</span><span class="nx">name</span> <span class="o">+</span> <span class="s2">&quot; (&quot;</span> <span class="o">+</span> <span class="nx">vertex</span><span class="p">.</span><span class="nx">type</span> <span class="o">+</span> <span class="s2">&quot;)&quot;</span><span class="p">;</span>
 </span><span class='line'>  <span class="k">return</span> <span class="nx">indentation</span> <span class="o">+</span> <span class="nx">label</span><span class="p">;</span>
 </span><span class='line'><span class="p">});</span>
@@ -412,18 +412,18 @@ root vertex, which does not have a parent:</p>
 </pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">aqlfunctions</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/functions&quot;</span><span class="p">);</span>
 </span><span class='line'>
 </span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::structurePrinter&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">,</span> <span class="nx">path</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">result</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">res</span> <span class="o">=</span> <span class="p">{</span>
 </span><span class='line'>    <span class="nx">name</span><span class="o">:</span> <span class="nx">vertex</span><span class="p">.</span><span class="nx">name</span><span class="p">,</span>
 </span><span class='line'>    <span class="nx">type</span><span class="o">:</span> <span class="nx">vertex</span><span class="p">.</span><span class="nx">type</span><span class="p">,</span>
 </span><span class='line'>    <span class="nx">level</span><span class="o">:</span> <span class="nx">path</span><span class="p">.</span><span class="nx">vertices</span><span class="p">.</span><span class="nx">length</span>
 </span><span class='line'>  <span class="p">};</span>
 </span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="nx">path</span><span class="p">.</span><span class="nx">vertices</span><span class="p">.</span><span class="nx">length</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>    <span class="nx">result</span><span class="p">.</span><span class="nx">parent</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">res</span><span class="p">.</span><span class="nx">parent</span> <span class="o">=</span> <span class="p">{</span>
 </span><span class='line'>      <span class="nx">name</span><span class="o">:</span> <span class="nx">path</span><span class="p">.</span><span class="nx">vertices</span><span class="p">[</span><span class="nx">path</span><span class="p">.</span><span class="nx">vertices</span><span class="p">.</span><span class="nx">length</span> <span class="o">-</span> <span class="mi">2</span><span class="p">].</span><span class="nx">name</span><span class="p">,</span>
 </span><span class='line'>      <span class="nx">type</span><span class="o">:</span> <span class="nx">path</span><span class="p">.</span><span class="nx">vertices</span><span class="p">[</span><span class="nx">path</span><span class="p">.</span><span class="nx">vertices</span><span class="p">.</span><span class="nx">length</span> <span class="o">-</span> <span class="mi">2</span><span class="p">].</span><span class="nx">type</span>
 </span><span class='line'>    <span class="p">};</span>
 </span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="k">return</span> <span class="nx">result</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">res</span><span class="p">;</span>
 </span><span class='line'><span class="p">});</span>
 </span></code></pre></td></tr></table></div></figure>
 
@@ -781,7 +781,7 @@ vertices that passed our <em>filterVertices</em> function.</p>
 <span class='line-number'>8</span>
 </pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">aqlfunctions</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/functions&quot;</span><span class="p">);</span>
 </span><span class='line'>
-</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::vertexCounter&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::vertexCounter&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">)</span> <span class="p">{</span>
 </span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">length</span> <span class="o">===</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
 </span><span class='line'>    <span class="nx">result</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
 </span><span class='line'>  <span class="p">}</span>
@@ -908,6 +908,102 @@ registration of a custom function:</p>
 </span><span class='line'>FOR result IN TRAVERSAL(v, e, "v/world", "inbound", params) 
 </span><span class='line'>  RETURN result</span></code></pre></td></tr></table></div></figure>
 
+
+<h1>Accessing components from the path</h1>
+
+<p>Visitors are allowed to peek into the <code>paths</code> variable to check how the currently visited
+vertex is linked to others.</p>
+
+<p>The paths variable is an object with a <code>vertices</code> sub-attribute and an <code>edges</code> sub-attribute.
+<code>vertices</code> is an array including all vertices in the path from the start vertex up to the
+currently visited vertex. The currently visited vertex is included in this array.
+<code>edges</code> is an array including all connections (edges) between the start vertex and the
+currently visited vertex. This array might be empty, in case the visitor is called for the
+start vertex.</p>
+
+<p>The following visitor function demonstrates how to peek into <code>paths</code>: it will produce a
+stringified version of the path for all leaf vertices:</p>
+
+<figure class='code'><figcaption><span>registering a visitor that accesses components from the path</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">aqlfunctions</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/functions&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::leafNodePathVisitor&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">,</span> <span class="nx">path</span><span class="p">,</span> <span class="nx">connected</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="nx">connected</span> <span class="o">&amp;&amp;</span> <span class="nx">connected</span><span class="p">.</span><span class="nx">length</span> <span class="o">===</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="kd">var</span> <span class="nx">res</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="p">;</span>
+</span><span class='line'>    <span class="nx">path</span><span class="p">.</span><span class="nx">vertices</span><span class="p">.</span><span class="nx">forEach</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">v</span><span class="p">,</span> <span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">if</span> <span class="p">(</span><span class="nx">i</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="o">&amp;&amp;</span> <span class="nx">i</span> <span class="o">&lt;=</span> <span class="nx">path</span><span class="p">.</span><span class="nx">edges</span><span class="p">.</span><span class="nx">length</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nx">res</span> <span class="o">+=</span> <span class="s2">&quot; &lt;--[&quot;</span> <span class="o">+</span> <span class="nx">path</span><span class="p">.</span><span class="nx">edges</span><span class="p">[</span><span class="nx">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">].</span><span class="nx">type</span> <span class="o">+</span> <span class="s2">&quot;]-- &quot;</span><span class="p">;</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>      <span class="nx">res</span> <span class="o">+=</span> <span class="nx">v</span><span class="p">.</span><span class="nx">name</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">});</span>
+</span><span class='line'>    <span class="k">return</span> <span class="nx">res</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>It can be invoked as follows:</p>
+
+<figure class='code'><figcaption><span>using the visitor that accesses path components</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>LET params = { 
+</span><span class='line'>  order : "preorder-expander",
+</span><span class='line'>  visitor : "myfunctions::leafNodePathVisitor", 
+</span><span class='line'>  visitorReturnsResults : true 
+</span><span class='line'>}
+</span><span class='line'>FOR result IN TRAVERSAL(v, e, "v/world", "inbound", params) 
+</span><span class='line'>  RETURN result</span></code></pre></td></tr></table></div></figure>
+
+
+<p>It will return something like the following:</p>
+
+<figure class='code'><figcaption><span>query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="s2">&quot;World &lt;--[is-in]-- Africa &lt;--[is-in]-- Algeria &lt;--[is-in]-- Algiers&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;World &lt;--[is-in]-- Africa &lt;--[is-in]-- Angola &lt;--[is-in]-- Luanda&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;World &lt;--[is-in]-- Africa &lt;--[is-in]-- Botswana &lt;--[is-in]-- Gaborone&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;World &lt;--[is-in]-- Africa &lt;--[is-in]-- Burkina Faso &lt;--[is-in]-- Ouagadougou&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;World &lt;--[is-in]-- Africa &lt;--[is-in]-- Burundi &lt;--[is-in]-- Bujumbura&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;World &lt;--[is-in]-- Africa &lt;--[is-in]-- Cameroon &lt;--[is-in]-- Yaounde&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;World &lt;--[is-in]-- Africa &lt;--[is-in]-- Chad &lt;--[is-in]-- N&#39;Djamena&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="p">...</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note: the contents of the <code>path</code> variable will change between calls to the
+visitor function. Therefore is it not safe to reference arrays or objects from <code>path</code>
+in the result for visitors that modify the <code>result</code> variable in place (i.e. when
+<em>visitorReturnsResults</em> is set to <em>false</em>). The safe way to put path components
+into the result of such visitors is to clone the parts of the path before putting
+them into <code>result</code>.</p>
 
 <h1>Passing parameters into visitors and filters</h1>
 
