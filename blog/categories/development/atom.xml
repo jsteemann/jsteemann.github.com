@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Development | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/development/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-01-30T00:13:40+01:00</updated>
+  <updated>2015-01-30T01:27:58+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -525,7 +525,7 @@ the time. So it&rsquo;s better used for throw-away tests only.</p>
 
 <h2>Installing build tools and libraries</h2>
 
-<p>Now that the repository has been cloned into directory <em>ArangoDB</em>,
+<p>Now that the repository has been cloned into directory <em>arangodb</em>,
 we can install the required tools and libraries we need to build
 from source:</p>
 
@@ -604,7 +604,7 @@ connect to it with the ArangoShell.</p>
 <p>Note that if you used Vagrant, you will first need to connect to the
 Vagrant box in the other terminal using <code>vagrant ssh</code> from the directory
 you ran the <code>vagrant init</code> in. When connect to the Vagrant box, don&rsquo;t
-forget to switch into the <code>ArangoDB</code> directory.</p>
+forget to switch into the <code>arangodb</code> directory.</p>
 
 <p>Once you&rsquo;re in the correct directory, just issue this:</p>
 
@@ -619,7 +619,7 @@ instance.</p>
 <p>Time to make some changes in the code. A good place to start is usually
 <code>main</code>. Here are a few places to get you started:</p>
 
-<pre><code>~/ArangoDB$ grep -r "int main" arangod/ arangosh/
+<pre><code>~/arangodb$ grep -r "int main" arangod/ arangosh/
 arangod/RestServer/arangod.cpp:int main (int argc, char* argv[]) {
 arangosh/Benchmark/arangob.cpp:int main (int argc, char* argv[]) {
 arangosh/V8Client/arangorestore.cpp:int main (int argc, char* argv[]) {

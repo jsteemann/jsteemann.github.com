@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Graphs | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/graphs/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-01-30T00:13:40+01:00</updated>
+  <updated>2015-01-30T01:27:58+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -31,7 +31,8 @@ side-effect, this change facilitates writing specialized traversal functions
 with much higher efficiency than the general-purpose, cover-all-cases default
 ones.</p>
 
-<p>The extensions are currently available in the devel branch of ArangoDB, but will</p>
+<p>The extensions are currently available in the devel branch of ArangoDB, but will
+be backported to 2.4 soon.</p>
 
 <!-- more -->
 
@@ -103,8 +104,14 @@ var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
 });
 ```</p>
 
-<p>Now we can run the following AQL query to invoke the visitor:
-<code>plain invoking the custom visitor
+<h2>Processing vertex data with a function</h2>
+
+<p>The above function will be called for every vertex in the graph when we use it in
+a traversal. Let&rsquo;s do it and run the AQL query to invoke the visitor function.</p>
+
+<p>I suggest running the query from the web interface&rsquo;s <strong>AQL editor</strong>:</p>
+
+<p><code>plain invoking the custom visitor
 LET params = {
   visitor : "myfunctions::structurePrinter",
   visitorReturnsResults : true
@@ -145,9 +152,12 @@ terminate. The traversal will automatically terminate after it has visited all n
 
 <p>This should provide a good overview of the graph&rsquo;s contents.</p>
 
+<h2>Referring to elements in the path</h2>
+
 <p>To return the above result in a more structured manner, let&rsquo;s overwrite the
 previous visitor function with one that returns the most interesting vertex
-attributes individually:</p>
+attributes individually. Let&rsquo;s include one that shows the nesting level of
+each vertex in the tree:</p>
 
 <p>```js registering another custom visitor to return the tree structure
 var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
@@ -236,6 +246,8 @@ level: path.vertices.length
 ]
 ```</p>
 
+<h2>Adding control flow</h2>
+
 <p>Now let&rsquo;s add some control flow to the visitor function. The following visitor
 function will also return information about each vertex' parent &ndash; except for the
 root vertex, which does not have a parent:</p>
@@ -243,7 +255,7 @@ root vertex, which does not have a parent:</p>
 <p>```js a custom visitor with simple control flow
 var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
 
-<p>aqlfunctions.register(&ldquo;myfunctions::structureReturner&rdquo;, function (config, result, vertex, path) {
+<p>aqlfunctions.register(&ldquo;myfunctions::structurePrinter&rdquo;, function (config, result, vertex, path) {
   var result = {</p>
 
 <pre><code>name: vertex.name, 
@@ -318,6 +330,8 @@ than for all the other vertices:</p>
 ]
 ```</p>
 
+<p>Of course much more things can be achieved by peeking the <em>path</em> variable.</p>
+
 <h1>Filtering</h1>
 
 <p>Now let&rsquo;s try to restrict the results of a graph traversal to just some vertices,
@@ -327,7 +341,7 @@ simple, the following naive approach will already do:</p>
 <p>```js a custom visitor returning only European country names
 var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
 
-<p>aqlfunctions.register(&ldquo;myfunctions::structureReturner&rdquo;, function (config, result, vertex, path) {
+<p>aqlfunctions.register(&ldquo;myfunctions::structurePrinter&rdquo;, function (config, result, vertex, path) {
   if (path.vertices.length > 1 &amp;&amp;</p>
 
 <pre><code>  path.vertices[path.vertices.length - 2].name === "Europe") {
@@ -353,8 +367,8 @@ if a given vertex is going to be visited (via calling the <em>visitor</em> funct
 connections should be followed. It can skip non-interesting vertices early, providing a
 good way to make traversals more efficient.</p>
 
-<p>A filter function can be specified in the <em>filter</em> attribute of the traversal options.
-If specified, <em>filter</em> needs to contain the name of a custom AQL function. A filter
+<p>A filter function can be specified in the <em>filterVertices</em> attribute of the traversal options.
+If specified, <em>filterVertices</em> needs to contain the name of a custom AQL function. A filter
 function again needs to be written in JavaScript and has the following signature:</p>
 
 <p><code>js filter function signature
@@ -422,7 +436,7 @@ var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
 <p>```js a very simple visitor
 var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
 
-<p>aqlfunctions.register(&ldquo;myfunctions::structureReturner&rdquo;, function (config, result, vertex) {
+<p>aqlfunctions.register(&ldquo;myfunctions::structurePrinter&rdquo;, function (config, result, vertex) {
   return vertex.name;
 });
 ```</p>
@@ -430,7 +444,7 @@ var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
 <p>We must also slightly extend our AQL query and tell it to use our custom filter function:
 <code>plain invoking the custom visitor and the custom filter
 LET params = {
-  filter : "myfunctions::europeFilter",
+  filterVertices : "myfunctions::europeFilter",
   visitor : "myfunctions::structurePrinter",
   visitorReturnsResults : true
 }
@@ -464,9 +478,11 @@ up to the specified distance away from the start vertex. This helps bounding
 traversals, but is not flexible enough when handling graphs with very distinct
 path lengths.</p>
 
+<h2>Returning only leaf nodes</h2>
+
 <p>For example, <strong>finding leaf nodes</strong> in a graph is quite hard using a default
-traversal. The <em>filter</em> function cannot be used to find leaf nodes, because
-<em>filter</em> is called before a vertex' connections are determined. The same is true
+traversal. The <em>filterVertices</em> function cannot be used to find leaf nodes, because
+<em>filterVertices</em> is called before a vertex' connections are determined. The same is true
 for visitor functions. There were not provided any information about whether the
 currently visited vertex has connections or not. All a visitor could previously do
 to find leaf nodes is to return each visited vertex along with the full path information.
@@ -524,79 +540,64 @@ specific for this type of graph.</p>
 <p>So it seems like the above function is general purpose and can be reused for
 other graphs, too.</p>
 
-<h1>Passing parameters into visitors</h1>
+<h2>Counting vertices</h2>
 
-<p>It is often useful to pass own parameters into function to provide some sort
-of invocation context. For example, the purpose of the following visitor function
-is to return an object with only certain attributes of each visited vertex:</p>
+<p>Let&rsquo;s say we wanted to count the number of vertices in the graph, or the number of
+vertices that passed our <em>filterVertices</em> function.</p>
 
-<p>```js a visitor that can return arbitrary vertex attributes:
+<h3>Counting globally</h3>
+
+<p>This is easy to achieve with a custom visitor like this:</p>
+
+<p>```js registering a visitor that counts the number of vertices visited
 var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
 
-<p>aqlfunctions.register(&ldquo;myfunctions::attributesReturner&rdquo;, function (config, result, vertex) {
-  var values = { };
-  if (typeof config.data === &ldquo;object&rdquo; &amp;&amp; Array.isArray(config.data.attributes)) {</p>
+<p>aqlfunctions.register(&ldquo;myfunctions::vertexCounter&rdquo;, function (config, result, vertex) {
+  if (result.length === 0) {</p>
 
-<pre><code>config.data.attributes.forEach(function (attribute) {
-  values[attribute] = vertex[attribute];
-});
+<pre><code>result.push(0);
 </code></pre>
 
 <p>  }
-  return values;
+  result[0]++;
 });
-<code>``
-Which attributes the function will return can be configured by passing in an
-array of attribute names in the</code>config<code>parameter's</code>data<code>sub-attribute. Here's
-an AQL query that will configure the visitor to return</code>_id<code>and</code>type`:</p>
+```</p>
 
-<p>```plain invoking the attributes visitor
+<p>Note that the above visitor function does not return anything, but will modify an existing
+result in place. As a result, it will produce one counter value, which will be increased
+whenever the visitor is called for a vertex.</p>
+
+<p>To invoke this visitor and retrieve the count value, we have to set the <em>visitorReturnsResults</em>
+attribute in the AQL query to <em>false</em>. This will make the traversal code pass the existing
+result into the visitor and does not expect it to return any results via a <code>return</code> instruction.
+Here&rsquo;s how to run this visitor:</p>
+
+<p><code>plain invoking the global vertex counter
 LET params = {
-  visitor : &ldquo;myfunctions::attributesReturner&rdquo;,
-  visitorReturnsResults : true,
-  data: {</p>
-
-<pre><code>attributes: [ "_id", "type" ] 
-</code></pre>
-
-<p>  }<br/>
+  visitor : "myfunctions::vertexCounter",
+  visitorReturnsResults : false
 }
-FOR result IN TRAVERSAL(v, e, &ldquo;v/world&rdquo;, &ldquo;inbound&rdquo;, params)
+FOR result IN TRAVERSAL(v, e, "v/world", "inbound", params)
   RETURN result
-```</p>
+</code></p>
 
-<h1>Aggregation</h1>
+<p>The result will simply be:
+<code>js query result
+[
+  87
+]
+</code></p>
 
-<p>Let&rsquo;s say we wanted to count the number of vertices per type. As standard AQL supports
-aggregation, this is easy to do without custom visitor functions. All we need to do is to
-return each vertex' <code>type</code> attribute from a traversal, pass that through <code>COLLECT...COUNT</code>
-and finally return the aggregated results:</p>
+<h3>Counting by type</h3>
 
-<p>```plain aggregation example using COLLECT on a TRAVERSAL result
-FOR result IN TRAVERSAL(v, e, &ldquo;v/world&rdquo;, &ldquo;inbound&rdquo;)
-  COLLECT vertexType = result.vertex.type WITH COUNT INTO vertexCount
-  RETURN {</p>
-
-<pre><code>type: vertexType, 
-count: vertexCount 
-</code></pre>
-
-<p>  }
-```</p>
-
-<p>The problem with this is that the call to <code>TRAVERSAL</code> can produce a very big intermediate
-result if the graph is big. By default, <code>TRAVERSAL</code> will follow all connections, and put
-all visited vertices and path information into its result. This can get out of hand size-wise
-and use lots of resources. If all we want is to count the number of vertices per type, we
-won&rsquo;t be interested in all the details a default traversal will produce, so we need something
-that creates only very small results.</p>
-
-<p>For this task, we can create a very specialized visitor function that will be very efficient:</p>
+<p>Let&rsquo;s say we wanted to count vertices by type. This is similar, except that now one global
+counter value is insufficient and we instead need an object to keep track of the different
+counters. We can still get away with modifying an existing result in place:</p>
 
 <p>```js registering a visitor that counts vertices by type
 var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
 
-<p>aqlfunctions.register(&ldquo;myfunctions::vertexTypeCounter&rdquo;, function (config, result, vertex) {
+<p>aqlfunctions.register(&ldquo;myfunctions::vertexCounter&rdquo;, function (config, result, vertex) {
   if (result.length === 0) {</p>
 
 <pre><code>result.push({ });
@@ -619,26 +620,7 @@ var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
 });
 ```</p>
 
-<p>Our invocation AQL query looks like this:
-<code>plain invoking the vertex type counter
-LET params = {
-  visitor : "myfunctions::vertexTypeCounter",
-  visitorReturnsResults : false
-}
-FOR result IN TRAVERSAL(v, e, "v/world", "inbound", params)
-  RETURN result
-</code></p>
-
-<p>One important thing to note is that the <em>visitorReturnsResults</em> traversal parameter was set to
-<em>false</em>. This means that the visitor function will not return any values. This is intentional.</p>
-
-<p>Instead, this visitor will be modifying the traversal&rsquo;s result incrementally, in place.
-In the beginning, there won&rsquo;t be any result, so the visitor will be pushing an empty object into it.
-This object will contain the counters, with the type names as attribute keys. For every vertex
-type encountered, a key will be created in this object and initialized with 1. If the key
-already existed, it will be incremented.</p>
-
-<p>The final result of this visitor for the example graph will be:
+<p>Our invocation AQL query does not change. The result of this visitor for the example graph will be:
 ```js query result
 [
   {</p>
@@ -653,9 +635,69 @@ already existed, it will be incremented.</p>
 ]
 ```</p>
 
-<p>Not only is this the final result of the AQL query, but also the intermediate result that the
-<code>TRAVERSAL</code> has produced. Cleary this will not cost as much memory as if the <code>TRAVERSAL</code> had
-copied all visited vertex data and paths to them into the intermediate result.</p>
+<p>Of course such visitors can be combined with custom filters.</p>
+
+<p>You probably ask why writing custom code is required to achieve a simple task like counting.
+The main reason for this is that the traversal functionality is very general purpose and
+is not optimized for a specific use case like just counting. For example, the default traversal
+visitor will copy the complete vertex and path information into the result.</p>
+
+<p>This can produce very big intermediate results if the graph is big or vertices contain lots
+of data. If all we want is to count the number of vertices globally or per type, we are better
+off with something more specialized.</p>
+
+<p>The good news is that the most simple use case &ldquo;count all vertices&rdquo; there is a predefined
+visitor named <code>_AQL::COUNTINGVISITOR</code> that can directly be used from a query, without prior
+registration of a custom function:</p>
+
+<p><code>plain using the predefined countingvisitor function
+LET params = {
+  visitor : "_AQL::COUNTINGVISITOR"
+}
+FOR result IN TRAVERSAL(v, e, "v/world", "inbound", params)
+  RETURN result
+</code></p>
+
+<h1>Passing parameters into visitors and filters</h1>
+
+<p>It is often useful to pass own parameters into function to provide some sort
+of invocation context. For example, the purpose of the following visitor function
+is to return an object with only certain attributes of each visited vertex:</p>
+
+<p>```js a visitor that can return arbitrary vertex attributes:
+var aqlfunctions = require(&ldquo;org/arangodb/aql/functions&rdquo;);</p>
+
+<p>aqlfunctions.register(&ldquo;myfunctions::attributesPrinter&rdquo;, function (config, result, vertex) {
+  var values = { };
+  if (typeof config.data === &ldquo;object&rdquo; &amp;&amp; Array.isArray(config.data.attributes)) {</p>
+
+<pre><code>config.data.attributes.forEach(function (attribute) {
+  values[attribute] = vertex[attribute];
+});
+</code></pre>
+
+<p>  }
+  return values;
+});
+<code>``
+Which attributes the function will return can be configured by passing in an
+array of attribute names in the</code>config<code>parameter's</code>data<code>sub-attribute. Here's
+an AQL query that will configure the visitor to return</code>_id<code>and</code>type`:</p>
+
+<p>```plain invoking the attributes visitor
+LET params = {
+  visitor : &ldquo;myfunctions::attributesPrinter&rdquo;,
+  visitorReturnsResults : true,
+  data: {</p>
+
+<pre><code>attributes: [ "_id", "type", "name" ] 
+</code></pre>
+
+<p>  }<br/>
+}
+FOR result IN TRAVERSAL(v, e, &ldquo;v/world&rdquo;, &ldquo;inbound&rdquo;, params)
+  RETURN result
+```</p>
 ]]></content>
   </entry>
   

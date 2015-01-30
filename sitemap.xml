@@ -34,7 +34,7 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/</loc>
-        <lastmod>2015-01-30T00:13:09+01:00</lastmod>
+        <lastmod>2015-01-30T00:15:00+01:00</lastmod>
     </url>
     <url>
         <loc>
@@ -102,11 +102,11 @@
         <loc>
             http://jsteemann.github.io/blog/2015/01/28/using-custom-visitors-in-aql-graph-traversals/
         </loc>
-        <lastmod>2015-01-29T01:56:35+01:00</lastmod>
+        <lastmod>2015-01-30T01:27:50+01:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2015-01-30T00:13:09+01:00</lastmod>
+        <lastmod>2015-01-30T01:27:50+01:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -114,6 +114,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2015-01-30T00:13:09+01:00</lastmod>
+        <lastmod>2015-01-30T01:27:50+01:00</lastmod>
     </url>
 </urlset>

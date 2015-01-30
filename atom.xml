@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-01-30T00:13:40+01:00</updated>
+  <updated>2015-01-30T01:27:58+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -31,7 +31,8 @@ side-effect, this change facilitates writing specialized traversal functions
 with much higher efficiency than the general-purpose, cover-all-cases default
 ones.</p>
 
-<p>The extensions are currently available in the devel branch of ArangoDB, but will</p>
+<p>The extensions are currently available in the devel branch of ArangoDB, but will
+be backported to 2.4 soon.</p>
 
 <!-- more -->
 
@@ -112,7 +113,12 @@ by running the following code from the ArangoShell:</p>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>Now we can run the following AQL query to invoke the visitor:</p>
+<h2>Processing vertex data with a function</h2>
+
+<p>The above function will be called for every vertex in the graph when we use it in
+a traversal. Let&rsquo;s do it and run the AQL query to invoke the visitor function.</p>
+
+<p>I suggest running the query from the web interface&rsquo;s <strong>AQL editor</strong>:</p>
 
 <figure class='code'><figcaption><span>invoking the custom visitor</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -176,9 +182,12 @@ terminate. The traversal will automatically terminate after it has visited all n
 
 <p>This should provide a good overview of the graph&rsquo;s contents.</p>
 
+<h2>Referring to elements in the path</h2>
+
 <p>To return the above result in a more structured manner, let&rsquo;s overwrite the
 previous visitor function with one that returns the most interesting vertex
-attributes individually:</p>
+attributes individually. Let&rsquo;s include one that shows the nesting level of
+each vertex in the tree:</p>
 
 <figure class='code'><figcaption><span>registering another custom visitor to return the tree structure </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -292,6 +301,8 @@ attributes individually:</p>
 </span></code></pre></td></tr></table></div></figure>
 
 
+<h2>Adding control flow</h2>
+
 <p>Now let&rsquo;s add some control flow to the visitor function. The following visitor
 function will also return information about each vertex&#8217; parent &ndash; except for the
 root vertex, which does not have a parent:</p>
@@ -314,7 +325,7 @@ root vertex, which does not have a parent:</p>
 <span class='line-number'>16</span>
 </pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">aqlfunctions</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/functions&quot;</span><span class="p">);</span>
 </span><span class='line'>
-</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::structureReturner&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">,</span> <span class="nx">path</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::structurePrinter&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">,</span> <span class="nx">path</span><span class="p">)</span> <span class="p">{</span>
 </span><span class='line'>  <span class="kd">var</span> <span class="nx">result</span> <span class="o">=</span> <span class="p">{</span>
 </span><span class='line'>    <span class="nx">name</span><span class="o">:</span> <span class="nx">vertex</span><span class="p">.</span><span class="nx">name</span><span class="p">,</span>
 </span><span class='line'>    <span class="nx">type</span><span class="o">:</span> <span class="nx">vertex</span><span class="p">.</span><span class="nx">type</span><span class="p">,</span>
@@ -407,6 +418,8 @@ than for all the other vertices:</p>
 </span></code></pre></td></tr></table></div></figure>
 
 
+<p>Of course much more things can be achieved by peeking the <em>path</em> variable.</p>
+
 <h1>Filtering</h1>
 
 <p>Now let&rsquo;s try to restrict the results of a graph traversal to just some vertices,
@@ -423,7 +436,7 @@ simple, the following naive approach will already do:</p>
 <span class='line-number'>8</span>
 </pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">aqlfunctions</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/functions&quot;</span><span class="p">);</span>
 </span><span class='line'>
-</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::structureReturner&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">,</span> <span class="nx">path</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::structurePrinter&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">,</span> <span class="nx">path</span><span class="p">)</span> <span class="p">{</span>
 </span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="nx">path</span><span class="p">.</span><span class="nx">vertices</span><span class="p">.</span><span class="nx">length</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="o">&amp;&amp;</span>
 </span><span class='line'>      <span class="nx">path</span><span class="p">.</span><span class="nx">vertices</span><span class="p">[</span><span class="nx">path</span><span class="p">.</span><span class="nx">vertices</span><span class="p">.</span><span class="nx">length</span> <span class="o">-</span> <span class="mi">2</span><span class="p">].</span><span class="nx">name</span> <span class="o">===</span> <span class="s2">&quot;Europe&quot;</span><span class="p">)</span> <span class="p">{</span>
 </span><span class='line'>    <span class="k">return</span> <span class="nx">vertex</span><span class="p">.</span><span class="nx">name</span><span class="p">;</span>
@@ -447,8 +460,8 @@ if a given vertex is going to be visited (via calling the <em>visitor</em> funct
 connections should be followed. It can skip non-interesting vertices early, providing a
 good way to make traversals more efficient.</p>
 
-<p>A filter function can be specified in the <em>filter</em> attribute of the traversal options.
-If specified, <em>filter</em> needs to contain the name of a custom AQL function. A filter
+<p>A filter function can be specified in the <em>filterVertices</em> attribute of the traversal options.
+If specified, <em>filterVertices</em> needs to contain the name of a custom AQL function. A filter
 function again needs to be written in JavaScript and has the following signature:</p>
 
 <figure class='code'><figcaption><span>filter function signature</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
@@ -530,7 +543,7 @@ This will make the traversal end at the <code>country</code> level.</p>
 <span class='line-number'>5</span>
 </pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">aqlfunctions</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/functions&quot;</span><span class="p">);</span>
 </span><span class='line'>
-</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::structureReturner&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::structurePrinter&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">)</span> <span class="p">{</span>
 </span><span class='line'>  <span class="k">return</span> <span class="nx">vertex</span><span class="p">.</span><span class="nx">name</span><span class="p">;</span>
 </span><span class='line'><span class="p">});</span>
 </span></code></pre></td></tr></table></div></figure>
@@ -546,7 +559,7 @@ This will make the traversal end at the <code>country</code> level.</p>
 <span class='line-number'>6</span>
 <span class='line-number'>7</span>
 </pre></td><td class='code'><pre><code class=''><span class='line'>LET params = { 
-</span><span class='line'>  filter : "myfunctions::europeFilter",
+</span><span class='line'>  filterVertices : "myfunctions::europeFilter",
 </span><span class='line'>  visitor : "myfunctions::structurePrinter", 
 </span><span class='line'>  visitorReturnsResults : true 
 </span><span class='line'>}
@@ -589,9 +602,11 @@ up to the specified distance away from the start vertex. This helps bounding
 traversals, but is not flexible enough when handling graphs with very distinct
 path lengths.</p>
 
+<h2>Returning only leaf nodes</h2>
+
 <p>For example, <strong>finding leaf nodes</strong> in a graph is quite hard using a default
-traversal. The <em>filter</em> function cannot be used to find leaf nodes, because
-<em>filter</em> is called before a vertex&#8217; connections are determined. The same is true
+traversal. The <em>filterVertices</em> function cannot be used to find leaf nodes, because
+<em>filterVertices</em> is called before a vertex&#8217; connections are determined. The same is true
 for visitor functions. There were not provided any information about whether the
 currently visited vertex has connections or not. All a visitor could previously do
 to find leaf nodes is to return each visited vertex along with the full path information.
@@ -661,7 +676,154 @@ specific for this type of graph.</p>
 <p>So it seems like the above function is general purpose and can be reused for
 other graphs, too.</p>
 
-<h1>Passing parameters into visitors</h1>
+<h2>Counting vertices</h2>
+
+<p>Let&rsquo;s say we wanted to count the number of vertices in the graph, or the number of
+vertices that passed our <em>filterVertices</em> function.</p>
+
+<h3>Counting globally</h3>
+
+<p>This is easy to achieve with a custom visitor like this:</p>
+
+<figure class='code'><figcaption><span>registering a visitor that counts the number of vertices visited</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">aqlfunctions</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/functions&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::vertexCounter&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">length</span> <span class="o">===</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">result</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="nx">result</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">++</span><span class="p">;</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note that the above visitor function does not return anything, but will modify an existing
+result in place. As a result, it will produce one counter value, which will be increased
+whenever the visitor is called for a vertex.</p>
+
+<p>To invoke this visitor and retrieve the count value, we have to set the <em>visitorReturnsResults</em>
+attribute in the AQL query to <em>false</em>. This will make the traversal code pass the existing
+result into the visitor and does not expect it to return any results via a <code>return</code> instruction.
+Here&rsquo;s how to run this visitor:</p>
+
+<figure class='code'><figcaption><span>invoking the global vertex counter</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>LET params = { 
+</span><span class='line'>  visitor : "myfunctions::vertexCounter", 
+</span><span class='line'>  visitorReturnsResults : false 
+</span><span class='line'>}
+</span><span class='line'>FOR result IN TRAVERSAL(v, e, "v/world", "inbound", params) 
+</span><span class='line'>  RETURN result</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The result will simply be:</p>
+
+<figure class='code'><figcaption><span>query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="mi">87</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>Counting by type</h3>
+
+<p>Let&rsquo;s say we wanted to count vertices by type. This is similar, except that now one global
+counter value is insufficient and we instead need an object to keep track of the different
+counters. We can still get away with modifying an existing result in place:</p>
+
+<figure class='code'><figcaption><span>registering a visitor that counts vertices by type</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">aqlfunctions</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/functions&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::vertexCounter&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">length</span> <span class="o">===</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">result</span><span class="p">.</span><span class="nx">push</span><span class="p">({</span> <span class="p">});</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">vertexType</span> <span class="o">=</span> <span class="nx">vertex</span><span class="p">.</span><span class="nx">type</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="nx">result</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">hasOwnProperty</span><span class="p">(</span><span class="nx">vertexType</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">result</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="nx">vertexType</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">result</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="nx">vertexType</span><span class="p">]</span><span class="o">++</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Our invocation AQL query does not change. The result of this visitor for the example graph will be:</p>
+
+<figure class='code'><figcaption><span>query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="s2">&quot;root&quot;</span> <span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;continent&quot;</span> <span class="o">:</span> <span class="mi">6</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;country&quot;</span> <span class="o">:</span> <span class="mi">40</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;capital&quot;</span> <span class="o">:</span> <span class="mi">40</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Of course such visitors can be combined with custom filters.</p>
+
+<p>You probably ask why writing custom code is required to achieve a simple task like counting.
+The main reason for this is that the traversal functionality is very general purpose and
+is not optimized for a specific use case like just counting. For example, the default traversal
+visitor will copy the complete vertex and path information into the result.</p>
+
+<p>This can produce very big intermediate results if the graph is big or vertices contain lots
+of data. If all we want is to count the number of vertices globally or per type, we are better
+off with something more specialized.</p>
+
+<p>The good news is that the most simple use case &ldquo;count all vertices&rdquo; there is a predefined
+visitor named <code>_AQL::COUNTINGVISITOR</code> that can directly be used from a query, without prior
+registration of a custom function:</p>
+
+<figure class='code'><figcaption><span>using the predefined countingvisitor function</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>LET params = { 
+</span><span class='line'>  visitor : "_AQL::COUNTINGVISITOR"
+</span><span class='line'>}
+</span><span class='line'>FOR result IN TRAVERSAL(v, e, "v/world", "inbound", params) 
+</span><span class='line'>  RETURN result</span></code></pre></td></tr></table></div></figure>
+
+
+<h1>Passing parameters into visitors and filters</h1>
 
 <p>It is often useful to pass own parameters into function to provide some sort
 of invocation context. For example, the purpose of the following visitor function
@@ -680,7 +842,7 @@ is to return an object with only certain attributes of each visited vertex:</p>
 <span class='line-number'>11</span>
 </pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">aqlfunctions</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/functions&quot;</span><span class="p">);</span>
 </span><span class='line'>
-</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::attributesReturner&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::attributesPrinter&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">)</span> <span class="p">{</span>
 </span><span class='line'>  <span class="kd">var</span> <span class="nx">values</span> <span class="o">=</span> <span class="p">{</span> <span class="p">};</span>
 </span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="k">typeof</span> <span class="nx">config</span><span class="p">.</span><span class="nx">data</span> <span class="o">===</span> <span class="s2">&quot;object&quot;</span> <span class="o">&amp;&amp;</span> <span class="nb">Array</span><span class="p">.</span><span class="nx">isArray</span><span class="p">(</span><span class="nx">config</span><span class="p">.</span><span class="nx">data</span><span class="p">.</span><span class="nx">attributes</span><span class="p">))</span> <span class="p">{</span>
 </span><span class='line'>    <span class="nx">config</span><span class="p">.</span><span class="nx">data</span><span class="p">.</span><span class="nx">attributes</span><span class="p">.</span><span class="nx">forEach</span><span class="p">(</span><span class="kd">function</span> <span class="p">(</span><span class="nx">attribute</span><span class="p">)</span> <span class="p">{</span>
@@ -706,126 +868,17 @@ an AQL query that will configure the visitor to return <code>_id</code> and <cod
 <span class='line-number'>8</span>
 <span class='line-number'>9</span>
 </pre></td><td class='code'><pre><code class=''><span class='line'>LET params = { 
-</span><span class='line'>  visitor : "myfunctions::attributesReturner",
+</span><span class='line'>  visitor : "myfunctions::attributesPrinter",
 </span><span class='line'>  visitorReturnsResults : true, 
 </span><span class='line'>  data: { 
-</span><span class='line'>    attributes: [ "_id", "type" ] 
+</span><span class='line'>    attributes: [ "_id", "type", "name" ] 
 </span><span class='line'>  }  
 </span><span class='line'>}
 </span><span class='line'>FOR result IN TRAVERSAL(v, e, "v/world", "inbound", params) 
 </span><span class='line'>  RETURN result</span></code></pre></td></tr></table></div></figure>
 
 
-<h1>Aggregation</h1>
 
-<p>Let&rsquo;s say we wanted to count the number of vertices per type. As standard AQL supports
-aggregation, this is easy to do without custom visitor functions. All we need to do is to
-return each vertex&#8217; <code>type</code> attribute from a traversal, pass that through <code>COLLECT...COUNT</code>
-and finally return the aggregated results:</p>
-
-<figure class='code'><figcaption><span>aggregation example using COLLECT on a TRAVERSAL result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR result IN TRAVERSAL(v, e, "v/world", "inbound")
-</span><span class='line'>  COLLECT vertexType = result.vertex.type WITH COUNT INTO vertexCount 
-</span><span class='line'>  RETURN { 
-</span><span class='line'>    type: vertexType, 
-</span><span class='line'>    count: vertexCount 
-</span><span class='line'>  }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The problem with this is that the call to <code>TRAVERSAL</code> can produce a very big intermediate
-result if the graph is big. By default, <code>TRAVERSAL</code> will follow all connections, and put
-all visited vertices and path information into its result. This can get out of hand size-wise
-and use lots of resources. If all we want is to count the number of vertices per type, we
-won&rsquo;t be interested in all the details a default traversal will produce, so we need something
-that creates only very small results.</p>
-
-<p>For this task, we can create a very specialized visitor function that will be very efficient:</p>
-
-<figure class='code'><figcaption><span>registering a visitor that counts vertices by type</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">aqlfunctions</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/functions&quot;</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="nx">aqlfunctions</span><span class="p">.</span><span class="nx">register</span><span class="p">(</span><span class="s2">&quot;myfunctions::vertexTypeCounter&quot;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">config</span><span class="p">,</span> <span class="nx">result</span><span class="p">,</span> <span class="nx">vertex</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">length</span> <span class="o">===</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>    <span class="nx">result</span><span class="p">.</span><span class="nx">push</span><span class="p">({</span> <span class="p">});</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">vertexType</span> <span class="o">=</span> <span class="nx">vertex</span><span class="p">.</span><span class="nx">type</span><span class="p">;</span>
-</span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="nx">result</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">hasOwnProperty</span><span class="p">(</span><span class="nx">vertexType</span><span class="p">))</span> <span class="p">{</span>
-</span><span class='line'>    <span class="nx">result</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="nx">vertexType</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="k">else</span> <span class="p">{</span>
-</span><span class='line'>    <span class="nx">result</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="nx">vertexType</span><span class="p">]</span><span class="o">++</span><span class="p">;</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">});</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Our invocation AQL query looks like this:</p>
-
-<figure class='code'><figcaption><span>invoking the vertex type counter</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>LET params = { 
-</span><span class='line'>  visitor : "myfunctions::vertexTypeCounter", 
-</span><span class='line'>  visitorReturnsResults : false 
-</span><span class='line'>}
-</span><span class='line'>FOR result IN TRAVERSAL(v, e, "v/world", "inbound", params) 
-</span><span class='line'>  RETURN result</span></code></pre></td></tr></table></div></figure>
-
-
-<p>One important thing to note is that the <em>visitorReturnsResults</em> traversal parameter was set to
-<em>false</em>. This means that the visitor function will not return any values. This is intentional.</p>
-
-<p>Instead, this visitor will be modifying the traversal&rsquo;s result incrementally, in place.
-In the beginning, there won&rsquo;t be any result, so the visitor will be pushing an empty object into it.
-This object will contain the counters, with the type names as attribute keys. For every vertex
-type encountered, a key will be created in this object and initialized with 1. If the key
-already existed, it will be incremented.</p>
-
-<p>The final result of this visitor for the example graph will be:</p>
-
-<figure class='code'><figcaption><span>query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="s2">&quot;root&quot;</span> <span class="o">:</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'>    <span class="s2">&quot;continent&quot;</span> <span class="o">:</span> <span class="mi">6</span><span class="p">,</span>
-</span><span class='line'>    <span class="s2">&quot;country&quot;</span> <span class="o">:</span> <span class="mi">40</span><span class="p">,</span>
-</span><span class='line'>    <span class="s2">&quot;capital&quot;</span> <span class="o">:</span> <span class="mi">40</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Not only is this the final result of the AQL query, but also the intermediate result that the
-<code>TRAVERSAL</code> has produced. Cleary this will not cost as much memory as if the <code>TRAVERSAL</code> had
-copied all visited vertex data and paths to them into the intermediate result.</p>
 ]]></content>
   </entry>
   
@@ -3803,7 +3856,7 @@ the time. So it&rsquo;s better used for throw-away tests only.</p>
 
 <h2>Installing build tools and libraries</h2>
 
-<p>Now that the repository has been cloned into directory <em>ArangoDB</em>,
+<p>Now that the repository has been cloned into directory <em>arangodb</em>,
 we can install the required tools and libraries we need to build
 from source:</p>
 
@@ -3882,7 +3935,7 @@ connect to it with the ArangoShell.</p>
 <p>Note that if you used Vagrant, you will first need to connect to the
 Vagrant box in the other terminal using <code>vagrant ssh</code> from the directory
 you ran the <code>vagrant init</code> in. When connect to the Vagrant box, don&rsquo;t
-forget to switch into the <code>ArangoDB</code> directory.</p>
+forget to switch into the <code>arangodb</code> directory.</p>
 
 <p>Once you&rsquo;re in the correct directory, just issue this:</p>
 
@@ -3897,7 +3950,7 @@ instance.</p>
 <p>Time to make some changes in the code. A good place to start is usually
 <code>main</code>. Here are a few places to get you started:</p>
 
-<pre><code>~/ArangoDB$ grep -r "int main" arangod/ arangosh/
+<pre><code>~/arangodb$ grep -r "int main" arangod/ arangosh/
 arangod/RestServer/arangod.cpp:int main (int argc, char* argv[]) {
 arangosh/Benchmark/arangob.cpp:int main (int argc, char* argv[]) {
 arangosh/V8Client/arangorestore.cpp:int main (int argc, char* argv[]) {
