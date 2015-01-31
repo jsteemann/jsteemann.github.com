@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-01-31T19:37:17+01:00</updated>
+  <updated>2015-01-31T19:40:29+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -61,6 +61,8 @@ eligible for being moved down.</p>
 
 <p><img src="http://jsteemann.github.io/downloads/screenshots/explain-25.png"></p>
 
+<p>As we can see from the changed id sequence on the left, the calculation was moved down.</p>
+
 <p>What does this buy us? For the simple query above, with the <code>test</code> collection containing
 100.000 documents with <code>value</code> ranging from 0 to 99,999, the results are as follows:</p>
 
@@ -76,7 +78,7 @@ without.</li>
 
 
 <p>This is quite a nice speedup, especially when taking into account how simple the optimizer
-rule is. The effects may be even greater for queries that can contain multiple calculations
+rule is. The effects may be even greater for queries that contain multiple calculations
 that can be pushed beyond filters, or for more expensive calculations.</p>
 
 <p>Of course the best solution for the above query would be to use a skiplist index on
