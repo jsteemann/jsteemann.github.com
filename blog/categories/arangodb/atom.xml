@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-01-30T11:45:19+01:00</updated>
+  <updated>2015-01-31T19:37:17+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,76 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[YAOR - Yet Another Optimizer Rule]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/"/>
+    <updated>2015-01-31T18:51:30+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule</id>
+    <content type="html"><![CDATA[<p>A quick post that showcases the new optimizer rule <code>move-calculations-down</code> that was added
+in ArangoDB 2.5 (current <code>devel</code> branch).</p>
+
+<!-- more -->
+
+
+<p>Consider the following simple query:</p>
+
+<p><code>plain Example query
+FOR doc IN test
+  LET calculated = CONCAT('foo', doc.value)
+  FILTER doc.value &lt; 100
+  RETURN calculated
+</code></p>
+
+<p>If no indexes are present in collection <code>test</code>, the execution plan will look
+like this in 2.4:</p>
+
+<p><img src="/downloads/screenshots/explain-24.png"></p>
+
+<p>The plan can be improved a bit. While there are no indexes to exploit, the calculation
+for <code>calculated</code> can be pushed beyond the execution of the <code>FILTER</code>. This will be very
+beneficial if the calculation is expensive and the <code>FILTER</code> can prune a lot of documents.</p>
+
+<p>In 2.5, there is an optimizer rule <code>move-calculations-down</code> that will do this. It will
+move all eligible calculations as far down in the plan as possible. A calculation obviously can
+be moved down a step only if the successor step does not depend on its result.</p>
+
+<p>Additionally, a calculation will not be moved beyond a <code>COLLECT</code> operation, because
+<code>COLLECT</code> changes which variables are visible in a scope. Finally, a calculation will not
+be moved down inside a <code>FOR</code> loop, in order to avoid repeated calculations.</p>
+
+<p>In the example query, the step following the <code>LET</code> calculation was a <code>FILTER</code>.
+The filter condition does not depend on the result of <code>calcuated</code>, so the calculation is
+eligible for being moved down.</p>
+
+<p>The resulting execution plan will look like this in 2.5:</p>
+
+<p><img src="/downloads/screenshots/explain-25.png"></p>
+
+<p>What does this buy us? For the simple query above, with the <code>test</code> collection containing
+100.000 documents with <code>value</code> ranging from 0 to 99,999, the results are as follows:</p>
+
+<ul>
+<li>if the filter leaves only 0.1 % of the documents pass, execution time goes down from
+0.87 seconds to 0.17 seconds thanks to the rule</li>
+<li>if the filter lets 1 % of the documents pass, execution time is 0.21 seconds with the rule,
+and 0.91 without</li>
+<li>if the filter lets 10 % of the documents pass, execution time is 0.25 s, vs. 0.91 seconds
+without.</li>
+<li>if the filter lets all documents pss, there is no difference in execution time</li>
+</ul>
+
+
+<p>This is quite a nice speedup, especially when taking into account how simple the optimizer
+rule is. The effects may be even greater for queries that can contain multiple calculations
+that can be pushed beyond filters, or for more expensive calculations.</p>
+
+<p>Of course the best solution for the above query would be to use a skiplist index on
+<code>value</code>, but that&rsquo;s a different story. The optimizer rule shown here is orthogonal to
+using indexes, so queries already using indexes might still benefit from the rule if they
+contain additional calculations or further filters which cannot be satifisfied by indexes.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Using Custom Visitors in AQL Graph Traversals]]></title>
@@ -793,7 +863,7 @@ will send to the ArangoDB server to have it explained.</p>
 <p>But it doesn&rsquo;t print a voluminous JSON object. This one is for developers
 with a full schedule.</p>
 
-<p>{% img /downloads/screenshots/explainer.png %}</p>
+<p><img src="/downloads/screenshots/explainer.png"></p>
 
 <!-- more -->
 
@@ -810,7 +880,7 @@ promising from my point of view.</p>
 <p>For example, a poor man&rsquo;s graph query (using a subquery to join connected
 edges) still prints nicely:</p>
 
-<p>{% img /downloads/screenshots/explainer-inv.png %}</p>
+<p><img src="/downloads/screenshots/explainer-inv.png"></p>
 
 <p>As usual, your mileage may vary. If you&rsquo;re inspecting complex queries
 with it, the lines printed may get too long and wrap. The output won&rsquo;t be
@@ -1657,221 +1727,6 @@ implemented by the V8 team in future versions of V8.</p>
 
 <p>Apart from that, a lot of nice ES6 features are there already and can be used
 in ArangoDB applications.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Improvements for 2.4]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/12/12/aql-improvements-for-24/"/>
-    <updated>2014-12-12T23:35:08+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/12/12/aql-improvements-for-24</id>
-    <content type="html"><![CDATA[<p>While on a retreat in Belgium, we found some spare time to
-work on improvements for AQL. These will be shipped with
-ArangoDB version 2.4, and are already available in the devel
-version for testing from now on.</p>
-
-<p>Here&rsquo;s a short overview of the improvements:</p>
-
-<!-- more -->
-
-
-<h1>COLLECT WITH COUNT</h1>
-
-<p>A common use case in query languages is to count the number of
-documents returned by a query. The AQL solution for this has been
-to use the <code>LENGTH</code> function and a subquery:</p>
-
-<p>```
-RETURN LENGTH((
-  FOR doc IN collection</p>
-
-<pre><code>FILTER doc.someAttribute == someValue
-RETURN doc
-</code></pre>
-
-<p>  )
-)
-```</p>
-
-<p>This works but is probably unintuitive for people which have
-used SQL for years.</p>
-
-<p>We therefore now allow using the following alternative syntax,
-using the new <code>COLLECT ... WITH COUNT INTO ...</code> clause:</p>
-
-<p><code>
-FOR doc IN collection
-  FILTER doc.someAttribute == someValue
-  COLLECT WITH COUNT INTO length
-  RETURN length
-</code></p>
-
-<p>This query returns just the total number of matches, but not the
-matches themselves. As this query is made for counting only, it
-can be executed more efficiently than the original query.
-In the query with the <code>COUNT INTO ...</code> clause, the documents found
-by the filter condition will only be counted and then instantly
-discarded. They will not be shipped around inside the query, from
-the subquery to the top level into the <code>LENGTH()</code> function.</p>
-
-<p>This new variant will be drastically faster than the old variant
-if there is no filter condition at all. When there is a filter
-condition, evaluating the filter condition might be the most computationally
-expensive part of the query. But even then, the new variant should
-be faster than the old one and use less memory.</p>
-
-<p>As a bonus, there is no need to use a subquery anymore, though the
-subquery variant is still fully supported and will be.</p>
-
-<p><code>COLLECT ... WITH COUNT</code> also works for counting the number of items
-per group:</p>
-
-<p><code>
-FOR doc IN collection
-  COLLECT value = doc.someAttribute WITH COUNT INTO length
-  RETURN { value: value, length : length }
-</code></p>
-
-<p>This returns the number of matches for each distinct <code>value</code>.</p>
-
-<p>A quick unscientific benchmark reveals that the specialized
-<code>WITH COUNT</code> clause seems to be faster than the old variant.
-The following results show the differences for a collection with
-500,000 small documents:</p>
-
-<p>The old variant that counts the number of documents per age runs
-in 4.75 seconds on my laptop:</p>
-
-<p><code>
-FOR doc IN collection
-  FILTER doc.age &lt; 20
-  COLLECT age = doc.age INTO g
-  RETURN { age: age, length: LENGTH(g) }
-</code></p>
-
-<p>The new variant produces the same result, but runs in 0.6 seconds locally:</p>
-
-<p><code>
-FOR doc IN collection
-  COLLECT age = doc.age WITH COUNT INTO length
-  RETURN { age: age, length: length }
-</code></p>
-
-<p>A notable speedup can also be observed if only a fraction of the
-groups is built (here: 1/8). The old variant for this runs in 0.6
-seconds:</p>
-
-<p><code>
-FOR doc IN collection
-  FILTER doc.age &lt; 20
-  COLLECT age = doc.age INTO g
-  RETURN { age: age, length: LENGTH(g) }
-</code></p>
-
-<p>The new variant runs in 0.12 seconds:</p>
-
-<p><code>
-FOR doc IN collection
-  FILTER doc.age &lt; 20
-  COLLECT age = doc.age WITH COUNT INTO length
-  RETURN { age: age, length: length }
-</code></p>
-
-<p>The absolute times may vary greatly depending on the type of documents and
-the hardware used, but in general the new variant should provide a
-speedup.</p>
-
-<h1>COLLECT with group expression</h1>
-
-<p>Finally, <code>COLLECT ... INTO</code> has been extended to support just another variant
-that can reduce the amount of copying inside a query.</p>
-
-<p>Let&rsquo;s have a look at this example query:</p>
-
-<p><code>
-FOR doc IN collection
-  COLLECT age = doc.age INTO g
-  RETURN { age: age, maxDate: MAX(g[*].doc.dateRegistered) }
-</code></p>
-
-<p>In the above query, for each distinct <code>age</code> value, all documents are collected
-into variable <code>g</code>. When the collecting phase is over, there will be an iteration
-over all the collected documents again, to extract their <code>dateRegistered</code> value.
-After that, the <code>dateRegistered</code> values will be passed into the <code>MAX()</code> function.</p>
-
-<p>This query can be made more efficient now as follows:</p>
-
-<p><code>
-FOR doc IN collection
-  COLLECT age = doc.age INTO g = doc.dateRegistered
-  RETURN { age: age, maxDate: MAX(g) }
-</code></p>
-
-<p>The new thing about this variant is the expression following the <code>INTO</code>.
-Having an expression there allows controlling what values are collected for
-each group. Using a projection expression here can greatly reduce the
-amount of copying afterwards, and thus make the query more efficient than if
-it had to copy the entire documents.</p>
-
-<h1>Removing filters covered by indexes</h1>
-
-<p><code>FILTER</code> conditions which are completely covered by indexes will
-now be removed from the execution plan if it is safe to do so.
-Dropping the <code>FILTER</code> statements allows the optimizer to get rid
-of not only the <em>FilterNode</em>, but also its corresponding <em>CalculationNode</em>.
-This will save a lot of computation if the condition needs to be checked
-for many documents.</p>
-
-<p>For example, imagine the following query:</p>
-
-<p><code>
-FOR doc IN collection
-  FILTER doc.value &lt; 10
-  RETURN doc
-</code></p>
-
-<p>If there is a (skiplist) index on <code>doc.value</code>, the optimizer may
-decide to use this index. It will replace the query&rsquo;s <em>EnumerateCollectionNode</em>
-with an <em>IndexRangeNode</em> instead first. The <em>IndexRangeNode</em> will scan the index
-on <code>doc.value</code> for the range [-inf, 10).</p>
-
-<p>Following that, the optimizer rule <code>remove-filter-covered-by-index</code>
-should fire and detect that the <code>FILTER</code> condition is already covered
-by the <em>IndexRangeNode</em> alone. It can thus remove the <em>FilterNode</em>.
-This also makes the <em>CalculationNode</em> of the <em>FilterNode</em> obsolete,
-so these two nodes will be removed and computation is saved.</p>
-
-<h1>Removing brackets for subquery function call parameters</h1>
-
-<p>Since the beginning of AQL, the parser required the user the put
-subqueries that were used as function parameters inside two pairs of
-brackets.</p>
-
-<p>For example, the following query did not parse in 2.3 and before:
-<code>
-RETURN LENGTH(FOR doc IN collection RETURN doc)
-</code></p>
-
-<p>Instead, it needed to be written as:
-<code>
-RETURN LENGTH((FOR doc IN collection RETURN doc))
-</code></p>
-
-<p>If you didn&rsquo;t notice the difference, the latter version of the query had
-duplicate parentheses. The requirement to use duplicate parentheses has
-caused several support questions over time, and this can be taken as a
-proof that it was not intuitive.</p>
-
-<p>The requirement for duplicate parentheses was an artifact required by the
-AQL parser grammar in order to parse the query correctly.</p>
-
-<p>For 2.4, the AQL grammar has been cleaned up in this respect.
-Duplicate parentheses are still allowed and work fine in 2.4 but they are not
-required anymore. This should make the first steps with AQL a bit easier
-and more intuitive.</p>
-
-<p>We&rsquo;re 1.5 days into our retreat now. Maybe there&rsquo;ll be some more
-AQL-related improvements in the end. Let&rsquo;s see.</p>
 ]]></content>
   </entry>
   

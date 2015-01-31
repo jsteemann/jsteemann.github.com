@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-01-30T11:45:15+01:00</updated>
+  <updated>2015-01-31T19:37:17+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,79 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[YAOR - Yet Another Optimizer Rule]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/"/>
+    <updated>2015-01-31T18:51:30+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule</id>
+    <content type="html"><![CDATA[<p>A quick post that showcases the new optimizer rule <code>move-calculations-down</code> that was added
+in ArangoDB 2.5 (current <code>devel</code> branch).</p>
+
+<!-- more -->
+
+
+<p>Consider the following simple query:</p>
+
+<figure class='code'><figcaption><span>Example query </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN test 
+</span><span class='line'>  LET calculated = CONCAT('foo', doc.value) 
+</span><span class='line'>  FILTER doc.value &lt; 100 
+</span><span class='line'>  RETURN calculated</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If no indexes are present in collection <code>test</code>, the execution plan will look
+like this in 2.4:</p>
+
+<p><img src="http://jsteemann.github.io/downloads/screenshots/explain-24.png"></p>
+
+<p>The plan can be improved a bit. While there are no indexes to exploit, the calculation
+for <code>calculated</code> can be pushed beyond the execution of the <code>FILTER</code>. This will be very
+beneficial if the calculation is expensive and the <code>FILTER</code> can prune a lot of documents.</p>
+
+<p>In 2.5, there is an optimizer rule <code>move-calculations-down</code> that will do this. It will
+move all eligible calculations as far down in the plan as possible. A calculation obviously can
+be moved down a step only if the successor step does not depend on its result.</p>
+
+<p>Additionally, a calculation will not be moved beyond a <code>COLLECT</code> operation, because
+<code>COLLECT</code> changes which variables are visible in a scope. Finally, a calculation will not
+be moved down inside a <code>FOR</code> loop, in order to avoid repeated calculations.</p>
+
+<p>In the example query, the step following the <code>LET</code> calculation was a <code>FILTER</code>.
+The filter condition does not depend on the result of <code>calcuated</code>, so the calculation is
+eligible for being moved down.</p>
+
+<p>The resulting execution plan will look like this in 2.5:</p>
+
+<p><img src="http://jsteemann.github.io/downloads/screenshots/explain-25.png"></p>
+
+<p>What does this buy us? For the simple query above, with the <code>test</code> collection containing
+100.000 documents with <code>value</code> ranging from 0 to 99,999, the results are as follows:</p>
+
+<ul>
+<li>if the filter leaves only 0.1 % of the documents pass, execution time goes down from
+0.87 seconds to 0.17 seconds thanks to the rule</li>
+<li>if the filter lets 1 % of the documents pass, execution time is 0.21 seconds with the rule,
+and 0.91 without</li>
+<li>if the filter lets 10 % of the documents pass, execution time is 0.25 s, vs. 0.91 seconds
+without.</li>
+<li>if the filter lets all documents pss, there is no difference in execution time</li>
+</ul>
+
+
+<p>This is quite a nice speedup, especially when taking into account how simple the optimizer
+rule is. The effects may be even greater for queries that can contain multiple calculations
+that can be pushed beyond filters, or for more expensive calculations.</p>
+
+<p>Of course the best solution for the above query would be to use a skiplist index on
+<code>value</code>, but that&rsquo;s a different story. The optimizer rule shown here is orthogonal to
+using indexes, so queries already using indexes might still benefit from the rule if they
+contain additional calculations or further filters which cannot be satifisfied by indexes.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Using Custom Visitors in AQL Graph Traversals]]></title>
@@ -5328,238 +5401,6 @@ as a replication master, but should work in cases when replication is not used.<
 <p>The option should not have a big effect if documents are greatly or at least
 somewhat homogenous. For these cases, ArangoDB 2.2 with its WAL should already
 be as fast as 2.1 (or even faster).</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[How ArangoDB's Write-ahead Log Works]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/08/06/how-arangodbs-write-ahead-log-works/"/>
-    <updated>2014-08-06T21:14:00+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/08/06/how-arangodbs-write-ahead-log-works</id>
-    <content type="html"><![CDATA[<p>Since version 2.2, ArangoDB stores all data-modification operations in its
-<em>write-ahead log</em> (abbreviated <em>WAL</em>). The introduction of the WAL massively
-changed how data are stored in ArangoDB.</p>
-
-<!-- more -->
-
-
-<h1>What&rsquo;s in the WAL?</h1>
-
-<p>The WAL contains data of all data-modification operations that were executed in
-the ArangoDB server instance. Operations are written to the WAL in the order of
-execution. The following types of operations are logged to the WAL:</p>
-
-<ul>
-<li>creating, updating, replacing or removing documents</li>
-<li>creating, modifying or dropping collections and their indexes</li>
-<li>creating or dropping databases</li>
-</ul>
-
-
-<p>The WAL is used for all databases of an ArangoDB server. Database ids are stored
-in the WAL in order to tell data from different databases apart.</p>
-
-<h1>Recovery using the WAL</h1>
-
-<p>Should the ArangoDB server crash, it will replay its write-ahead
-logs at restart. Replaying the logs will make the server recover the same
-state of data as before the crash.</p>
-
-<p>Any document-modification operations might belong to a transaction. Transaction
-data are also stored in the write-ahead log, allowing the recovery of committed
-transactions and preventing the recovery of aborted or unfinished transactions.</p>
-
-<p>Let&rsquo;s assume the following operations are executed in an ArangoDB server in this
-order&hellip;</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Seq#  |  Operation type       |  Transaction#  |  Context
-</span><span class='line'>------+-----------------------+----------------+---------------------------------------
-</span><span class='line'>   1  |  start transaction    |           773  |  database "_system"
-</span><span class='line'>   2  |  insert document      |           773  |  collection "test", key "foo"
-</span><span class='line'>   3  |  start transaction    |           774  |  database "_system"
-</span><span class='line'>   4  |  insert document      |           774  |  collection "mycollection", key "bar"
-</span><span class='line'>   5  |  start transaction    |           775  |  database "_system"
-</span><span class='line'>   6  |  update document      |           775  |  collection "boom", key "test"
-</span><span class='line'>   7  |  abort transaction    |           774  |  -                
-</span><span class='line'>   8  |  remove document      |           773  |  collection "test", key "baz"
-</span><span class='line'>   9  |  commit transaction   |           773  |  -     </span></code></pre></td></tr></table></div></figure>
-
-
-<p>&hellip;and then the server goes down due to a power outage.</p>
-
-<p>On server restart, the WAL contents will be replayed, so the server will redo the
-above operations. It will find out that operations #2 and #8 belong to transaction #773.
-Transaction #773 was already committed, so all of its operations must and will be
-recovered.</p>
-
-<p>Further it will find out that operation #4 belongs to transaction #774, which was
-aborted by the user. Therefore, this operation will not be replayed but ignored.</p>
-
-<p>Finally, it will find operation #6 belongs to transaction #775. For this transaction,
-there is neither an abort nor a commit operation in the log. Because the transaction
-was never committed, all of its operations are not replayed at restart and the server
-will behave as if the transaction never happened.</p>
-
-<h1>WAL and replication</h1>
-
-<p>A side-effect of having a write-ahead log is that it can also be used for replication.
-When a slave server fetches the latest changes from the master, the master can simply
-read the operations from its WAL. Data in the WAL are self-contained, meaning the
-master can efficiently compile the list of changes using only the WAL and without
-performing lookups elsewhere.</p>
-
-<p>The WAL is there and will be used anyway, enabling any ArangoDB server to be used as
-a replication master without any configuration. Previous versions of ArangoDB (without
-the WAL) required setting up an extra component for replication logging. This
-requirement is now gone.</p>
-
-<h1>Organization of the WAL</h1>
-
-<p>The WAL is actually a collection of logfiles. Logfiles are named <code>logfile-xxxx.db</code>
-(with xxxx being the logfile&rsquo;s id). Logfiles with lower ids are older than logfiles
-with higher ids. By default, the logfiles reside in the <em>journals</em> sub-directory of
-ArangoDB&rsquo;s database directory.</p>
-
-<p>At any point in time, one of the logfiles will be the <em>active</em> logfile. ArangoDB will
-write all data-modifications to the active logfile. Writing is append-only, meaning
-ArangoDB will never overwrite existing logfile data. To ensure logfile integrity,
-a CRC32 checksum is calculated for each logfile entry. This checksum is validated when
-a logfile is replayed. When there is a checksum mismatch, this indicates a disk error
-or an incompletely written operation &ndash; in both cases it won&rsquo;t be safe to recover and
-replay the operation.</p>
-
-<p>If an operation can&rsquo;t be written into the active logfile due to lack of space, the
-active logfile will be closed and a new logfile will become the active logfile.</p>
-
-<p>A background thread will open new logfiles before the current active one is fully
-filled up. This is done to ensure that no waiting is required when there is a switch
-of the active logfile.</p>
-
-<p>By default, each logfile has a size of 32 MB, allowing lots of operations to be stored
-in it. If you want to adjust the default size, the option <code>--wal.logfile-size</code> is for you.</p>
-
-<h1>Logfile synchronization</h1>
-
-<p>Writes to logfiles are synchronized to disk automatically in a configurable interval
-(the option to look for is <code>--wal.sync-interval</code>). To get immediate synchronization
-of operations, operations can be run with the <code>waitForSync</code> attribute set to <code>true</code>,
-or on collections with the <code>waitForSync</code> attribute being set.</p>
-
-<p>For example, the following operations will have been synchronized to disk when the
-operations return:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="c1">// operation will be synchronized because the `waitForSync` attribute </span>
-</span><span class='line'><span class="c1">// is set on operation level</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">test</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">foo</span><span class="o">:</span> <span class="s2">&quot;bar&quot;</span> <span class="p">},</span> <span class="p">{</span> <span class="nx">waitForSync</span><span class="o">:</span> <span class="kc">true</span> <span class="p">});</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// operation will be synchronized because the `waitForSync` attribute </span>
-</span><span class='line'><span class="c1">// is set on collection level</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">mycollection</span><span class="p">.</span><span class="nx">properties</span><span class="p">({</span> <span class="nx">waitForSync</span><span class="o">:</span> <span class="kc">true</span> <span class="p">});</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">mycollection</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">foo</span><span class="o">:</span> <span class="s2">&quot;bar&quot;</span> <span class="p">});</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>When no immediate synchronization has been requested, ArangoDB will have a background
-thread periodically call <code>msync</code> for not-yet synchronized logfile regions. Multiple
-operations are synchronized together because they reside in adjacent memory regions.
-That means automatic synchronization can get away with far less calls to <code>msync</code> than
-there are operations.</p>
-
-<h1>Storage overhead</h1>
-
-<p>Documents stored in the WAL (as part of an insert, update or replace operation) are
-stored in a format that contains the document values plus the document&rsquo;s shape.
-This allows reading a document fully from a WAL entry without looking up shape
-information elsewhere, making it faster and also more reliable.</p>
-
-<p>Storing shape information in the WAL has a storage space overhead though. The overhead
-should not matter much if a logfile contains a lot of documents with identical shapes.
-ArangoDB will make sure each shape is only stored once per WAL logfile. This has
-turned out to be a rather good solution: it reduces WAL storage space requirements
-greatly, and still is reliable and fast, as shape lookups are local to the current
-WAL logfile only.</p>
-
-<p>The overhead of storing shape information in the WAL will matter most when documents
-have completely different shapes. In this case, no shape information will ever be
-re-used. While this may happen in benchmarks with synthetic data, we found that in
-reality there are often lots of identically-structured documents and thus a lot of
-potential for re-using shapes.</p>
-
-<p>Note that storing shape information in the WAL can be turned off to reduce overhead.
-ArangoDB provides the option <code>--wal.suppress-shape-information</code> for this purpose.
-When set to <code>true</code>, no shape information will be written to the WAL. Note that by
-default, the option is set to <code>false</code> and that the option shouldn&rsquo;t be changed if
-the server is to be used as a replication master. If documents aren&rsquo;t too heterogenous,
-setting the option to <code>true</code> won&rsquo;t help much. It will help a lot if all documents
-that are stored have different shapes (which we consider unrealistic, but we still
-provide the option to reduce overhead in this case).</p>
-
-<h1>WAL cleanup</h1>
-
-<p>WAL logfiles that are completely filled are subject to garbage collection. WAL
-garbage collection is performed by a separate garbage collector thread. The thread
-will copy over the still-relevant operations into the collection datafiles.
-After that, indexes will be adjusted to point to the new storage locations.
-Documents that have become obsolete due to later changes will not be copied from
-the WAL into the collection datafiles at all.</p>
-
-<p>Garbage-collected logfiles are deleted by ArangoDB automatically if there exist
-more of these &ldquo;historic&rdquo; logfiles than configured. The number of historic logfiles
-to keep before deletion is configured using the option <code>--wal.historic-logfiles</code>.</p>
-
-<p>If no replication is to be used, there is no need to keep any historic logfiles.
-They have no purpose but to provide a history of recent changes. The more history
-there is on a master server, the longer is the period for which slave servers can
-request changes for.
-How much history is needed depends on how reliable the network connection between
-a replication slave and the master is. If the network connection is known to fail
-periodically, it may be wise to keep a few historic logfiles on the master, so the
-slave can catch up from the point it stopped when the network connection is
-re-established.</p>
-
-<p>If network connections are reliable or no replication is to be used at all, the
-number of historic logfiles can be set to a low value to save disk space.</p>
-
-<h1>Side-effects of the WAL</h1>
-
-<p>The WAL can be used for replication, removing the requirement to explicitly turn
-on the separate logging of operations for replication purposes. This is a clear
-improvement over previous versions of ArangoDB.</p>
-
-<p>The introduction of the WAL also caused a few other minor changes:</p>
-
-<p>While documents are stored in a WAL logfile, their sizes won&rsquo;t be included in
-the output of the <code>figures</code> method of the collection. When a WAL logfile gets
-garbage-collected, documents will physically be moved into the collection logfiles
-and the figures will be updated.</p>
-
-<p>Note that the output of the <code>count</code> method is not affected by whether a document
-is stored in the WAL or in a collection logfile.</p>
-
-<p>Another side-effect of storing operations in the WAL first is that no collection
-logfiles will be created when the first document is inserted. So there will be
-collections with documents but without any logfiles, at least temporarily until
-the WAL garbage collection kicks in and will transfer data from the WAL to the
-collection logfiles.</p>
 ]]></content>
   </entry>
   

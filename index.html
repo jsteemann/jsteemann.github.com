@@ -9,8 +9,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="This post is about some recent extensions for the AQL graph traversal functionality
-in ArangoDB. These extensions allow invoking user-defined &hellip;">
+  <meta name="description" content="A quick post that showcases the new optimizer rule move-calculations-down that was added
+in ArangoDB 2.5 (current devel branch). ">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -78,6 +78,48 @@ in ArangoDB. These extensions allow invoking user-defined &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/01/31/yaor-yet-another-optimizer-rule/">YAOR - Yet Another Optimizer Rule</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-01-31T18:51:30+01:00" pubdate data-updated="true">Jan 31<span>st</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>A quick post that showcases the new optimizer rule <code>move-calculations-down</code> that was added
+in ArangoDB 2.5 (current <code>devel</code> branch).</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/01/31/yaor-yet-another-optimizer-rule/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -582,61 +624,6 @@ creating such test setups is so much easier.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/">Getting Core Dumps of Failed TravisCI Builds</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-10-30T23:05:48+01:00" pubdate data-updated="true">Oct 30<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>I recently wrote about <a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">using TravisCI for continuously testing C++11 projects</a>.</p>
-
-<p><strong>Now, what if a build fails?</strong></p>
-
-<p>Especially for C and C++ projects, build failures may mean crashed
-programs. In a local setup, the usual way to analyze program crashes
-is to manually inspect the core files that are written on crash.</p>
-
-<p>With TravisCI, there is no way to log in to a build machine and
-inspect a core dump interactively. There is no SSH access to
-the build machines. TravisCI does not even persist any state of
-builds but the result and the log output.</p>
-
-<p>There is a way to get to the core dumps, but it was fiddly to find
-out and set up.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -658,6 +645,10 @@ out and set up.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/01/31/yaor-yet-another-optimizer-rule/">YAOR - Yet Another Optimizer Rule</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/01/28/using-custom-visitors-in-aql-graph-traversals/">Using Custom Visitors in AQL Graph Traversals</a>
       </li>
     
@@ -673,10 +664,6 @@ out and set up.</p>
         <a href="/blog/2014/12/19/using-es6-features-in-arangodb/">Using ES6 Features in ArangoDB</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2014/12/14/99-bottles-of-beer/">99 Bottles of Beer</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -685,7 +672,7 @@ out and set up.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (6)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (17)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (2)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (4)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (4)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (7)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (18)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (2)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (4)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (4)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 
   

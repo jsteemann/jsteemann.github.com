@@ -4,7 +4,7 @@
   <title><![CDATA[Category: C++ | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/c-plus-plus/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-01-30T11:45:19+01:00</updated>
+  <updated>2015-01-31T19:37:17+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -73,7 +73,7 @@ after_failure:
 
 <p>A failed build might produce output like this:</p>
 
-<p>{% img /downloads/screenshots/travis-ci-gdb.png %}</p>
+<p><img src="/downloads/screenshots/travis-ci-gdb.png"></p>
 
 <p>I recommend compiling the executable to test with debug symbols on and
 with all optimizations turned off (i.e. compiler options <code>-g -O0</code>).
