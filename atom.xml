@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-02-02T19:04:14+01:00</updated>
+  <updated>2015-02-03T01:05:19+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,504 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Using Dynamic Attribute Names in AQL]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/"/>
+    <updated>2015-02-03T00:12:39+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql</id>
+    <content type="html"><![CDATA[<p>On our mailing list, there is quite often the question whether attribute names in objects
+returned from AQL queries can be made dynamic.</p>
+
+<p>Here&rsquo;s a (non-working) example query for this:</p>
+
+<figure class='code'><figcaption><span>example query that does not work</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  RETURN { doc.type : doc.value }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The intention in the above query obviously is to use the dynamic value from <code>doc.type</code> as
+an attribute name in the result object and not to have an attribute named <code>"doc.type"</code>. This
+feature is probably in the top 20 of the most-often wished features.</p>
+
+<!-- more -->
+
+
+<p>However, the above query won&rsquo;t even parse. The AQL grammar only allows string values
+left of the colon in an object definition. Non-quoted strings are allowed there too, and are
+implicitly turned into quoted strings. It works similar to how object literals are defined
+in JavaScript:</p>
+
+<figure class='code'><figcaption><span>using unquoted and quoted string attribute names</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN { 
+</span><span class='line'>  foo : "bar",
+</span><span class='line'>  "baz" : "qux"
+</span><span class='line'>}</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Why not allow arbitrary expression left of the colon? The reason is simple: this would cause
+ambiguity and probably have side-effects. For an example, have a look at the following query:</p>
+
+<figure class='code'><figcaption><span>which attribute name to use here?</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  LET type = doc.type;
+</span><span class='line'>  RETURN { type : doc.value }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If the <code>type</code> attribute name inside the object definition is interpreted as a string literal
+as it currently is an AQL (and always was), then the resulting attribute name is just <code>"type"</code>.</p>
+
+<p>If the <code>type</code> attribute name would now be intepreted as an expression, it would get the value
+that was assigned to the variable <code>type</code> by the <code>LET</code> statement. Removing the <code>LET</code> from the
+query would change the attribute name in the result back to the string literal <code>"type"</code>.</p>
+
+<p>The ambiguity could be solved by telling the parser what to do in such cases. While technically
+this could be working, I think it may have too many unintended side-effects. I already mentioned
+that introducing a <code>LET</code> statement into the query would change the attribute name in the result.
+The same could also happen if a collection named <code>type</code> was added to the query. And it would
+break compatibility with existing queries.</p>
+
+<p>JavaScript has the same problem, and it wasn&rsquo;t solved portably yet. However, there is a proposal
+for ES6 that suggests enclosing attribute name expressions in <code>[</code> and <code>]</code>.</p>
+
+<p>To me, this looks like a good solution for the problem. It&rsquo;s two bytes more to type when keying
+queries, but the syntax is easy and explicit. There are no ambiguities.</p>
+
+<p>I prototyped this solution for AQL, so I could write:</p>
+
+<figure class='code'><figcaption><span>query using dynamic attribute names</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN 1..5 
+</span><span class='line'>  RETURN { 
+</span><span class='line'>    [ CONCAT('test', i) ] : i, 
+</span><span class='line'>    [ SUBSTITUTE(CONCAT('i is ', (i &lt;= 3 ? 'small' : 'not small')), { ' ' :  '_' } ) ] : i 
+</span><span class='line'>  }
+</span><span class='line'>
+</span><span class='line'>[ 
+</span><span class='line'>  { 
+</span><span class='line'>    "test1" : 1, 
+</span><span class='line'>    "i is small" : true 
+</span><span class='line'>  }, 
+</span><span class='line'>  { 
+</span><span class='line'>    "test2" : 2, 
+</span><span class='line'>    "i is small" : true 
+</span><span class='line'>  }, 
+</span><span class='line'>  { 
+</span><span class='line'>    "test3" : 3, 
+</span><span class='line'>    "i is small" : true 
+</span><span class='line'>  }, 
+</span><span class='line'>  { 
+</span><span class='line'>    "test4" : 4, 
+</span><span class='line'>    "i is not small" : false 
+</span><span class='line'>  }, 
+</span><span class='line'>  { 
+</span><span class='line'>    "test5" : 5, 
+</span><span class='line'>    "i is not small" : false 
+</span><span class='line'>  } 
+</span><span class='line'>]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>I only ran a few queries with this, but and they seemed to work. However, I haven&rsquo;t
+committed the feature yet. There might still be cases in which it doesn&rsquo;t work. Tests
+for the feature are also still missing. I hope I can finalize the implementation soon
+so it becomes available in some release.</p>
+
+<p>Until then, here is the Gist with the patch for the current devel branch with the
+current version:</p>
+
+<div><script src='https://gist.github.com/d6133add26d7b4d07f5a.js?file=aql-dynamic-attribute-names.diff'></script>
+<noscript><pre><code>diff --git a/arangod/Aql/Ast.cpp b/arangod/Aql/Ast.cpp
+index 8fcc742..77187bd 100644
+--- a/arangod/Aql/Ast.cpp
++++ b/arangod/Aql/Ast.cpp
+@@ -852,6 +852,19 @@ AstNode* Ast::createNodeObjectElement (char const* attributeName,
+ }
+ 
+ ////////////////////////////////////////////////////////////////////////////////
++/// @brief create an AST calculated object element node
++////////////////////////////////////////////////////////////////////////////////
++
++AstNode* Ast::createNodeCalculatedObjectElement (AstNode const* attributeName,
++                                                 AstNode const* expression) {
++  AstNode* node = createNode(NODE_TYPE_CALCULATED_OBJECT_ELEMENT);
++  node-&gt;addMember(attributeName);
++  node-&gt;addMember(expression);
++
++  return node;
++}
++
++////////////////////////////////////////////////////////////////////////////////
+ /// @brief create an AST function call node
+ ////////////////////////////////////////////////////////////////////////////////
+ 
+diff --git a/arangod/Aql/Ast.h b/arangod/Aql/Ast.h
+index 047b61b..efba2a3 100644
+--- a/arangod/Aql/Ast.h
++++ b/arangod/Aql/Ast.h
+@@ -483,6 +483,13 @@ namespace triagens {
+                                           AstNode const*);
+ 
+ ////////////////////////////////////////////////////////////////////////////////
++/// @brief create an AST calculated object element node
++////////////////////////////////////////////////////////////////////////////////
++
++        AstNode* createNodeCalculatedObjectElement (AstNode const*,
++                                                    AstNode const*);
++
++////////////////////////////////////////////////////////////////////////////////
+ /// @brief create an AST function call node
+ ////////////////////////////////////////////////////////////////////////////////
+ 
+diff --git a/arangod/Aql/AstNode.cpp b/arangod/Aql/AstNode.cpp
+index a28c269..07703a1 100644
+--- a/arangod/Aql/AstNode.cpp
++++ b/arangod/Aql/AstNode.cpp
+@@ -120,7 +120,8 @@ std::unordered_map&lt;int, std::string const&gt; const AstNode::TypeNames{
+   { static_cast&lt;int&gt;(NODE_TYPE_RANGE),                    &quot;range&quot; },
+   { static_cast&lt;int&gt;(NODE_TYPE_NOP),                      &quot;no-op&quot; },
+   { static_cast&lt;int&gt;(NODE_TYPE_COLLECT_COUNT),            &quot;collect count&quot; },
+-  { static_cast&lt;int&gt;(NODE_TYPE_COLLECT_EXPRESSION),       &quot;collect expression&quot; }
++  { static_cast&lt;int&gt;(NODE_TYPE_COLLECT_EXPRESSION),       &quot;collect expression&quot; },
++  { static_cast&lt;int&gt;(NODE_TYPE_CALCULATED_OBJECT_ELEMENT),&quot;calculated object element&quot; }
+ };
+ 
+ std::unordered_map&lt;int, std::string const&gt; const AstNode::valueTypeNames{
+@@ -170,7 +171,8 @@ static AstNode const* ResolveAttribute (AstNode const* node) {
+       for (size_t i = 0; i &lt; n; ++i) {
+         auto member = node-&gt;getMember(i);
+ 
+-        if (member != nullptr &amp;&amp; strcmp(member-&gt;getStringValue(), attributeName) == 0) {
++        if (member-&gt;type == NODE_TYPE_OBJECT_ELEMENT 
++            &amp;&amp; strcmp(member-&gt;getStringValue(), attributeName) == 0) {
+           // found the attribute
+           node = member-&gt;getMember(0);
+           if (attributeNames.empty()) {
+@@ -523,6 +525,7 @@ AstNode::AstNode (Ast* ast,
+     case NODE_TYPE_ARRAY:
+     case NODE_TYPE_RANGE:
+     case NODE_TYPE_NOP:
++    case NODE_TYPE_CALCULATED_OBJECT_ELEMENT:
+       break;
+   }
+ 
+@@ -1156,6 +1159,12 @@ bool AstNode::isSimple () const {
+     return true;
+   }
+ 
++  if (type == NODE_TYPE_CALCULATED_OBJECT_ELEMENT) {
++    // this one is explicitly non-simple!
++    setFlag(DETERMINED_SIMPLE);
++    return false;
++  } 
++
+   if (type == NODE_TYPE_OBJECT_ELEMENT || 
+       type == NODE_TYPE_ATTRIBUTE_ACCESS ||
+       type == NODE_TYPE_OPERATOR_UNARY_NOT) {
+@@ -1234,13 +1243,11 @@ bool AstNode::isConstant () const {
+     for (size_t i = 0; i &lt; n; ++i) {
+       auto member = getMember(i);
+ 
+-      if (member != nullptr) {
+       if (! member-&gt;isConstant()) {
+         setFlag(DETERMINED_CONSTANT);
+         return false;
+       }
+     }
+-    }
+ 
+     setFlag(DETERMINED_CONSTANT, VALUE_CONSTANT);
+     return true;
+@@ -1251,19 +1258,20 @@ bool AstNode::isConstant () const {
+ 
+     for (size_t i = 0; i &lt; n; ++i) {
+       auto member = getMember(i);
+-
+-      if (member != nullptr) {
++      if (member-&gt;type == NODE_TYPE_OBJECT_ELEMENT) {
+         auto value = member-&gt;getMember(0);
+ 
+-        if (value == nullptr) {
+-          continue;
+-        }
+-
+         if (! value-&gt;isConstant()) {
+           setFlag(DETERMINED_CONSTANT);
+           return false;
+         }
+       }
++      else {
++        // definitely not const!
++        TRI_ASSERT(member-&gt;type == NODE_TYPE_CALCULATED_OBJECT_ELEMENT);
++        setFlag(DETERMINED_CONSTANT);
++        return false;
++      }
+     }
+ 
+     setFlag(DETERMINED_CONSTANT, VALUE_CONSTANT);
+@@ -1438,6 +1446,24 @@ bool AstNode::isDeterministic () const {
+ }
+ 
+ ////////////////////////////////////////////////////////////////////////////////
++/// @brief whether or not the object node contains dynamically named attributes
++/// on its first level
++////////////////////////////////////////////////////////////////////////////////
++
++bool AstNode::containsDynamicAttributeName () const {
++  TRI_ASSERT(type == NODE_TYPE_OBJECT);
++
++  size_t const n = numMembers();
++  for (size_t i = 0; i &lt; n; ++i) {
++    if (getMember(i)-&gt;type == NODE_TYPE_CALCULATED_OBJECT_ELEMENT) {
++      return true;
++    }
++  }
++
++  return false;
++}
++
++////////////////////////////////////////////////////////////////////////////////
+ /// @brief clone a node, recursively
+ ////////////////////////////////////////////////////////////////////////////////
+ 
+@@ -1449,6 +1475,7 @@ AstNode* AstNode::clone (Ast* ast) const {
+ /// @brief append a string representation of the node to a string buffer
+ /// the string representation does not need to be JavaScript-compatible 
+ /// except for node types NODE_TYPE_VALUE, NODE_TYPE_ARRAY and NODE_TYPE_OBJECT
++/// (only for objects that do not contain dynamic attributes)
+ ////////////////////////////////////////////////////////////////////////////////
+ 
+ void AstNode::stringify (triagens::basics::StringBuffer* buffer,
+@@ -1494,8 +1521,8 @@ void AstNode::stringify (triagens::basics::StringBuffer* buffer,
+         }
+ 
+         AstNode* member = getMember(i);
+-        if (member != nullptr) {
+-          TRI_ASSERT(member-&gt;type == NODE_TYPE_OBJECT_ELEMENT);
++
++        if (member-&gt;type == NODE_TYPE_OBJECT_ELEMENT) {
+           TRI_ASSERT(member-&gt;numMembers() == 1);
+ 
+           buffer-&gt;appendChar('&quot;');
+@@ -1504,6 +1531,17 @@ void AstNode::stringify (triagens::basics::StringBuffer* buffer,
+ 
+           member-&gt;getMember(0)-&gt;stringify(buffer, verbose);
+         }
++        else if (member-&gt;type == NODE_TYPE_CALCULATED_OBJECT_ELEMENT) {
++          TRI_ASSERT(member-&gt;numMembers() == 2);
++
++          buffer-&gt;appendText(&quot;$[&quot;, 2);
++          member-&gt;getMember(0)-&gt;stringify(buffer, verbose);
++          buffer-&gt;appendText(&quot;]:&quot;, 2);
++          member-&gt;getMember(1)-&gt;stringify(buffer, verbose);
++        }
++        else {
++          TRI_ASSERT(false);
++        }
+       }
+       buffer-&gt;appendChar('}');
+     }
+diff --git a/arangod/Aql/AstNode.h b/arangod/Aql/AstNode.h
+index 483c656..f38d515 100644
+--- a/arangod/Aql/AstNode.h
++++ b/arangod/Aql/AstNode.h
+@@ -167,7 +167,8 @@ namespace triagens {
+       NODE_TYPE_RANGE                         = 49,
+       NODE_TYPE_NOP                           = 50,
+       NODE_TYPE_COLLECT_COUNT                 = 51,
+-      NODE_TYPE_COLLECT_EXPRESSION            = 52
++      NODE_TYPE_COLLECT_EXPRESSION            = 52,
++      NODE_TYPE_CALCULATED_OBJECT_ELEMENT     = 53
+     };
+ 
+     static_assert(NODE_TYPE_VALUE &lt; NODE_TYPE_ARRAY, &quot;incorrect node types&quot;);
+@@ -487,6 +488,13 @@ namespace triagens {
+         bool isDeterministic () const;
+ 
+ ////////////////////////////////////////////////////////////////////////////////
++/// @brief whether or not the object node contains dynamically named attributes
++/// on its first level
++////////////////////////////////////////////////////////////////////////////////
++
++        bool containsDynamicAttributeName () const;
++
++////////////////////////////////////////////////////////////////////////////////
+ /// @brief return the number of members
+ ////////////////////////////////////////////////////////////////////////////////
+ 
+diff --git a/arangod/Aql/Executor.cpp b/arangod/Aql/Executor.cpp
+index 11a3a66..58f7c55 100644
+--- a/arangod/Aql/Executor.cpp
++++ b/arangod/Aql/Executor.cpp
+@@ -505,6 +505,51 @@ void Executor::generateCodeArray (AstNode const* node) {
+ void Executor::generateCodeObject (AstNode const* node) {
+   TRI_ASSERT(node != nullptr);
+ 
++  if (node-&gt;containsDynamicAttributeName()) {
++    generateCodeDynamicObject(node);
++  }
++  else {
++    generateCodeRegularObject(node);
++  }
++}
++
++////////////////////////////////////////////////////////////////////////////////
++/// @brief generate JavaScript code for an object with dynamically named
++/// attributes
++////////////////////////////////////////////////////////////////////////////////
++
++void Executor::generateCodeDynamicObject (AstNode const* node) {
++  size_t const n = node-&gt;numMembers();
++  // very conservative minimum bound
++  _buffer-&gt;reserve(64 + n * 10);
++
++  _buffer-&gt;appendText(&quot;(function() { var o={};&quot;);
++  for (size_t i = 0; i &lt; n; ++i) {
++    auto member = node-&gt;getMember(i);
++
++    if (member-&gt;type == NODE_TYPE_OBJECT_ELEMENT) {
++      _buffer-&gt;appendText(&quot;o[&quot;, 2);
++      generateCodeString(member-&gt;getStringValue());
++      _buffer-&gt;appendText(&quot;]=&quot;, 2);
++      generateCodeNode(member-&gt;getMember(0));
++    }
++    else {
++      _buffer-&gt;appendText(&quot;o[_AQL.AQL_TO_STRING(&quot;);
++      generateCodeNode(member-&gt;getMember(0));
++      _buffer-&gt;appendText(&quot;)]=&quot;, 3);
++      generateCodeNode(member-&gt;getMember(1));
++    }
++    _buffer-&gt;appendChar(';');
++  }
++  _buffer-&gt;appendText(&quot;return o;})()&quot;);
++}
++
++////////////////////////////////////////////////////////////////////////////////
++/// @brief generate JavaScript code for an object without dynamically named
++/// attributes
++////////////////////////////////////////////////////////////////////////////////
++
++void Executor::generateCodeRegularObject (AstNode const* node) {
+   size_t const n = node-&gt;numMembers();
+   // very conservative minimum bound
+   _buffer-&gt;reserve(2 + n * 6);
+diff --git a/arangod/Aql/Executor.h b/arangod/Aql/Executor.h
+index 589b90e..d2f5421 100644
+--- a/arangod/Aql/Executor.h
++++ b/arangod/Aql/Executor.h
+@@ -142,6 +142,20 @@ namespace triagens {
+         void generateCodeObject (AstNode const*); 
+ 
+ ////////////////////////////////////////////////////////////////////////////////
++/// @brief generate JavaScript code for an object with dynamically named
++/// attributes
++////////////////////////////////////////////////////////////////////////////////
++
++        void generateCodeDynamicObject (AstNode const*); 
++
++////////////////////////////////////////////////////////////////////////////////
++/// @brief generate JavaScript code for an object without dynamically named
++/// attributes
++////////////////////////////////////////////////////////////////////////////////
++
++        void generateCodeRegularObject (AstNode const*); 
++
++////////////////////////////////////////////////////////////////////////////////
+ /// @brief generate JavaScript code for a unary operator
+ ////////////////////////////////////////////////////////////////////////////////
+ 
+diff --git a/arangod/Aql/Parser.cpp b/arangod/Aql/Parser.cpp
+index 6aa8565..8330606 100644
+--- a/arangod/Aql/Parser.cpp
++++ b/arangod/Aql/Parser.cpp
+@@ -301,6 +301,18 @@ void Parser::pushObjectElement (char const* attributeName,
+ }
+ 
+ ////////////////////////////////////////////////////////////////////////////////
++/// @brief push an AstNode into the object element on top of the stack
++////////////////////////////////////////////////////////////////////////////////
++
++void Parser::pushObjectElement (AstNode* attributeName,
++                                AstNode* node) {
++  auto object = static_cast&lt;AstNode*&gt;(peekStack());
++  TRI_ASSERT(object-&gt;type == NODE_TYPE_OBJECT);
++  auto element = _ast-&gt;createNodeCalculatedObjectElement(attributeName, node);
++  object-&gt;addMember(element);
++}
++
++////////////////////////////////////////////////////////////////////////////////
+ /// @brief push a temporary value on the parser's stack
+ ////////////////////////////////////////////////////////////////////////////////
+ 
+diff --git a/arangod/Aql/Parser.h b/arangod/Aql/Parser.h
+index f158f47..13a90a0 100644
+--- a/arangod/Aql/Parser.h
++++ b/arangod/Aql/Parser.h
+@@ -259,6 +259,13 @@ namespace triagens {
+                                 AstNode*);
+ 
+ ////////////////////////////////////////////////////////////////////////////////
++/// @brief push an AstNode into the object element on top of the stack
++////////////////////////////////////////////////////////////////////////////////
++
++        void pushObjectElement (AstNode*,
++                                AstNode*);
++
++////////////////////////////////////////////////////////////////////////////////
+ /// @brief push a temporary value on the parser's stack
+ ////////////////////////////////////////////////////////////////////////////////
+ 
+diff --git a/arangod/Aql/grammar.y b/arangod/Aql/grammar.y
+index 3aa1857..38c3ed3 100644
+--- a/arangod/Aql/grammar.y
++++ b/arangod/Aql/grammar.y
+@@ -903,6 +903,9 @@ object_element:
+     object_element_name T_COLON expression {
+       parser-&gt;pushObjectElement($1, $3);
+     }
++  | T_ARRAY_OPEN expression T_ARRAY_CLOSE T_COLON expression {
++      parser-&gt;pushObjectElement($2, $5);
++    }
+   ;
+ 
+ reference:
+</code></pre></noscript></div>
+
+
+<p>Everyone is welcome to try it out already!</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[YAOR - Yet Another Optimizer Rule]]></title>
@@ -5023,386 +5521,6 @@ is yet that widely supported and easy to use as JSON.</p>
 <p>For our use case, it looks like Msgpack could fit quite well, but
 probably only as a second, alternative interface for highest-efficiency
 data transfers.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Benchmarking ArangoDB's Write-ahead Log]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/"/>
-    <updated>2014-08-07T01:27:04+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log</id>
-    <content type="html"><![CDATA[<h1>Motivation</h1>
-
-<p>One of the major changes in ArangoDB 2.2 was the introduction of the
-<em>write-ahead log</em> (abbreviated <em>WAL</em>).</p>
-
-<p>The introduction of the WAL changed how documents are stored internally in
-ArangoDB. A lot of things have been changed for it under the hood, and it has
-been a lot of work to implement it.</p>
-
-<p>During the implementation, we refactored some code parts and made them
-considerably faster. From these changes we expected a positive effect on the
-database performance. But due to the fact that shape information is now also
-saved in the write-ahead log, there may also be some negative effect.</p>
-
-<p>We developers were of course very interested in seeing the net effects, so
-we ran some tests for a few use cases. We compared ArangoDB 2.1.2 (still without
-the WAL) with ArangoDB 2.2.1 (with the WAL). The results are interesting.</p>
-
-<!-- more -->
-
-
-<h1>Test setup</h1>
-
-<p>To get a broad overview of performance changes, we ran a few different test cases:</p>
-
-<ul>
-<li><strong>document</strong>: inserts a document</li>
-<li><strong>crud</strong>: inserts a document, fetches it, updates it, and deletes it</li>
-<li><strong>crud-append</strong>: inserts a document, fetches it, updates it, and fetches it again</li>
-<li><strong>multi-collection</strong>: transactionally save two documents in two collections</li>
-<li><strong>random-shapes</strong>: save documents with completely different structures/shapes</li>
-</ul>
-
-
-<p>All tests were run with the <code>arangob</code> benchmark tool, with various concurrency levels,
-complexity settings and repeated several times. <code>arangob</code> was invoked like this:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>arangob                         \
-</span><span class='line'>  --test-case $case             \
-</span><span class='line'>  --request $requests           \
-</span><span class='line'>  --concurrency $concurrency    \
-</span><span class='line'>  --complexity $complexity</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Both ArangoDB servers and <code>arangob</code> were located on the same server. Only one
-ArangoDB server was active during each test run, and the other was shut down so
-it didn&rsquo;t compete for system resources.</p>
-
-<h1>Test results</h1>
-
-<p>Following are the results for the different test cases.</p>
-
-<p>In the result tables, the columns have the following meanings:</p>
-
-<ul>
-<li><strong>Complexity</strong>: the number of attributes for the test documents, used as parameter
-<code>--complexity</code> for <code>arangob</code></li>
-<li><strong>Requests</strong>: the number of operations executed, used as parameter <code>--requests</code>
-for <code>arangob</code></li>
-<li><strong>Concurrency</strong>: the number of client threads started by <code>arangob</code>, used a parameter
-<code>concurrency</code> for <code>arangob</code></li>
-<li><strong>Time 2.1</strong>: test execution time (in seconds) for ArangoDB 2.1</li>
-<li><strong>Time 2.2</strong>: test execution time (in seconds) for ArangoDB 2.2</li>
-<li><strong>T2.1/T2.2</strong>: relative performance of ArangoDB 2.1 compared to ArangoDB 2.2. Values
-less than one indicate that ArangoDB 2.1 was faster than ArangoDB 2.2. Values
-greater than one indicate that ArangoDB 2.1 was slower than ArangoDB 2.2. A
-value of one means that both versions had equal speed.</li>
-</ul>
-
-
-<p>Please note that the absolute execution times aren&rsquo;t too interesting in the
-results shown here. We haven&rsquo;t used the most powerful server on earth for running
-these tests. We were most interested in how ArangoDB 2.2 compared to
-ArangoDB 2.1.</p>
-
-<h2>Inserting documents</h2>
-
-<p>The <code>document</code> test appends new documents (with an identical structure) to a
-collection. Here are the results for inserting a million documents with 100
-attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>       100       1000000               1       97.452       94.839         1.02    
-</span><span class='line'>       100       1000000               2       61.146       53.928         1.13   
-</span><span class='line'>       100       1000000               4       54.368       31.379         1.73  </span></code></pre></td></tr></table></div></figure>
-
-
-<p>Following are the results for 100,000 documents with 1,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>      1000        100000               1       86.883       80.669         1.07 
-</span><span class='line'>      1000        100000               2       59.381       48.599         1.22 
-</span><span class='line'>      1000        100000               4       53.784       27.494         1.95 </span></code></pre></td></tr></table></div></figure>
-
-
-<p>The results for 5,000 documents with 10,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>     10000          5000               1       43.991       40.577         1.08 
-</span><span class='line'>     10000          5000               2       31.403       26.117         1.20 
-</span><span class='line'>     10000          5000               4       28.713       20.044         1.43 </span></code></pre></td></tr></table></div></figure>
-
-
-<p>As we can see in the results above, ArangoDB 2.2 is faster than ArangoDB 2.1 for
-all tested configurations. The difference is negligible if the test client is
-single-threaded (one insert thread), but ArangoDB 2.2 is considerably faster than
-ArangoDB 2.1 with more concurrent clients.</p>
-
-<h2>CRUD operations (I)</h2>
-
-<p>The <code>crud</code> test case inserts a document, fetches it, updates it, fetches it again
-and finally deletes it. Executing 1 million crud operations on documents with 100
-attributes each results in the following execution times:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>       100       1000000               1       66.856       67.072         0.99       
-</span><span class='line'>       100       1000000               2       47.907       47.043         1.01        
-</span><span class='line'>       100       1000000               4       42.089       42.047         1.00         </span></code></pre></td></tr></table></div></figure>
-
-
-<p>Running 100,000 crud operations on documents with 1,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>      1000        100000               1      160.228      158.312         1.01 
-</span><span class='line'>      1000        100000               2      147.413      147.990         0.99  
-</span><span class='line'>      1000        100000               4      143.575      143.233         1.00   </span></code></pre></td></tr></table></div></figure>
-
-
-<p>And here are the test results for running 5,000 crud operations on documents with
-10,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>     10000          5000               1      645.859      643.924         1.00        
-</span><span class='line'>     10000          5000               2      640.414      640.767         0.99       
-</span><span class='line'>     10000          5000               4      637.438      637.132         1.00      </span></code></pre></td></tr></table></div></figure>
-
-
-<p>The results of all these tests show that performance for the tested workload hasn&rsquo;t
-changed between ArangoDB 2.1 and 2.2. This is somewhat expected, as the WAL should
-not affect the performance of read and delete operations much: reading a document
-does not require writing to the WAL at all, and removing a document only requires
-writing a very small remove marker to the WAL.</p>
-
-<h2>CRUD operations (II)</h2>
-
-<p>The <code>crud-append</code> test case inserts a document, fetches it, updates it, and fetches
-it again. Executing 1 million crud operations on documents with 100 attributes each
-results in the following execution times:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>       100       1000000               1       81.187       79.079         1.02 
-</span><span class='line'>       100       1000000               2       59.544       56.934         1.04  
-</span><span class='line'>       100       1000000               4       53.845       52.098         1.03   </span></code></pre></td></tr></table></div></figure>
-
-
-<p>Running 100,000 crud operations on documents with 1,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>      1000        100000               1      200.057      196.722         1.01 
-</span><span class='line'>      1000        100000               2      182.436      181.633         1.00 
-</span><span class='line'>      1000        100000               4      181.233      180.631         1.00 </span></code></pre></td></tr></table></div></figure>
-
-
-<p>And here are the test results for running 5,000 crud operations on documents with
-10,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>     10000          5000               1      804.781      801.903         1.00 
-</span><span class='line'>     10000          5000               2      796.589      797.693         0.99  
-</span><span class='line'>     10000          5000               4      796.664      795.823         1.00  </span></code></pre></td></tr></table></div></figure>
-
-
-<p>Again, ArangoDB 2.1 and 2.2 are pretty much the same speed for the tested operations.</p>
-
-<h2>Multi-collection write transactions</h2>
-
-<p>The <code>multi-collection</code> test stores two documents in two different collections
-transactionally. Here are the results for executing 100,000 transactions for
-documents with 100 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>       100        100000               1     6936.895       30.736       225.69   
-</span><span class='line'>       100        100000               2     6946.524       25.577       271.59    
-</span><span class='line'>       100        100000               4     7720.682       24.334       317.27     </span></code></pre></td></tr></table></div></figure>
-
-
-<p>Executing 10,000 transactions on documents with 1,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>      1000         10000               1      949.974       21.368        44.45     
-</span><span class='line'>      1000         10000               2      953.672       19.322        49.35    
-</span><span class='line'>      1000         10000               4      941.645       20.486        45.96   </span></code></pre></td></tr></table></div></figure>
-
-
-<p>And finally, the results for executing 500 transactions on documents with 10,000
-attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>     10000           500               1       46.776       10.413         4.49 
-</span><span class='line'>     10000           500               2       45.102       10.173         4.43 
-</span><span class='line'>     10000           500               4       44.172        9.192         4.80  </span></code></pre></td></tr></table></div></figure>
-
-
-<p>The above results show that ArangoDB 2.2 is much faster than ArangoDB 2.1 for
-executing transactions that write to two collections.</p>
-
-<p>We expected that! Multi-collection (write) transactions in ArangoDB 2.2 require
-far less calls to <code>msync</code> than in ArangoDB 2.1. ArangoDB 2.2 can sync operations
-of multiple transactions together in one call to <code>msync</code>. ArangoDB 2.1 needed to
-synchronize each transaction separately.</p>
-
-<h2>(Fully) heterogenous documents</h2>
-
-<p>The <code>random-shapes</code> test inserts documents that have different structures each.
-For each inserted document a new shape will need to be stored. Inserting one million
-documents with 100 attributes each results in the following figures:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>       100       1000000               1      664.006       87.181         7.61        
-</span><span class='line'>       100       1000000               2      433.570       60.613         7.15       
-</span><span class='line'>       100       1000000               4      313.666       45.327         6.92      </span></code></pre></td></tr></table></div></figure>
-
-
-<p>
-The results show that ArangoDB 2.2 is considerably faster than ArangoDB 2.1 for
-these cases &ndash; even with the storage overhead of writing the shapes to the WAL.</p>
-
-<p>Now we inserted 100,000 documents with 1,000 document attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>      1000        100000              1        61.709       66.954         0.92    
-</span><span class='line'>      1000        100000              2        39.294       46.458         0.84   
-</span><span class='line'>      1000        100000              4        36.866       40.910         0.90  </span></code></pre></td></tr></table></div></figure>
-
-
-<p>In these cases, the storage overhead of writing all shapes to the WAL seems to
-start to matter, and ArangoDB 2.2 gets slower than ArangoDB 2.1 in this test
-case.</p>
-
-<p>The same was true when we inserted 5,000 documents with 10,000 attributes each:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Complexity      Requests     Concurrency     Time 2.1     Time 2.2    T2.1/T2.2
-</span><span class='line'>-------------------------------------------------------------------------------
-</span><span class='line'>     10000          5000               1       25.337       30.412         0.83    
-</span><span class='line'>     10000          5000               2       20.021       22.128         0.90     
-</span><span class='line'>     10000          5000               4       14.800       18.872         0.78      </span></code></pre></td></tr></table></div></figure>
-
-
-<p>Note that the <code>random-shapes</code> test case is an extreme test case. We do not
-consider it realistic that all documents in a collection have completely different
-attribute names. Still we included it in our tests because we were sure that this
-would be a case in which the overhead of the WAL would be clearly measurable.</p>
-
-<p>Note that there is a way to make ArangoDB 2.2 faster than ArangoDB 2.1 even for
-this test case: setting the option <code>--wal.suppress-shape-information</code> to <code>true</code>
-will make ArangoDB not write shape information to the WAL, making document write
-operations much faster in case all documents have heterogenous structures.</p>
-
-<p>The option won&rsquo;t help much if a shapes repeat a lot. In this case, the WAL overhead
-shouldn&rsquo;t matter too much already, or ArangoDB 2.2 should already be faster than 2.1
-(as shown in the results above).</p>
-
-<h1>Summary</h1>
-
-<p>The tests revealed that the overhead of the WAL in ArangoDB 2.2 seems to be
-negligible for most of the tested workloads. In many cases, ArangoDB 2.2 with
-the WAL is even faster than ArangoDB 2.1 that did not have a WAL at all.</p>
-
-<p>There is one notable exception: when documents have fully heterogenous structures,
-the overhead of the WAL is measurable and significant. Though we consider this
-to be a rather hypothetical case, we have added the configurtion option
-<code>--wal.suppress-shape-information</code>. This can be used to turn off storing
-shape information in the WAL. This is not safe when the server is to be used
-as a replication master, but should work in cases when replication is not used.</p>
-
-<p>The option should not have a big effect if documents are greatly or at least
-somewhat homogenous. For these cases, ArangoDB 2.2 with its WAL should already
-be as fast as 2.1 (or even faster).</p>
 ]]></content>
   </entry>
   
