@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Traversals | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/traversals/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-02-03T09:13:50+01:00</updated>
+  <updated>2015-02-03T23:10:11+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -48,7 +48,7 @@ enough to demonstrate some common traversal use cases.</p>
 <p>The example graph consists of the following two collections:</p>
 
 <ul>
-<li><code>v</code>: a collection with vertex documents.</li>
+<li><code>v</code>: a collection with vertex documents</li>
 <li><code>e</code>: an edge collection containing the connections between vertices in <code>v</code></li>
 </ul>
 
@@ -60,7 +60,7 @@ vertices of type <code>continent</code>. These are also connected to some <code>
 Finally, <code>country</code> vertices are also connected to <code>capital</code> vertices:</p>
 
 <p><code>plain
-root &lt;--[is in]-- continent &lt;--[is in]-- country &lt;--[is in]-- captial
+root &lt;--[is in]-- continent &lt;--[is in]-- country &lt;--[is in]-- capital
 </code></p>
 
 <p>In the examples, we&rsquo;ll only look at the vertices and ignore what the connections

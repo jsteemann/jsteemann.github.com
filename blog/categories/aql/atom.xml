@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-02-03T09:13:50+01:00</updated>
+  <updated>2015-02-03T23:10:11+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -72,7 +72,7 @@ break compatibility with existing queries.</p>
 <p>JavaScript has the same problem, and it wasn&rsquo;t solved portably yet. However, there is a proposal
 for ES6 that suggests enclosing attribute name expressions in <code>[</code> and <code>]</code>.</p>
 
-<p>To me, this looks like a good solution for the problem. It&rsquo;s two bytes more to type when keying
+<p>To me, this looks like a good solution for the problem. It&rsquo;s two bytes more when keying in
 queries, but the syntax is easy and explicit. There are no ambiguities.</p>
 
 <p>I prototyped this solution for AQL, so I could write:</p>
@@ -126,13 +126,13 @@ FOR i IN 1..5
 ]
 ```</p>
 
-<p>I only ran a few queries with this, but and they seemed to work. However, I haven&rsquo;t
+<p>I ran a few queries with this, and they seemed to work. <del>However, I haven&rsquo;t
 committed the feature yet. There might still be cases in which it doesn&rsquo;t work. Tests
 for the feature are also still missing. I hope I can finalize the implementation soon
-so it becomes available in some release.</p>
+so it becomes available in some release.</del></p>
 
-<p>Until then, here is <a href="https://gist.github.com/jsteemann/d6133add26d7b4d07f5a">a Gist with the patch</a>
-for the current devel branch.</p>
+<p><strong>UPDATE</strong>: tests have been added now, and there has been committed in devel. It will
+be included in AranoDB 2.5.</p>
 
 <p>Everyone is welcome to try it out already!</p>
 ]]></content>
@@ -245,7 +245,7 @@ enough to demonstrate some common traversal use cases.</p>
 <p>The example graph consists of the following two collections:</p>
 
 <ul>
-<li><code>v</code>: a collection with vertex documents.</li>
+<li><code>v</code>: a collection with vertex documents</li>
 <li><code>e</code>: an edge collection containing the connections between vertices in <code>v</code></li>
 </ul>
 
@@ -257,7 +257,7 @@ vertices of type <code>continent</code>. These are also connected to some <code>
 Finally, <code>country</code> vertices are also connected to <code>capital</code> vertices:</p>
 
 <p><code>plain
-root &lt;--[is in]-- continent &lt;--[is in]-- country &lt;--[is in]-- captial
+root &lt;--[is in]-- continent &lt;--[is in]-- country &lt;--[is in]-- capital
 </code></p>
 
 <p>In the examples, we&rsquo;ll only look at the vertices and ignore what the connections
