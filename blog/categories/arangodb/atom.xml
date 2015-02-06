@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-02-03T23:10:11+01:00</updated>
+  <updated>2015-02-06T01:17:16+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,181 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Using ArangoDB as a Logstash Output]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/02/05/using-arangodb-as-a-logstash-output/"/>
+    <updated>2015-02-05T23:39:23+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/02/05/using-arangodb-as-a-logstash-output</id>
+    <content type="html"><![CDATA[<p>Inspired by a question on <a href="http://stackoverflow.com/questions/28314711/logstash-output-for-arangodb">StackOverflow</a>,
+I did some investigation about how to make <a href="http://www.elasticsearch.org/overview/logstash/">Logstash</a>
+send log events to ArangoDB.</p>
+
+<p>There is no dedicated Logstash output plugin for ArangoDB on the
+<a href="https://github.com/logstash-plugins">Logstash plugins page</a>, so I had already accepted to write
+one on my own.</p>
+
+<p>Browsing the plugins page for inspiration, I found an
+<a href="https://github.com/logstash-plugins/logstash-output-http">HTTP output plugin for Logstash</a>.
+It seems to be general enough that it can send the log event in JSON format to any HTTP-speaking backend.</p>
+
+<p>ArangoDB&rsquo;s API is JSON over HTTP, so it sounded like a perfect match. I briefly tried it out and
+it seemed to work fine.</p>
+
+<!-- more -->
+
+
+<p>Here are the steps I carried out to connect the two:</p>
+
+<h2>Prepare an ArangoDB server</h2>
+
+<p>I started an ArangoDB server with default configuration (binding to IP address 127.0.0.1 and port
+8529). I then used the ArangoShell to create a collection named <code>logstash</code>:</p>
+
+<p><code>js
+db._create("logstash");
+</code></p>
+
+<p>This collection will be used for storing the log events sent by Logstash.</p>
+
+<h2>Download Logstash</h2>
+
+<p>In order to run Logstash, you must have Java installed, which I assume you already have.</p>
+
+<p>Now it&rsquo;s time to download Logstash. You can download and unpack it with the command following.
+The current version is 1.5.0 beta1 (<strong>warning: 100 MB download!</strong>):</p>
+
+<p><code>bash
+wget "http://download.elasticsearch.org/logstash/logstash/logstash-1.5.0.beta1.tar.gz"
+tar xvfz logstash-1.5.0.beta1.tar.gz
+cd Downloads/logstash-1.5.0.beta1
+</code></p>
+
+<h2>Connecting Logstash with ArangoDB</h2>
+
+<p>We are now ready to start Logstash. I&rsquo;ll start it in a mode that will send all input from
+stdin as log events to ArangoDB. I am using the <code>stdin</code> input plugin, and the <code>http</code> output
+plugin for this. The <code>http</code> output plugin needs to know the URL to send the log events to.</p>
+
+<p>The URL is ArangoDB&rsquo;s base URL plus the REST API method for storing a single document, with
+the name of the target collection (<code>logstash</code>) appended.</p>
+
+<p>Here is the full command:</p>
+
+<p><code>bash
+bin/logstash -e 'input { stdin } } output { http { http_method =&gt; "post" url =&gt; "http://127.0.0.1:8529/_api/document?collection=logstash" format =&gt; "json" } }'
+</code></p>
+
+<p>Logstash may need a few seconds to start. The HTTP plugin will print a message about itself
+being a milestone 1 release only, but it works. Anything entered in the terminal should now be
+sent as a log event to ArangoDB.</p>
+
+<p>For example, type <code>fingers crossed!</code> and hit enter:</p>
+
+<p><code>
+Using milestone 1 output plugin 'http'. This plugin should work, but would benefit from use by folks like you. Please let us know if you find bugs or have suggestions on how to improve this plugin.  For more information on plugin milestones, see http://logstash.net/docs/1.5.0.beta1/plugin-milestones {:level=&gt;:warn}
+fingers crossed!
+</code></p>
+
+<p>Let&rsquo;s check if the log event made it into ArangoDB. I have used the ArangoShell for this:</p>
+
+<p>```js
+db.logstash.toArray()
+[
+  {</p>
+
+<pre><code>"_id" : "logstash/3507690866496", 
+"_key" : "3507690866496", 
+"_rev" : "3507690866496", 
+"@version" : "1", 
+"host" : "kalk", 
+"message" : "fingers crossed!", 
+"@timestamp" : "2015-02-05T23:17:39.982Z" 
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<h3>Querying log events</h3>
+
+<p>So we&rsquo;re getting log events in from Logstash.</p>
+
+<p>We can use AQL to query the received log events in ArangoDB. But before we run a query,
+we probably want to index the <code>@timestamp</code> attribute of the events, so we can efficiently
+find and filter them by date and time:</p>
+
+<p><code>js
+db.logstash.ensureSkiplist("@timestamp");
+</code></p>
+
+<p>Now we can run the following AQL query to find the latest 5 log events:</p>
+
+<p><code>plain
+FOR l IN logstash
+  FILTER l.`@timestamp` &lt;= '2099' /* arbitrary max value */
+  SORT l.`@timestamp` DESC
+  LIMIT 5
+  RETURN l
+</code></p>
+
+<p>Note: the <code>@timestamp</code> attribute name needs to be enclosed in backticks because a <code>@</code> prefix
+is used to designate bind parameters in AQL. Enclosing the names in backticks will make AQL treat
+them as attribute name literals.</p>
+
+<p>For the simple types of events triggered by the <code>stdin</code> input plugin, this is already sufficient.
+However, log events may look different, depending on the type of input plugins that are used. For
+other inputs, other attributes may need to be indexed, too.</p>
+
+<h3>Adjusting IP, port and authentication</h3>
+
+<p>Above I have used the default configuration of ArangoDB, that is IP 127.0.0.1, port 8529, and no
+authentication. You probably want to change this.</p>
+
+<p>To make ArangoDB listen on any other IP address or port, change the <code>endpoint</code> setting in its
+configuration file <code>/etc/arangod.conf</code>. You may also want to set the <code>disable-authentication</code>
+flag to <code>false</code>, meaning authentication is turned on.</p>
+
+<p><code>
+[server]
+endpoint = tcp://192.168.173.13:9999
+disable-authentication = false
+</code></p>
+
+<p>Before activating the new configuration, let&rsquo;s create a dedicated ArangoDB user <code>logstash</code>.
+I will also change the default password of the <code>root</code> user. The following ArangoShell commands
+do this:</p>
+
+<p><code>js
+require("org/arangodb/users").save("logstash", "secret-logging", true);
+require("org/arangodb/users").save("root", "nobody-will-ever-guess", true);
+</code></p>
+
+<p>To make logstash use the above settings, we have to adjust the command-line:</p>
+
+<p><code>bash
+bin/logstash -e 'input { stdin } } output { http { http_method =&gt; "post" url =&gt; "http://logstash:secret-logging@192.168.173.13:9999/_api/document?collection=logstash" format =&gt; "json" } }'
+</code></p>
+
+<h3>Pitfalls</h3>
+
+<p>Though Logstash itself can write a logfile (<code>--log</code> option) and can provide debug information
+(<code>--debug</code>), I did not get it log or print errors when misconfiguring the HTTP output plugin.
+For example, specifying a wrong target URL will make all HTTP requests from Logstash to ArangoDB
+silently fail, with the log events being lost if not stored elsewhere.</p>
+
+<p>Maybe this is configurable somewhere, but then I didn&rsquo;t find it. It is also possible that this
+will be fixed in some future release.</p>
+
+<h3>Disclaimer</h3>
+
+<p>Please feel free to use this blog as a starting point but not as an endorsement.</p>
+
+<p>Though I think it will work perfectly, I am not at all an expert for Logstash or its plugins.
+I didn&rsquo;t spend much time with it yet, and I may have overlooked important things. So should you
+be interested in using it, please conduct your own tests first.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Using Dynamic Attribute Names in AQL]]></title>
@@ -1035,171 +1210,6 @@ This should make it work from the ArangoShell (but not from the web interface).<
 the web interface, but as a backend developer, I am not able to do any
 serious UI work. I also put this together in my leisure time, and have to
 come to an end with it.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Returning Results From AQL INSERT/REMOVE/REPLACE Operations]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations/"/>
-    <updated>2015-01-13T22:53:40+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations</id>
-    <content type="html"><![CDATA[<p>ArangoDB provides many options for finding and modifying data. Though there are
-several more specialized operation, data-modification AQL queries are the most
-general solution in ArangoDB. They allow to find documents using arbitrary filter
-criteria, and to modify or remove the documents once found.</p>
-
-<p>Such <em>find-and-modify</em> operations can be executed with multiple queries (one for
-the find step, one for the modification step), or with a single query. Putting
-both steps into a single query will often save roundtrips between the application
-and the database and thus may be preferred over executing the steps separately.
-Putting both the find and the modify step into the same query also prevents other
-operations from interfering in between and tampering with the underlying data.</p>
-
-<p>Now what if the application not only requires the data to be updated, but also needs
-to keep track of which documents were found and modified by a <em>find-and-modify</em>
-query? This is often required when an application needs to keep database
-data in sync with data in some other datastore (e.g. the filesystem or a remote
-service).</p>
-
-<p>The pattern I would dub <em>find-modify-return</em> would be useful for this.</p>
-
-<!-- more -->
-
-
-<p>Unfortunately it hasn&rsquo;t been supported in AQL until very recently.
-We have been asked for this so many times that I stopped counting.</p>
-
-<p>I am glad that this got better with ArangoDB 2.4. Finding, modifying and returning
-documents is now possible from the same AQL query. The solution is not yet perfect,
-but at least it provides basic <em>find-modify-return</em> functionality for a lot of
-use cases, including multi-document, multi-collection queries.</p>
-
-<h2>INSERT</h2>
-
-<p>Let&rsquo;s start with an <code>INSERT</code> operation as it is the most simple to explain:</p>
-
-<p><code>plain insert query, not returning anything
-FOR i IN 1..10
-  INSERT { name: CONCAT("user", i), someValue: RAND() } IN testAccounts
-</code></p>
-
-<p>The above query does not explicitly specify the <code>_key</code> attribute for the inserted
-documents, meaning the database will create the documents keys automatically.
-Additionally, the query assigns a random value to an attribute <code>someValue</code>.
-Getting to know the created keys or random values required an extra lookup query
-before 2.4. Extra queries are something one wants to avoid for efficiency
-reasons.</p>
-
-<p>With 2.4, adding two lines at the end of the query will solve the problem so
-that everything can be done in one query:</p>
-
-<p><code>plain insert query, returning the inserted documents
-FOR i IN 1..10
-  INSERT { name: CONCAT("user", i), someValue: RAND() } IN testAccounts
-  LET inserted = NEW
-  RETURN inserted
-</code></p>
-
-<p>Using a <code>LET</code> with the pseudo-value of <code>NEW</code> after the <code>INSERT</code> together with
-a final <code>RETURN</code> statement will make the inserted documents appear in the query
-result. Note that the full documents will be returned and not just the specified
-attributes. This allows the application to track of all document attributes,
-even the auto-generated ones.</p>
-
-<h2>REMOVE</h2>
-
-<p>The mechanism works for <code>REMOVE</code> statements, too.</p>
-
-<p>Time to use a different example for this. Let&rsquo;s assume session metadata are
-stored in the database, and some bigger session files are stored somewhere
-in the filesystem. If the application needs to remove expired sessions, it
-will need to clean up in both places. It will first query the database to
-find the expired sessions, only to remove them from the filesystem (if the
-filesystem sessions were organized by session id from the database) and to
-finally remove the sessions from database itself.</p>
-
-<p>The following query could be used to find removal candidates:</p>
-
-<p><code>plain query for finding removal candidates
-FOR session IN sessions
-  FILTER session.dateExpires &lt; DATE_NOW()
-  LIMIT 1000
-  RETURN session._key
-</code></p>
-
-<p>The results of this query can be used for cleaning up sessions in the filesystem,
-and for finally removing the sessions from the database. However, this would require
-an extra <code>REMOVE</code> query. And didn&rsquo;t we say we would like to avoid extra queries?</p>
-
-<p>The good news is that in 2.4 we can by putting at least the database part into a
-single query:</p>
-
-<p><code>plain query for removing and returning expired sessions
-FOR session IN sessions
-  FILTER session.dateExpires &lt; DATE_NOW()
-  LIMIT 1000
-  REMOVE session IN sessions
-  LET removed = OLD
-  RETURN removed
-</code></p>
-
-<p>The last two lines of the above query make sure the removed sessions are
-returned to the application, so the application can perform any filesystem
-cleanup using the session ids from the database.</p>
-
-<p>Note that in case of <code>REMOVE</code> one has to use the pseudo-value <code>OLD</code> because
-<code>REMOVE</code> can only return documents before removal. In the case of <code>INSERT</code>
-we can only refer to the pseudo-value <code>NEW</code>.</p>
-
-<h2>UPDATE and REPLACE</h2>
-
-<p>So far we saw <code>INSERT</code> and <code>REMOVE</code>, but there are also <code>UPDATE</code> and <code>REPLACE</code>.
-I will handle <code>UPDATE</code> and <code>REPLACE</code> in one go. All the following refers to
-<code>UPDATE</code>, but does apply to <code>REPLACE</code> as well.</p>
-
-<p>The mechanism to return documents from a query is the same as
-already demonstrated: simply append the <code>LET ... RETURN</code> sequence to the end
-of the original query.</p>
-
-<p>In addition, <code>UPDATE</code> allows to return either the <em>old</em> document revisions
-(before modification) or the <em>new</em> document revisions (after modification).
-This can be expressed by using either <code>OLD</code> or <code>NEW</code> in the final <code>LET</code>
-statement.</p>
-
-<p>Following is a more complex example for an <code>UPDATE</code> query that aggregates data
-from one collection (<code>phraseOccurrences</code>) in order to find and modify matching
-documents in another collection (<code>phrases</code>). It will return the documents from
-<code>phrases</code> before they got modified:</p>
-
-<p><code>plain update query returning "old" documents
-FOR po IN phraseOccurrences
-  FILTER ! po.isSuspicious
-  FILTER po.dateMentioned &gt;= '2015-01-01' &amp;&amp; po.dateMentioned &lt;= '2015-01-09'
-  COLLECT phrase = po.phrase WITH COUNT INTO occurrences
-  FILTER occurrences % 42 != 23
-  LIMIT 13
-  UPDATE phrase WITH { isSuspicious: true } IN phrases
-  LET previous = OLD  /* returns document revisions before UPDATE */
-  RETURN previous
-</code></p>
-
-<p>If we are interested in what the documents in <code>phrases</code> look like with the
-<code>UPDATE</code> applied, we can use <code>NEW</code> instead:</p>
-
-<p><code>plain update query returning "new" documents
-FOR po IN phraseOccurrences
-  FILTER ! po.isSuspicious
-  FILTER po.dateMentioned &gt;= '2015-01-01' &amp;&amp; po.dateMentioned &lt;= '2015-01-09'
-  COLLECT phrase = po.phrase WITH COUNT INTO occurrences
-  FILTER occurrences % 42 != 23
-  LIMIT 13
-  UPDATE phrase WITH { isSuspicious: true } IN phrases
-  LET modified = NEW  /* returns document revisions after UPDATE */
-  RETURN modified
-</code></p>
-
-<p>Note that the full documents will be returned here, and not just the attributes
-specified in or modified by the <code>UPDATE</code> operation.</p>
 ]]></content>
   </entry>
   

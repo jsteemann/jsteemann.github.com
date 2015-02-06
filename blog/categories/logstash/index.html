@@ -5,11 +5,11 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>Getting Core Dumps of Failed TravisCI Builds - J@ArangoDB</title>
+  <title>Category: Logstash - J@ArangoDB</title>
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="I recently wrote about using TravisCI for continuously testing C++11 projects. Now, what if a build fails? Especially for C and C++ projects, build &hellip;">
+  <meta name="description" content="Category: Logstash">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -18,7 +18,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds">
+  <link rel="canonical" href="http://jsteemann.github.ioblog/categories/logstash">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
@@ -77,156 +77,35 @@
   <div id="main">
     <div id="content">
       <div>
-<article class="hentry" role="article">
+<article role="article">
   
   <header>
-    
-      <h1 class="entry-title">Getting Core Dumps of Failed TravisCI Builds</h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-10-30T23:05:48+01:00" pubdate data-updated="true">Oct 30<span>th</span>, 2014</time>
-        
-      </p>
+    <h1 class="entry-title">Category: Logstash</h1>
     
   </header>
+  
+  <div id="blog-archives" class="category">
 
 
-<div class="entry-content"><p>I recently wrote about <a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">using TravisCI for continuously testing C++11 projects</a>.</p>
 
-<p><strong>Now, what if a build fails?</strong></p>
+  
+  <h2>2015</h2>
 
-<p>Especially for C and C++ projects, build failures may mean crashed
-programs. In a local setup, the usual way to analyze program crashes
-is to manually inspect the core files that are written on crash.</p>
+<article>
+  
+<h1><a href="/blog/2015/02/05/using-arangodb-as-a-logstash-output/">Using ArangoDB as a Logstash Output</a></h1>
+<time datetime="2015-02-05T23:39:23+01:00" pubdate><span class='month'>Feb</span> <span class='day'>05</span> <span class='year'>2015</span></time>
 
-<p>With TravisCI, there is no way to log in to a build machine and
-inspect a core dump interactively. There is no SSH access to
-the build machines. TravisCI does not even persist any state of
-builds but the result and the log output.</p>
-
-<p>There is a way to get to the core dumps, but it was fiddly to find
-out and set up.</p>
-
-<!-- more -->
+<footer>
+  <span class="categories">posted in <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/logstash/'>Logstash</a></span>
+</footer>
 
 
-<p>The basic idea is to run <code>gdb</code> on the TravisCI build machine
-automatically when a build fails. <code>gdb</code> can be scripted, so all
-we need to do is to make it print a backtrace in all threads at
-the time of the crash.</p>
+</article>
 
-<p>By default, no core dumps will be produced on TravisCI. To turn them
-on, an appropriate ulimit value must be set. We also need to install
-<code>gdb</code> so we can actually run it. Here is the <code>.travis.yml</code> adjustment
-for these prerequisites:</p>
-
-<figure class='code'><figcaption><span>adjustments for install and before_script hooks</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">install</span><span class="p-Indicator">:</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">sudo apt-get install -y gdb</span>  <span class="c1"># install gdb</span>
-</span><span class='line'>
-</span><span class='line'><span class="l-Scalar-Plain">before_script</span><span class="p-Indicator">:</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">ulimit -c unlimited -S</span>       <span class="c1"># enable core dumps</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>To get an idea of where the program crashed, we can finally install
-an <code>after_failure</code> hook. This hook can check for a core file and use
-<code>gdb</code> to print a nice backtrace.</p>
-
-<p>The core file pattern on TravisCI seems to be <code>core-%p</code>, so core
-filenames will include the executable&rsquo;s process id and change on
-every run. We can use <code>find</code> to look for files named <code>core*</code> in the
-cwd and pick the first one as there should only be at most one core
-file per build:</p>
-
-<figure class='code'><figcaption><span>adjustments for after_failure hook</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">after_failure</span><span class="p-Indicator">:</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">COREFILE=$(find . -maxdepth 1 -name &quot;core*&quot; | head -n 1)</span> <span class="c1"># find core file</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">if [[ -f &quot;$COREFILE&quot; ]]; then gdb -c &quot;$COREFILE&quot; example -ex &quot;thread apply all bt&quot; -ex &quot;set pagination 0&quot; -batch; fi</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>A failed build might produce output like this:</p>
-
-<p><img src="/downloads/screenshots/travis-ci-gdb.png"></p>
-
-<p>I recommend compiling the executable to test with debug symbols on and
-with all optimizations turned off (i.e. compiler options <code>-g -O0</code>).
-Otherwise backtraces might reveal less useful information for debugging.</p>
-
-<p>On a side note: the <a href="http://lint.travis-ci.org/">Travis WebLint</a> is a
-handy tool for validating <code>.travis.yml</code> files <em>before</em> pushing them.</p>
 </div>
 
-
-  <footer>
-    <p class="meta">
-      
   
-
-<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
-
-      
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-10-30T23:05:48+01:00" pubdate data-updated="true">Oct 30<span>th</span>, 2014</time>
-      
-
-<span class="categories">
-  
-    <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>, <a class='category' href='/blog/categories/travisci/'>TravisCI</a>
-  
-</span>
-
-
-    </p>
-    
-      <div class="sharing">
-  
-  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/" >Tweet</a>
-  
-  
-  
-</div>
-
-    
-    <p class="meta">
-      
-        <a class="basic-alignment left" href="/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/" title="Previous Post: What I most like about C++11">&laquo; What I most like about C++11</a>
-      
-      
-        <a class="basic-alignment right" href="/blog/2014/11/04/setting-up-test-data/" title="Next Post: Setting up test data">Setting up test data &raquo;</a>
-      
-    </p>
-  </footer>
 </article>
 
 </div>
