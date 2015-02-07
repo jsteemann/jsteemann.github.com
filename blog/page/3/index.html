@@ -9,9 +9,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="To JSON or not? We&rsquo;re often asked why ArangoDB uses JSON as its
-data-interchange format for transferring documents from clients to
-the database &hellip;">
+  <meta name="description" content="Sometimes it is easier to make server-side operations run a bit faster.
+In the following post I&rsquo;ll show a few low-level optimizations that can &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -80,6 +79,50 @@ the database &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2014/08/20/speeding-up-server-side-operations/">Speeding Up Server-side Operations</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-08-20T22:02:09+02:00" pubdate data-updated="true">Aug 20<span>th</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>Sometimes it is easier to make server-side operations run a bit faster.
+In the following post I&rsquo;ll show a few low-level optimizations that can
+be applied to user-defined JavaScript code that is executed inside the
+ArangoDB server.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2014/08/20/speeding-up-server-side-operations/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -304,6 +347,10 @@ same data types).</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/02/07/using-ccache-when-working-with-different-branches/">Using Ccache When Working With Different Branches</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/02/05/using-arangodb-as-a-logstash-output/">Using ArangoDB as a Logstash Output</a>
       </li>
     
@@ -319,10 +366,6 @@ same data types).</p>
         <a href="/blog/2015/01/28/using-custom-visitors-in-aql-graph-traversals/">Using Custom Visitors in AQL Graph Traversals</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/01/23/explaining-aql-queries-the-fancy-way/">Explaining AQL Queries the Fancier Way</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -331,11 +374,11 @@ same data types).</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (8)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (20)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (4)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (2)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (5)</a></li><li><a href='/blog/categories/linux/'>Linux (4)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (4)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (8)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (20)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/foxx/'>Foxx (2)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (1)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (5)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (4)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (6)</li><ul class="month_list"><li class="month"><a href='/blog/2015/02/'>FEB (2)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (7)</li><ul class="month_list"><li class="month"><a href='/blog/2015/02/'>FEB (3)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

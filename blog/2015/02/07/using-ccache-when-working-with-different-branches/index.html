@@ -5,11 +5,11 @@
 <!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
 <head>
   <meta charset="utf-8">
-  <title>Getting Core Dumps of Failed TravisCI Builds - J@ArangoDB</title>
+  <title>Using Ccache When Working With Different Branches - J@ArangoDB</title>
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="I recently wrote about using TravisCI for continuously testing C++11 projects. Now, what if a build fails? Especially for C and C++ projects, build &hellip;">
+  <meta name="description" content="Git makes working with many different branches in the same local repository easy and efficient. In a C/C++ project, the code must be re-compiled &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -18,7 +18,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds">
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/02/07/using-ccache-when-working-with-different-branches">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
@@ -81,7 +81,7 @@
   
   <header>
     
-      <h1 class="entry-title">Getting Core Dumps of Failed TravisCI Builds</h1>
+      <h1 class="entry-title">Using Ccache When Working With Different Branches</h1>
     
     
       <p class="meta">
@@ -97,84 +97,120 @@
   
 
 
-<time datetime="2014-10-30T23:05:48+01:00" pubdate data-updated="true">Oct 30<span>th</span>, 2014</time>
+<time datetime="2015-02-07T17:00:15+01:00" pubdate data-updated="true">Feb 7<span>th</span>, 2015</time>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p>I recently wrote about <a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">using TravisCI for continuously testing C++11 projects</a>.</p>
+<div class="entry-content"><p>Git makes working with many different branches in the same local repository easy and efficient.</p>
 
-<p><strong>Now, what if a build fails?</strong></p>
+<p>In a C/C++ project, the code must be re-compiled after switching into another branch.
+If the branches only differ minimally, running <code>make</code> will only re-compile the parts that are
+actually different, and after that re-link them. That won&rsquo;t take too long, though especially
+link times can be annoying.</p>
 
-<p>Especially for C and C++ projects, build failures may mean crashed
-programs. In a local setup, the usual way to analyze program crashes
-is to manually inspect the core files that are written on crash.</p>
+<p>However, if there are differences in central header files that are included from every file,
+then <code>make</code> has no option but to <strong>re-compile everything</strong>. This can take significant amounts of
+time (and coffee).</p>
 
-<p>With TravisCI, there is no way to log in to a build machine and
-inspect a core dump interactively. There is no SSH access to
-the build machines. TravisCI does not even persist any state of
-builds but the result and the log output.</p>
-
-<p>There is a way to get to the core dumps, but it was fiddly to find
-out and set up.</p>
+<p>I just realized that there is a solution to speed up re-compilation in this situation:
+<a href="http://linux.die.net/man/1/ccache">ccache</a>!</p>
 
 <!-- more -->
 
 
-<p>The basic idea is to run <code>gdb</code> on the TravisCI build machine
-automatically when a build fails. <code>gdb</code> can be scripted, so all
-we need to do is to make it print a backtrace in all threads at
-the time of the crash.</p>
+<h2>Why ccache can help</h2>
 
-<p>By default, no core dumps will be produced on TravisCI. To turn them
-on, an appropriate ulimit value must be set. We also need to install
-<code>gdb</code> so we can actually run it. Here is the <code>.travis.yml</code> adjustment
-for these prerequisites:</p>
+<p>ccache is a wrapper for the actual compiler command. It will call the compiler with the specified
+arguments, and capture the compiler output. When called again with the same arguments, it will
+look in its internal cache for a ready-to-serve result. If one is present, it will return it
+without invoking the compiler again. Otherwise, or if it detects some changes that forbid serving
+outdated results from the cache, it will transparently invoke the compiler.</p>
 
-<figure class='code'><figcaption><span>adjustments for install and before_script hooks</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<p>When switching back to another branch that you had already compiled before, running <code>make</code>
+may re-build <em>everything</em> due to changes in headers. But it is not unlikely that you had built
+the branch before already. If so, and ccache was involved in the previous build, it may still
+have all the info required for re-compilation in its cache.</p>
+
+<p>And everyone will be happy: <code>make</code> will run its full rebuild, but most operations won&rsquo;t be handed
+to the compiler because ccache is sitting in between, serving results from its cache.
+And you as a developer won&rsquo;t lose that much time.</p>
+
+<h2>Some figures</h2>
+
+<p>Following are some figures demonstrating its potential when running a <code>make</code> in the devel branch
+after having returned from a different branch with significant changes.</p>
+
+<h3>With ccache, but cache empty</h3>
+
+<figure class='code'><figcaption><span>time make</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">install</span><span class="p-Indicator">:</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">sudo apt-get install -y gdb</span>  <span class="c1"># install gdb</span>
-</span><span class='line'>
-</span><span class='line'><span class="l-Scalar-Plain">before_script</span><span class="p-Indicator">:</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">ulimit -c unlimited -S</span>       <span class="c1"># enable core dumps</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>real  12m43.501s
+</span><span class='line'>user  11m52.550s
+</span><span class='line'>sys 0m44.110s</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>With ccache, everything in cache</h3>
+
+<figure class='code'><figcaption><span>time make</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>real  0m55.572s
+</span><span class='line'>user  0m26.346s
+</span><span class='line'>sys 0m7.551s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>That&rsquo;s a <strong>build time reduction of more than 90 %</strong>!</p>
+
+<p>This is already the optimal result, as everything was already present in the cache.
+However, the situation was not unrealistic. I often switch into another branch, try something
+out or commit a small change, and the return to the original branch. I already started having
+many separate directories for the different branches to avoid frequent recompilation.
+ccache can be relief here.</p>
+
+<p>By the way, timing results are from my laptop. I did not bother to run <code>make</code> with parallel
+jobs as this has limited effect on my laptop, though on more decent hardware it may be beneficial
+both with and without ccache, though I guess, with many parallel jobs and a full cache, linking
+will become the most expensive part.</p>
+
+<h2>How to use ccache</h2>
+
+<p>For Ubuntu, ccache is available in package <code>ccache</code>. You can easily install it with:</p>
+
+<figure class='code'><figcaption><span>Installing ccache on Ubuntu</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo apt-get install ccache
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>To get an idea of where the program crashed, we can finally install
-an <code>after_failure</code> hook. This hook can check for a core file and use
-<code>gdb</code> to print a nice backtrace.</p>
+<p>The most convenient way to use ccache in your build is to change your <code>CC</code> and <code>CXX</code>
+environment variables as follows:</p>
 
-<p>The core file pattern on TravisCI seems to be <code>core-%p</code>, so core
-filenames will include the executable&rsquo;s process id and change on
-every run. We can use <code>find</code> to look for files named <code>core*</code> in the
-cwd and pick the first one as there should only be at most one core
-file per build:</p>
-
-<figure class='code'><figcaption><span>adjustments for after_failure hook</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span>setting compilers environment variables</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='yaml'><span class='line'><span class="l-Scalar-Plain">after_failure</span><span class="p-Indicator">:</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">COREFILE=$(find . -maxdepth 1 -name &quot;core*&quot; | head -n 1)</span> <span class="c1"># find core file</span>
-</span><span class='line'><span class="p-Indicator">-</span> <span class="l-Scalar-Plain">if [[ -f &quot;$COREFILE&quot; ]]; then gdb -c &quot;$COREFILE&quot; example -ex &quot;thread apply all bt&quot; -ex &quot;set pagination 0&quot; -batch; fi</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">export </span><span class="nv">CC</span><span class="o">=</span><span class="s2">&quot;ccache gcc&quot;</span>
+</span><span class='line'><span class="nb">export </span><span class="nv">CXX</span><span class="o">=</span><span class="s2">&quot;ccache g++&quot;</span>
 </span></code></pre></td></tr></table></div></figure>
 
 
-<p>A failed build might produce output like this:</p>
+<p>I suggest putting that into <code>.bashrc</code> so the variables will be set in every session and not
+just once. After that, running <code>configure</code> will write a <code>Makefile</code> that will use ccache for
+building object files.</p>
 
-<p><img src="/downloads/screenshots/travis-ci-gdb.png"></p>
+<p>Note: that will change these environment variables globally, so ccache may be used for other
+projects, too.</p>
 
-<p>I recommend compiling the executable to test with debug symbols on and
-with all optimizations turned off (i.e. compiler options <code>-g -O0</code>).
-Otherwise backtraces might reveal less useful information for debugging.</p>
+<h3>What ccache cannot do</h3>
 
-<p>On a side note: the <a href="http://lint.travis-ci.org/">Travis WebLint</a> is a
-handy tool for validating <code>.travis.yml</code> files <em>before</em> pushing them.</p>
+<p>I already forgot about ccache because when working in a single branch it does not provide that
+many benefits. When making changes to your code, you can be pretty sure the new code won&rsquo;t be
+in the cache yet. Running <code>make</code> then will invoke ccache, but this will result in a cache miss.
+It cannot help here, because the new code was never compiled before and thus in no cache.</p>
+
+<p>Additionally, <code>make</code> is smart enough on its own to only re-build the parts of the program that
+have actually changed or depend on the changes you made.</p>
 </div>
 
 
@@ -197,12 +233,12 @@ handy tool for validating <code>.travis.yml</code> files <em>before</em> pushing
   
 
 
-<time datetime="2014-10-30T23:05:48+01:00" pubdate data-updated="true">Oct 30<span>th</span>, 2014</time>
+<time datetime="2015-02-07T17:00:15+01:00" pubdate data-updated="true">Feb 7<span>th</span>, 2015</time>
       
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>, <a class='category' href='/blog/categories/travisci/'>TravisCI</a>
+    <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>
   
 </span>
 
@@ -211,7 +247,7 @@ handy tool for validating <code>.travis.yml</code> files <em>before</em> pushing
     
       <div class="sharing">
   
-  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/" >Tweet</a>
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/02/07/using-ccache-when-working-with-different-branches/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/02/07/using-ccache-when-working-with-different-branches/" >Tweet</a>
   
   
   
@@ -220,10 +256,8 @@ handy tool for validating <code>.travis.yml</code> files <em>before</em> pushing
     
     <p class="meta">
       
-        <a class="basic-alignment left" href="/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/" title="Previous Post: What I most like about C++11">&laquo; What I most like about C++11</a>
+        <a class="basic-alignment left" href="/blog/2015/02/05/using-arangodb-as-a-logstash-output/" title="Previous Post: Using ArangoDB as a logstash output">&laquo; Using ArangoDB as a logstash output</a>
       
-      
-        <a class="basic-alignment right" href="/blog/2014/11/04/setting-up-test-data/" title="Next Post: Setting up test data">Setting up test data &raquo;</a>
       
     </p>
   </footer>

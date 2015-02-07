@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Linux | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/linux/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-02-06T01:17:16+01:00</updated>
+  <updated>2015-02-07T18:04:14+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,112 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Using Ccache When Working With Different Branches]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/02/07/using-ccache-when-working-with-different-branches/"/>
+    <updated>2015-02-07T17:00:15+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/02/07/using-ccache-when-working-with-different-branches</id>
+    <content type="html"><![CDATA[<p>Git makes working with many different branches in the same local repository easy and efficient.</p>
+
+<p>In a C/C++ project, the code must be re-compiled after switching into another branch.
+If the branches only differ minimally, running <code>make</code> will only re-compile the parts that are
+actually different, and after that re-link them. That won&rsquo;t take too long, though especially
+link times can be annoying.</p>
+
+<p>However, if there are differences in central header files that are included from every file,
+then <code>make</code> has no option but to <strong>re-compile everything</strong>. This can take significant amounts of
+time (and coffee).</p>
+
+<p>I just realized that there is a solution to speed up re-compilation in this situation:
+<a href="http://linux.die.net/man/1/ccache">ccache</a>!</p>
+
+<!-- more -->
+
+
+<h2>Why ccache can help</h2>
+
+<p>ccache is a wrapper for the actual compiler command. It will call the compiler with the specified
+arguments, and capture the compiler output. When called again with the same arguments, it will
+look in its internal cache for a ready-to-serve result. If one is present, it will return it
+without invoking the compiler again. Otherwise, or if it detects some changes that forbid serving
+outdated results from the cache, it will transparently invoke the compiler.</p>
+
+<p>When switching back to another branch that you had already compiled before, running <code>make</code>
+may re-build <em>everything</em> due to changes in headers. But it is not unlikely that you had built
+the branch before already. If so, and ccache was involved in the previous build, it may still
+have all the info required for re-compilation in its cache.</p>
+
+<p>And everyone will be happy: <code>make</code> will run its full rebuild, but most operations won&rsquo;t be handed
+to the compiler because ccache is sitting in between, serving results from its cache.
+And you as a developer won&rsquo;t lose that much time.</p>
+
+<h2>Some figures</h2>
+
+<p>Following are some figures demonstrating its potential when running a <code>make</code> in the devel branch
+after having returned from a different branch with significant changes.</p>
+
+<h3>With ccache, but cache empty</h3>
+
+<p><code>plain time make
+real  12m43.501s
+user  11m52.550s
+sys 0m44.110s
+</code></p>
+
+<h3>With ccache, everything in cache</h3>
+
+<p><code>plain time make
+real  0m55.572s
+user  0m26.346s
+sys 0m7.551s
+</code></p>
+
+<p>That&rsquo;s a <strong>build time reduction of more than 90 %</strong>!</p>
+
+<p>This is already the optimal result, as everything was already present in the cache.
+However, the situation was not unrealistic. I often switch into another branch, try something
+out or commit a small change, and the return to the original branch. I already started having
+many separate directories for the different branches to avoid frequent recompilation.
+ccache can be relief here.</p>
+
+<p>By the way, timing results are from my laptop. I did not bother to run <code>make</code> with parallel
+jobs as this has limited effect on my laptop, though on more decent hardware it may be beneficial
+both with and without ccache, though I guess, with many parallel jobs and a full cache, linking
+will become the most expensive part.</p>
+
+<h2>How to use ccache</h2>
+
+<p>For Ubuntu, ccache is available in package <code>ccache</code>. You can easily install it with:
+<code>bash Installing ccache on Ubuntu
+sudo apt-get install ccache
+</code></p>
+
+<p>The most convenient way to use ccache in your build is to change your <code>CC</code> and <code>CXX</code>
+environment variables as follows:
+<code>bash setting compilers environment variables
+export CC="ccache gcc"
+export CXX="ccache g++"
+</code></p>
+
+<p>I suggest putting that into <code>.bashrc</code> so the variables will be set in every session and not
+just once. After that, running <code>configure</code> will write a <code>Makefile</code> that will use ccache for
+building object files.</p>
+
+<p>Note: that will change these environment variables globally, so ccache may be used for other
+projects, too.</p>
+
+<h3>What ccache cannot do</h3>
+
+<p>I already forgot about ccache because when working in a single branch it does not provide that
+many benefits. When making changes to your code, you can be pretty sure the new code won&rsquo;t be
+in the cache yet. Running <code>make</code> then will invoke ccache, but this will result in a cache miss.
+It cannot help here, because the new code was never compiled before and thus in no cache.</p>
+
+<p>Additionally, <code>make</code> is smart enough on its own to only re-build the parts of the program that
+have actually changed or depend on the changes you made.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Getting Core Dumps of Failed TravisCI Builds]]></title>
