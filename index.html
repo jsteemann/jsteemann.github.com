@@ -10,7 +10,7 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="Contained in 2.5 are some small but useful AQL language improvements plus several AQL optimizer improvements. We are working on further AQL &hellip;">
+  <meta name="description" content="ArangoDB 2.5 comes with an upgraded version of V8, Google&rsquo;s open source JavaScript engine. The built-in version of V8 has been upgraded from 3. &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -79,6 +79,68 @@
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/02/26/more-es6-features/">More ES6 Features</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-02-26T12:00:46+01:00" pubdate data-updated="true">Feb 26<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>ArangoDB 2.5 comes with an upgraded version of V8, Google&rsquo;s open source JavaScript engine.</p>
+
+<p>The built-in version of V8 has been upgraded from 3.29.54 to 3.31.74.1.</p>
+
+<p>In addition to several already usable ES6 features (detailed in
+<a href="https://jsteemann.github.io/blog/2014/12/19/using-es6-features-in-arangodb/">this blog</a>,
+the following ES6 features are activated in ArangoDB 2.5 by default:</p>
+
+<ul>
+<li>iterators and generators</li>
+<li>template strings</li>
+<li>enhanced object literals</li>
+<li>enhanced numeric literals</li>
+<li>block scoping with <code>let</code> and constant variables using <code>const</code></li>
+<li>additional String methods (such as <code>startsWith</code>, <code>repeat</code> etc.)</li>
+</ul>
+
+
+<p>The above features are available in ArangoDB 2.5, and can now be used for scripting purposes
+in the ArangoShell and in server-side Foxx actions inside the database.</p>
+
+<p>This blog post briefly explains the features provides some quick examples for using them.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/02/26/more-es6-features/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -558,96 +620,6 @@ week. Time to play with some ES6 features!</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/12/14/99-bottles-of-beer/">99 Bottles of Beer</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-12-14T13:14:28+01:00" pubdate data-updated="true">Dec 14<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p><a href="http://www.99-bottles-of-beer.net/">99 bottles of beer</a> in AQL:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR quant IN 99..0 
-</span><span class='line'>  LET toPrint = (
-</span><span class='line'>    quant &gt; 1 ? 
-</span><span class='line'>      CONCAT(TO_STRING(quant), " bottles of beer on the wall, ", TO_STRING(quant), " bottles of beer.") : 
-</span><span class='line'>      (quant == 1 ? 
-</span><span class='line'>        "1 bottle of beer on the wall, 1 bottle of beer." :
-</span><span class='line'>        "No more bottles of beer on the wall, no more bottles of beer."
-</span><span class='line'>      )
-</span><span class='line'>  )
-</span><span class='line'> 
-</span><span class='line'>  LET suffix = (
-</span><span class='line'>    quant &gt; 2 ? 
-</span><span class='line'>      CONCAT(TO_STRING(quant - 1), " bottles of beer on the wall.") :
-</span><span class='line'>      (quant == 2 ? 
-</span><span class='line'>        "1 bottle of beer on the wall." :
-</span><span class='line'>        "no more bottles of beer on the wall."
-</span><span class='line'>      )
-</span><span class='line'>  )
-</span><span class='line'> 
-</span><span class='line'>  LET result = (
-</span><span class='line'>    quant &gt; 0 ? 
-</span><span class='line'>      CONCAT(toPrint, "\nTake one down, pass it around, ", suffix) : 
-</span><span class='line'>      CONCAT(toPrint, "\nGo to the store and buy some more, 99 bottles of beer on the wall.")
-</span><span class='line'>  )
-</span><span class='line'>
-</span><span class='line'>  RETURN result</span></code></pre></td></tr></table></div></figure>
-
-</div>
-  
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -670,6 +642,10 @@ week. Time to play with some ES6 features!</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/02/26/more-es6-features/">More ES6 Features</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/02/26/aql-improvements-in-25/">AQL Improvements in 2.5</a>
       </li>
     
@@ -685,10 +661,6 @@ week. Time to play with some ES6 features!</p>
         <a href="/blog/2015/02/03/using-dynamic-attribute-names-in-aql/">Using Dynamic Attribute Names in AQL</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/01/31/yaor-yet-another-optimizer-rule/">YAOR - Yet Another Optimizer Rule</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -697,11 +669,11 @@ week. Time to play with some ES6 features!</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (9)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (21)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/foxx/'>Foxx (2)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (2)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (5)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (5)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (9)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (22)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (2)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (5)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (8)</li><ul class="month_list"><li class="month"><a href='/blog/2015/02/'>FEB (4)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (9)</li><ul class="month_list"><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

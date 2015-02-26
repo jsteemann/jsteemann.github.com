@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-02-26T11:54:03+01:00</updated>
+  <updated>2015-02-26T13:31:30+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,333 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[More ES6 Features]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/02/26/more-es6-features/"/>
+    <updated>2015-02-26T12:00:46+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/02/26/more-es6-features</id>
+    <content type="html"><![CDATA[<p>ArangoDB 2.5 comes with an upgraded version of V8, Google&rsquo;s open source JavaScript engine.</p>
+
+<p>The built-in version of V8 has been upgraded from 3.29.54 to 3.31.74.1.</p>
+
+<p>In addition to several already usable ES6 features (detailed in
+<a href="https://jsteemann.github.io/blog/2014/12/19/using-es6-features-in-arangodb/">this blog</a>,
+the following ES6 features are activated in ArangoDB 2.5 by default:</p>
+
+<ul>
+<li>iterators and generators</li>
+<li>template strings</li>
+<li>enhanced object literals</li>
+<li>enhanced numeric literals</li>
+<li>block scoping with <code>let</code> and constant variables using <code>const</code></li>
+<li>additional String methods (such as <code>startsWith</code>, <code>repeat</code> etc.)</li>
+</ul>
+
+
+<p>The above features are available in ArangoDB 2.5, and can now be used for scripting purposes
+in the ArangoShell and in server-side Foxx actions inside the database.</p>
+
+<p>This blog post briefly explains the features provides some quick examples for using them.</p>
+
+<!-- more -->
+
+
+<h2>Iterators and generators</h2>
+
+<p>Iterator and generator support was optional in 2.4, but is turned on by default since 2.5.</p>
+
+<p>For everyone who is not familiar with generators in JavaScript, here&rsquo;s how they work:</p>
+
+<p>Generators are special functions tagged with an asterisk (<code>*</code>). Values are returned to the
+caller using the <code>yield</code> keyword:</p>
+
+<figure class='code'><figcaption><span>a simple generator that generates two values                                                            </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span><span class="o">*</span> <span class="nx">generate</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">yield</span> <span class="mi">23</span><span class="p">;</span>
+</span><span class='line'>  <span class="nx">yield</span> <span class="mi">42</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Calling the function with initialize/reset the generator. Calling the <code>next()</code> method on
+the generator&rsquo;s initial call return value produces the next sequence element. The element
+is returned in a <code>value</code> attribute. The <code>done</code> attribute indicates whether the sequence
+has come to an end:</p>
+
+<figure class='code'><figcaption><span>invoking the generator</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">generator</span> <span class="o">=</span> <span class="nx">generate</span><span class="p">();</span>
+</span><span class='line'><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">generator</span><span class="p">.</span><span class="nx">next</span><span class="p">());</span>  <span class="cm">/* { &quot;value&quot; : 23, &quot;done&quot; : false } */</span>
+</span><span class='line'><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">generator</span><span class="p">.</span><span class="nx">next</span><span class="p">());</span>  <span class="cm">/* { &quot;value&quot; : 42, &quot;done&quot; : false } */</span>
+</span><span class='line'><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">generator</span><span class="p">.</span><span class="nx">next</span><span class="p">());</span>  <span class="cm">/* { &quot;value&quot; : undefined, &quot;done&quot; : true } */</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<p>Sequences produced by generators can also be consumed via a <code>for...of</code> loop:</p>
+
+<figure class='code'><figcaption><span>consuming all values from a generator function</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">generator</span> <span class="o">=</span> <span class="nx">generate</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">value</span> <span class="nx">of</span> <span class="nx">generator</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">value</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In general, every object that is iteratable can be consumed using the <code>of</code> operator.
+Some built-in objects provide pre-defined iterators (e.g. <code>Map.keys()</code> or <code>Map.values()</code>),
+but you can also create iterators for your own objects:</p>
+
+<figure class='code'><figcaption><span>creating an iterator for an object</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">Sentence</span> <span class="p">(</span><span class="nx">text</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">this</span><span class="p">.</span><span class="nx">text</span> <span class="o">=</span> <span class="nx">text</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">Sentence</span><span class="p">.</span><span class="nx">prototype</span><span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">iterator</span><span class="p">]</span> <span class="o">=</span> <span class="kd">function</span><span class="o">*</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">regex</span> <span class="o">=</span> <span class="sr">/\S+/g</span><span class="p">;</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">text</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">text</span><span class="p">;</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">match</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">while</span> <span class="p">(</span><span class="nx">match</span> <span class="o">=</span> <span class="nx">regex</span><span class="p">.</span><span class="nx">exec</span><span class="p">(</span><span class="nx">text</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">yield</span> <span class="nx">match</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">sentence</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Sentence</span><span class="p">(</span><span class="s2">&quot;The quick brown fox jumped over the lazy dog&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">word</span> <span class="nx">of</span> <span class="nx">sentence</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">word</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Template strings</h2>
+
+<p>I know there are query string generators and such, but for the sake of the example, let&rsquo;s assume you
+wanted to write a query string in JavaScript. You might end up with something like this:</p>
+
+<figure class='code'><figcaption><span>multi-line query string</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span>
+</span><span class='line'>  <span class="s1">&#39;FOR doc IN users\n&#39;</span> <span class="o">+</span>
+</span><span class='line'>  <span class="s1">&#39;  FILTER doc.name == @name\n&#39;</span> <span class="o">+</span>
+</span><span class='line'>  <span class="s1">&#39;  RETURN doc\n&#39;</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This is hardly legible, and it is also very prone to errors.</p>
+
+<p>ES6 template strings provide a way to define multi-line string literals in a much easier and simpler way.
+Here&rsquo;s how to do it (note the backticks instead of the regular string quotes):</p>
+
+<figure class='code'><figcaption><span>using a multi-line template string</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span> <span class="err">`</span>
+</span><span class='line'><span class="nx">FOR</span> <span class="nx">doc</span> <span class="nx">IN</span> <span class="nx">users</span>
+</span><span class='line'>  <span class="nx">FILTER</span> <span class="nx">doc</span><span class="p">.</span><span class="nx">name</span> <span class="o">==</span> <span class="err">@</span><span class="nx">name</span>
+</span><span class='line'>  <span class="nx">RETURN</span> <span class="nx">doc</span>
+</span><span class='line'><span class="err">`</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Template strings also support value substitution, so you could even write something like this, too:</p>
+
+<figure class='code'><figcaption><span>value substitution in template strings</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">name</span> <span class="o">=</span> <span class="s2">&quot;AQL injection attempt \&quot; OR true OR \&quot;&quot;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span> <span class="err">`</span>
+</span><span class='line'><span class="nx">FOR</span> <span class="nx">doc</span> <span class="nx">IN</span> <span class="nx">users</span>
+</span><span class='line'>  <span class="nx">FILTER</span> <span class="nx">doc</span><span class="p">.</span><span class="nx">name</span> <span class="o">==</span> <span class="nx">$</span><span class="p">{</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">name</span><span class="p">)}</span>
+</span><span class='line'>  <span class="nx">RETURN</span> <span class="nx">doc</span>
+</span><span class='line'><span class="err">`</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<p>Note that while value substitution in template strings in convenient, you still have to be careful with
+user-generated values. Otherwise you might be subject to value injection attacks, as you would be with
+every other form of improper user value handling.</p>
+
+<h2>Enhanced object literals</h2>
+
+<p>Save some time when definining objects:</p>
+
+<figure class='code'><figcaption><span>using enhanced object literals</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">name</span> <span class="o">=</span> <span class="s2">&quot;foobar&quot;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">myObject</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">type</span> <span class="o">:</span> <span class="s2">&quot;myType&quot;</span><span class="p">,</span>   <span class="cm">/* always worked */</span>
+</span><span class='line'>  <span class="nx">name</span><span class="p">,</span>              <span class="cm">/* same as &quot;name&quot; : name */</span>
+</span><span class='line'>  <span class="nx">save</span> <span class="p">()</span> <span class="p">{</span>          <span class="cm">/* same as &quot;save&quot; : function () ... */</span>
+</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;save called!&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>  <span class="s2">&quot;type&quot;</span> <span class="o">:</span> <span class="s2">&quot;myType&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;name&quot;</span> <span class="o">:</span> <span class="s2">&quot;foobar&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;save&quot;</span> <span class="o">:</span> <span class="p">[</span><span class="nb">Function</span> <span class="s2">&quot;console.log(&quot;</span><span class="nx">save</span> <span class="nx">called</span><span class="o">!</span><span class="s2">&quot;);&quot;</span> <span class="p">...]</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As can be seen above, enhanced object literal declarations can save some typing and reduce redundancies
+in the code. Unfortunately we still cannot use object key names generated from expressions:</p>
+
+<figure class='code'><figcaption><span>does not work yet</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">myObject</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>  <span class="p">[</span> <span class="s2">&quot;foo&quot;</span> <span class="o">+</span> <span class="nx">bar</span><span class="s2">&quot; ] : &quot;</span><span class="nx">foobar</span><span class="err">&quot;</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Enhanced numeric literals</h2>
+
+<p>Numeric values can now be specified in binary or octal if required:</p>
+
+<figure class='code'><figcaption><span>numeric literals                                                                                        </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">life</span> <span class="o">=</span> <span class="mi">0</span><span class="nx">b101010</span><span class="p">;</span>          <span class="cm">/* binary, 42 in decimal */</span>
+</span><span class='line'><span class="kd">var</span> <span class="nx">filePermissions</span> <span class="o">=</span> <span class="mi">0</span><span class="nx">o777</span><span class="p">;</span>  <span class="cm">/* octal, 511 in decimal */</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<h2>Block scoping</h2>
+
+<p>As a mostly C++ programmer, I am always puzzled about the scoping of JavaScript variables.
+In the following example, variable <code>x</code> does not only live inside the curly brackets block in which
+it was declared, but also afterwards:</p>
+
+<figure class='code'><figcaption><span>numeric literals                                                                                        </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">work</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="kd">var</span> <span class="nx">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">x</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The reason is that the curly brackets around <code>var x = 1;</code> are not a scope at all in traditional
+JavaScript. This sucks, because variables can linger around in programs longer than necessary,
+leading to unwanted side-effects.</p>
+
+<p>With block-level scopes, this can be fixed. To use it, introduce variables not with the <code>var</code>
+keyword, but with <code>let</code>. <code>let</code> only works in strict mode, so make sure your function or module
+uses it.</p>
+
+<p>Now, with block-level scoping, the above snippet looks like this:</p>
+
+<figure class='code'><figcaption><span>numeric literals                                                                                        </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">work</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="s2">&quot;use strict&quot;</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="kd">let</span> <span class="nx">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">x</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And it will actually produce an error when trying to access variable <code>x</code> in the <code>return</code> statement.
+The reason is that the life of <code>x</code> was over as soon as its scope was left. The scope of variable <code>x</code> is
+now only the one with the <code>let</code> declaration inside the curly brackets.</p>
+
+<p>Someone else said &ldquo;<em>let is the new var</em>&rdquo;, and I think there&rsquo;s not much to add.</p>
+
+<p>Additionally, the <code>const</code> keyword can be used to define a read-only variables. Trying to re-define a
+constant will produce an error in strict mode (the desired behavior), and do nothing in non-strict mode.
+Another reason to use the strict mode.</p>
+
+<h2>Additional String methods</h2>
+
+<p><code>String</code> objects now provide extra built-in methods:</p>
+
+<ul>
+<li><code>string.startsWith(what)</code></li>
+<li><code>string.endsWith(what)</code></li>
+<li><code>string.includes(what)</code></li>
+<li><code>string.repeat(count)</code></li>
+<li><code>string.normalize(method)</code></li>
+<li><code>string.codePointAt(position)</code></li>
+</ul>
+
+
+<p>There is also an extra &ldquo;static&rdquo; method:</p>
+
+<ul>
+<li><code>String.fromCodePoint(codePoint)</code></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Improvements in 2.5]]></title>
@@ -2497,7 +2824,7 @@ or arangosh, start them with the option <code>--javascript.v8-options="--harmony
 <ul>
 <li>string.startsWith(what)</li>
 <li>string.endsWith(what)</li>
-<li>string.contains(what)</li>
+<li>string.includes(what)</li>
 <li>string.repeat(count)</li>
 <li>string.normalize(method)</li>
 <li>string.codePointAt(position)</li>
@@ -4854,133 +5181,6 @@ export CXXFLAGS="-g -O0"
 <p>This will turn off all optimizations and also generate debug symbols.</p>
 
 <p>Enjoy!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Handling Binary Data in Foxx]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/10/15/handling-binary-data-in-foxx/"/>
-    <updated>2014-10-15T20:41:30+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/10/15/handling-binary-data-in-foxx</id>
-    <content type="html"><![CDATA[<p>Handling binary data in JavaScript applications is a bit
-tricky because JavaScript does not provide a data type for
-binary data. This post explains how to use binary data in
-JavaScript actions written using ArangoDB&rsquo;s <a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a>.</p>
-
-<!-- more -->
-
-
-<h1>Strings vs. binary data</h1>
-
-<p>Internally, JavaScript strings are <a href="http://ecma-international.org/ecma-262/5.1/#sec-4.3.16">sequences of 16 bit integer values</a>.
-Furthermore, the ECMAScript standard requires that a JavaScript
-implementation should interpret characters in conformance with the
-Unicode standard, using either UCS-2 or UTF-16 encoding.</p>
-
-<p>While this is fine for handling natural language, it becomes problematic
-when trying to work with arbitrary binary data. Binary data cannot be
-used safely in a JavaScript string because it may not be valid UTF-16
-data.</p>
-
-<p>To make it work anyway, binary data needs to be stored in a wrapper
-object. I won&rsquo;t go into details about ES6 typed arrays here, but will
-focus on <code>Buffer</code> objects.</p>
-
-<h1>Binary data in Foxx actions</h1>
-
-<p>A Foxx route that shall handle HTTP POST requests containing arbitrary
-(binary) body in the request body should not use <code>req.body()</code>. The
-reason is that <code>req.body()</code> will return the body as a JavaScript string,
-and this isn&rsquo;t going to work with arbitrary binary data.</p>
-
-<p>Instead, the <code>req.rawBodyBuffer()</code> should be used. This will return the
-request body inside a buffer.
-Here&rsquo;s an example that stores the received data in a file on the server:</p>
-
-<figure class='code'><figcaption><span>Foxx action that can handle binary input</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">controller</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/receive-binary&#39;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="c1">// fetch request body into the buffer</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">body</span> <span class="o">=</span> <span class="nx">req</span><span class="p">.</span><span class="nx">rawBodyBuffer</span><span class="p">();</span>
-</span><span class='line'>  <span class="c1">// create an absolute filename, local to the Foxx application directory</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">filename</span> <span class="o">=</span> <span class="nx">applicationContext</span><span class="p">.</span><span class="nx">foxxFilename</span><span class="p">(</span><span class="s2">&quot;body&quot;</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;fs&quot;</span><span class="p">).</span><span class="nx">write</span><span class="p">(</span><span class="nx">filename</span><span class="p">,</span> <span class="nx">body</span><span class="p">);</span>
-</span><span class='line'><span class="p">});</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This action can be invoked as follows if the app is mounted with name <code>app</code>:</p>
-
-<pre><code>curl -X POST http://localhost:8529/app/receive-binary --data-binary @filename
-</code></pre>
-
-<p>This will send the contents of the file <code>filename</code> to the server. The Foxx
-action will then store the received data as is in a file name <code>body</code> in the
-application directory.</p>
-
-<p>Returning binary data from a Foxx action is simple, too. Here&rsquo;s a way that
-returns the contents of the file named <code>body</code> in the application&rsquo;s directory:</p>
-
-<figure class='code'><figcaption><span>Foxx action that returns contents of a file</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">controller</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/provide-binary-file&#39;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="c1">// create an absolute filename, local to the Foxx application directory</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">filename</span> <span class="o">=</span> <span class="nx">applicationContext</span><span class="p">.</span><span class="nx">foxxFilename</span><span class="p">(</span><span class="s2">&quot;body&quot;</span><span class="p">);</span>
-</span><span class='line'>  <span class="c1">// send the contents, this will also set mime type &quot;application/octet-stream&quot;</span>
-</span><span class='line'>  <span class="nx">res</span><span class="p">.</span><span class="nx">sendFile</span><span class="p">(</span><span class="nx">filename</span><span class="p">);</span>
-</span><span class='line'><span class="p">});</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>It is also possible to return data from an arbitrary buffer:</p>
-
-<figure class='code'><figcaption><span>Foxx action that returns data in a buffer </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">controller</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="s1">&#39;/provide-binary-buffer&#39;</span><span class="p">,</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">req</span><span class="p">,</span> <span class="nx">res</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="c1">// create an absolute filename, local to the Foxx application directory</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">filename</span> <span class="o">=</span> <span class="nx">applicationContext</span><span class="p">.</span><span class="nx">foxxFilename</span><span class="p">(</span><span class="s2">&quot;body&quot;</span><span class="p">);</span>
-</span><span class='line'>  <span class="c1">// read the file content into a buffer</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">fileContent</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;fs&quot;</span><span class="p">).</span><span class="nx">readBuffer</span><span class="p">(</span><span class="nx">filename</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="c1">// TODO: modify the contents of buffer here...</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="c1">// send the contents, this will also set mime type &quot;application/octet-stream&quot;</span>
-</span><span class='line'>  <span class="nx">res</span><span class="p">.</span><span class="nx">send</span><span class="p">(</span><span class="nx">fileContent</span><span class="p">);</span>
-</span><span class='line'><span class="p">});</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h1>Example application</h1>
-
-<p>I quickly put together an example application that shows how to handle arbitrary
-binary data in Foxx actions. The example app allows uploading files to the server.
-The server will then list these files and allows downloading them again.</p>
-
-<p>The application has no CSS at all. Its only purpose is to demo the server-side code.
-The application can be downloaded <a href="http://jsteemann.github.io/downloads/code/filelist-app.tar.gz">here</a>.</p>
-
-<p>Please note that the example application requires ArangoDB 2.3, which is currently
-in development.</p>
 ]]></content>
   </entry>
   

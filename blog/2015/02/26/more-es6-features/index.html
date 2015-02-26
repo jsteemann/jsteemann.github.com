@@ -1,0 +1,572 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>More ES6 Features - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="ArangoDB 2.5 comes with an upgraded version of V8, Google&rsquo;s open source JavaScript engine. The built-in version of V8 has been upgraded from 3. &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/02/26/more-es6-features">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>Notes on ArangoDB development</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">More ES6 Features</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-02-26T12:00:46+01:00" pubdate data-updated="true">Feb 26<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>ArangoDB 2.5 comes with an upgraded version of V8, Google&rsquo;s open source JavaScript engine.</p>
+
+<p>The built-in version of V8 has been upgraded from 3.29.54 to 3.31.74.1.</p>
+
+<p>In addition to several already usable ES6 features (detailed in
+<a href="https://jsteemann.github.io/blog/2014/12/19/using-es6-features-in-arangodb/">this blog</a>,
+the following ES6 features are activated in ArangoDB 2.5 by default:</p>
+
+<ul>
+<li>iterators and generators</li>
+<li>template strings</li>
+<li>enhanced object literals</li>
+<li>enhanced numeric literals</li>
+<li>block scoping with <code>let</code> and constant variables using <code>const</code></li>
+<li>additional String methods (such as <code>startsWith</code>, <code>repeat</code> etc.)</li>
+</ul>
+
+
+<p>The above features are available in ArangoDB 2.5, and can now be used for scripting purposes
+in the ArangoShell and in server-side Foxx actions inside the database.</p>
+
+<p>This blog post briefly explains the features provides some quick examples for using them.</p>
+
+<!-- more -->
+
+
+<h2>Iterators and generators</h2>
+
+<p>Iterator and generator support was optional in 2.4, but is turned on by default since 2.5.</p>
+
+<p>For everyone who is not familiar with generators in JavaScript, here&rsquo;s how they work:</p>
+
+<p>Generators are special functions tagged with an asterisk (<code>*</code>). Values are returned to the
+caller using the <code>yield</code> keyword:</p>
+
+<figure class='code'><figcaption><span>a simple generator that generates two values                                                            </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span><span class="o">*</span> <span class="nx">generate</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">yield</span> <span class="mi">23</span><span class="p">;</span>
+</span><span class='line'>  <span class="nx">yield</span> <span class="mi">42</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Calling the function with initialize/reset the generator. Calling the <code>next()</code> method on
+the generator&rsquo;s initial call return value produces the next sequence element. The element
+is returned in a <code>value</code> attribute. The <code>done</code> attribute indicates whether the sequence
+has come to an end:</p>
+
+<figure class='code'><figcaption><span>invoking the generator</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">generator</span> <span class="o">=</span> <span class="nx">generate</span><span class="p">();</span>
+</span><span class='line'><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">generator</span><span class="p">.</span><span class="nx">next</span><span class="p">());</span>  <span class="cm">/* { &quot;value&quot; : 23, &quot;done&quot; : false } */</span>
+</span><span class='line'><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">generator</span><span class="p">.</span><span class="nx">next</span><span class="p">());</span>  <span class="cm">/* { &quot;value&quot; : 42, &quot;done&quot; : false } */</span>
+</span><span class='line'><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">generator</span><span class="p">.</span><span class="nx">next</span><span class="p">());</span>  <span class="cm">/* { &quot;value&quot; : undefined, &quot;done&quot; : true } */</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<p>Sequences produced by generators can also be consumed via a <code>for...of</code> loop:</p>
+
+<figure class='code'><figcaption><span>consuming all values from a generator function</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">generator</span> <span class="o">=</span> <span class="nx">generate</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">value</span> <span class="nx">of</span> <span class="nx">generator</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">value</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In general, every object that is iteratable can be consumed using the <code>of</code> operator.
+Some built-in objects provide pre-defined iterators (e.g. <code>Map.keys()</code> or <code>Map.values()</code>),
+but you can also create iterators for your own objects:</p>
+
+<figure class='code'><figcaption><span>creating an iterator for an object</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">Sentence</span> <span class="p">(</span><span class="nx">text</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">this</span><span class="p">.</span><span class="nx">text</span> <span class="o">=</span> <span class="nx">text</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">Sentence</span><span class="p">.</span><span class="nx">prototype</span><span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">iterator</span><span class="p">]</span> <span class="o">=</span> <span class="kd">function</span><span class="o">*</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">regex</span> <span class="o">=</span> <span class="sr">/\S+/g</span><span class="p">;</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">text</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">text</span><span class="p">;</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">match</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">while</span> <span class="p">(</span><span class="nx">match</span> <span class="o">=</span> <span class="nx">regex</span><span class="p">.</span><span class="nx">exec</span><span class="p">(</span><span class="nx">text</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">yield</span> <span class="nx">match</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">sentence</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Sentence</span><span class="p">(</span><span class="s2">&quot;The quick brown fox jumped over the lazy dog&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">word</span> <span class="nx">of</span> <span class="nx">sentence</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">word</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Template strings</h2>
+
+<p>I know there are query string generators and such, but for the sake of the example, let&rsquo;s assume you
+wanted to write a query string in JavaScript. You might end up with something like this:</p>
+
+<figure class='code'><figcaption><span>multi-line query string</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span>
+</span><span class='line'>  <span class="s1">&#39;FOR doc IN users\n&#39;</span> <span class="o">+</span>
+</span><span class='line'>  <span class="s1">&#39;  FILTER doc.name == @name\n&#39;</span> <span class="o">+</span>
+</span><span class='line'>  <span class="s1">&#39;  RETURN doc\n&#39;</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This is hardly legible, and it is also very prone to errors.</p>
+
+<p>ES6 template strings provide a way to define multi-line string literals in a much easier and simpler way.
+Here&rsquo;s how to do it (note the backticks instead of the regular string quotes):</p>
+
+<figure class='code'><figcaption><span>using a multi-line template string</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span> <span class="err">`</span>
+</span><span class='line'><span class="nx">FOR</span> <span class="nx">doc</span> <span class="nx">IN</span> <span class="nx">users</span>
+</span><span class='line'>  <span class="nx">FILTER</span> <span class="nx">doc</span><span class="p">.</span><span class="nx">name</span> <span class="o">==</span> <span class="err">@</span><span class="nx">name</span>
+</span><span class='line'>  <span class="nx">RETURN</span> <span class="nx">doc</span>
+</span><span class='line'><span class="err">`</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Template strings also support value substitution, so you could even write something like this, too:</p>
+
+<figure class='code'><figcaption><span>value substitution in template strings</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">name</span> <span class="o">=</span> <span class="s2">&quot;AQL injection attempt \&quot; OR true OR \&quot;&quot;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span> <span class="err">`</span>
+</span><span class='line'><span class="nx">FOR</span> <span class="nx">doc</span> <span class="nx">IN</span> <span class="nx">users</span>
+</span><span class='line'>  <span class="nx">FILTER</span> <span class="nx">doc</span><span class="p">.</span><span class="nx">name</span> <span class="o">==</span> <span class="nx">$</span><span class="p">{</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">name</span><span class="p">)}</span>
+</span><span class='line'>  <span class="nx">RETURN</span> <span class="nx">doc</span>
+</span><span class='line'><span class="err">`</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<p>Note that while value substitution in template strings in convenient, you still have to be careful with
+user-generated values. Otherwise you might be subject to value injection attacks, as you would be with
+every other form of improper user value handling.</p>
+
+<h2>Enhanced object literals</h2>
+
+<p>Save some time when definining objects:</p>
+
+<figure class='code'><figcaption><span>using enhanced object literals</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">name</span> <span class="o">=</span> <span class="s2">&quot;foobar&quot;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">myObject</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">type</span> <span class="o">:</span> <span class="s2">&quot;myType&quot;</span><span class="p">,</span>   <span class="cm">/* always worked */</span>
+</span><span class='line'>  <span class="nx">name</span><span class="p">,</span>              <span class="cm">/* same as &quot;name&quot; : name */</span>
+</span><span class='line'>  <span class="nx">save</span> <span class="p">()</span> <span class="p">{</span>          <span class="cm">/* same as &quot;save&quot; : function () ... */</span>
+</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;save called!&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">{</span>
+</span><span class='line'>  <span class="s2">&quot;type&quot;</span> <span class="o">:</span> <span class="s2">&quot;myType&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;name&quot;</span> <span class="o">:</span> <span class="s2">&quot;foobar&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;save&quot;</span> <span class="o">:</span> <span class="p">[</span><span class="nb">Function</span> <span class="s2">&quot;console.log(&quot;</span><span class="nx">save</span> <span class="nx">called</span><span class="o">!</span><span class="s2">&quot;);&quot;</span> <span class="p">...]</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As can be seen above, enhanced object literal declarations can save some typing and reduce redundancies
+in the code. Unfortunately we still cannot use object key names generated from expressions:</p>
+
+<figure class='code'><figcaption><span>does not work yet</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">myObject</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>  <span class="p">[</span> <span class="s2">&quot;foo&quot;</span> <span class="o">+</span> <span class="nx">bar</span><span class="s2">&quot; ] : &quot;</span><span class="nx">foobar</span><span class="err">&quot;</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Enhanced numeric literals</h2>
+
+<p>Numeric values can now be specified in binary or octal if required:</p>
+
+<figure class='code'><figcaption><span>numeric literals                                                                                        </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">life</span> <span class="o">=</span> <span class="mi">0</span><span class="nx">b101010</span><span class="p">;</span>          <span class="cm">/* binary, 42 in decimal */</span>
+</span><span class='line'><span class="kd">var</span> <span class="nx">filePermissions</span> <span class="o">=</span> <span class="mi">0</span><span class="nx">o777</span><span class="p">;</span>  <span class="cm">/* octal, 511 in decimal */</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<h2>Block scoping</h2>
+
+<p>As a mostly C++ programmer, I am always puzzled about the scoping of JavaScript variables.
+In the following example, variable <code>x</code> does not only live inside the curly brackets block in which
+it was declared, but also afterwards:</p>
+
+<figure class='code'><figcaption><span>numeric literals                                                                                        </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">work</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="kd">var</span> <span class="nx">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">x</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The reason is that the curly brackets around <code>var x = 1;</code> are not a scope at all in traditional
+JavaScript. This sucks, because variables can linger around in programs longer than necessary,
+leading to unwanted side-effects.</p>
+
+<p>With block-level scopes, this can be fixed. To use it, introduce variables not with the <code>var</code>
+keyword, but with <code>let</code>. <code>let</code> only works in strict mode, so make sure your function or module
+uses it.</p>
+
+<p>Now, with block-level scoping, the above snippet looks like this:</p>
+
+<figure class='code'><figcaption><span>numeric literals                                                                                        </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">work</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="s2">&quot;use strict&quot;</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="kd">let</span> <span class="nx">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">x</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And it will actually produce an error when trying to access variable <code>x</code> in the <code>return</code> statement.
+The reason is that the life of <code>x</code> was over as soon as its scope was left. The scope of variable <code>x</code> is
+now only the one with the <code>let</code> declaration inside the curly brackets.</p>
+
+<p>Someone else said &ldquo;<em>let is the new var</em>&rdquo;, and I think there&rsquo;s not much to add.</p>
+
+<p>Additionally, the <code>const</code> keyword can be used to define a read-only variables. Trying to re-define a
+constant will produce an error in strict mode (the desired behavior), and do nothing in non-strict mode.
+Another reason to use the strict mode.</p>
+
+<h2>Additional String methods</h2>
+
+<p><code>String</code> objects now provide extra built-in methods:</p>
+
+<ul>
+<li><code>string.startsWith(what)</code></li>
+<li><code>string.endsWith(what)</code></li>
+<li><code>string.includes(what)</code></li>
+<li><code>string.repeat(count)</code></li>
+<li><code>string.normalize(method)</code></li>
+<li><code>string.codePointAt(position)</code></li>
+</ul>
+
+
+<p>There is also an extra &ldquo;static&rdquo; method:</p>
+
+<ul>
+<li><code>String.fromCodePoint(codePoint)</code></li>
+</ul>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-02-26T12:00:46+01:00" pubdate data-updated="true">Feb 26<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/es6/'>ES6</a>, <a class='category' href='/blog/categories/foxx/'>Foxx</a>, <a class='category' href='/blog/categories/javascript/'>JavaScript</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/02/26/more-es6-features/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/02/26/more-es6-features/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/02/26/aql-improvements-in-25/" title="Previous Post: AQL improvements in 2.5">&laquo; AQL improvements in 2.5</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/02/26/more-es6-features/">More ES6 Features</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/02/26/aql-improvements-in-25/">AQL Improvements in 2.5</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/02/07/using-ccache-when-working-with-different-branches/">Using Ccache When Working With Different Branches</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/02/05/using-arangodb-as-a-logstash-output/">Using ArangoDB as a Logstash Output</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/02/03/using-dynamic-attribute-names-in-aql/">Using Dynamic Attribute Names in AQL</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (9)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (22)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (2)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (5)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (9)</li><ul class="month_list"><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

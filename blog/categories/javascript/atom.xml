@@ -4,7 +4,7 @@
   <title><![CDATA[Category: JavaScript | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/javascript/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-02-26T11:54:03+01:00</updated>
+  <updated>2015-02-26T13:31:30+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,258 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[More ES6 Features]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/02/26/more-es6-features/"/>
+    <updated>2015-02-26T12:00:46+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/02/26/more-es6-features</id>
+    <content type="html"><![CDATA[<p>ArangoDB 2.5 comes with an upgraded version of V8, Google&rsquo;s open source JavaScript engine.</p>
+
+<p>The built-in version of V8 has been upgraded from 3.29.54 to 3.31.74.1.</p>
+
+<p>In addition to several already usable ES6 features (detailed in
+<a href="https://jsteemann.github.io/blog/2014/12/19/using-es6-features-in-arangodb/">this blog</a>,
+the following ES6 features are activated in ArangoDB 2.5 by default:</p>
+
+<ul>
+<li>iterators and generators</li>
+<li>template strings</li>
+<li>enhanced object literals</li>
+<li>enhanced numeric literals</li>
+<li>block scoping with <code>let</code> and constant variables using <code>const</code></li>
+<li>additional String methods (such as <code>startsWith</code>, <code>repeat</code> etc.)</li>
+</ul>
+
+
+<p>The above features are available in ArangoDB 2.5, and can now be used for scripting purposes
+in the ArangoShell and in server-side Foxx actions inside the database.</p>
+
+<p>This blog post briefly explains the features provides some quick examples for using them.</p>
+
+<!-- more -->
+
+
+<h2>Iterators and generators</h2>
+
+<p>Iterator and generator support was optional in 2.4, but is turned on by default since 2.5.</p>
+
+<p>For everyone who is not familiar with generators in JavaScript, here&rsquo;s how they work:</p>
+
+<p>Generators are special functions tagged with an asterisk (<code>*</code>). Values are returned to the
+caller using the <code>yield</code> keyword:</p>
+
+<p><code>js a simple generator that generates two values                                                            
+function* generate () {                                                                                       
+  yield 23;                                                                                                   
+  yield 42;                                                                                                   
+}                                                                                                            
+</code></p>
+
+<p>Calling the function with initialize/reset the generator. Calling the <code>next()</code> method on
+the generator&rsquo;s initial call return value produces the next sequence element. The element
+is returned in a <code>value</code> attribute. The <code>done</code> attribute indicates whether the sequence
+has come to an end:</p>
+
+<p><code>js invoking the generator
+var generator = generate();                                                                                   
+console.log(generator.next());  /* { "value" : 23, "done" : false } */                                        
+console.log(generator.next());  /* { "value" : 42, "done" : false } */                                        
+console.log(generator.next());  /* { "value" : undefined, "done" : true } */                                  
+</code></p>
+
+<p>Sequences produced by generators can also be consumed via a <code>for...of</code> loop:</p>
+
+<p>```js consuming all values from a generator function
+var generator = generate();</p>
+
+<p>for (var value of generator) {
+  console.log(value);
+}
+```</p>
+
+<p>In general, every object that is iteratable can be consumed using the <code>of</code> operator.
+Some built-in objects provide pre-defined iterators (e.g. <code>Map.keys()</code> or <code>Map.values()</code>),
+but you can also create iterators for your own objects:</p>
+
+<p>```js creating an iterator for an object
+function Sentence (text) {
+  this.text = text;
+}</p>
+
+<p>Sentence.prototype[Symbol.iterator] = function*() {
+  var regex = /\S+/g;
+  var text = this.text;
+  var match;
+  while (match = regex.exec(text)) {</p>
+
+<pre><code>yield match[0]; 
+</code></pre>
+
+<p>  }
+};</p>
+
+<p>var sentence = new Sentence(&ldquo;The quick brown fox jumped over the lazy dog&rdquo;);
+for (var word of sentence) {
+  console.log(word);
+}
+```</p>
+
+<h2>Template strings</h2>
+
+<p>I know there are query string generators and such, but for the sake of the example, let&rsquo;s assume you
+wanted to write a query string in JavaScript. You might end up with something like this:</p>
+
+<p><code>js multi-line query string
+var query =
+  'FOR doc IN users\n' +
+  '  FILTER doc.name == @name\n' +
+  '  RETURN doc\n';
+</code></p>
+
+<p>This is hardly legible, and it is also very prone to errors.</p>
+
+<p>ES6 template strings provide a way to define multi-line string literals in a much easier and simpler way.
+Here&rsquo;s how to do it (note the backticks instead of the regular string quotes):</p>
+
+<p><code>js using a multi-line template string
+var query = `
+FOR doc IN users
+  FILTER doc.name == @name
+  RETURN doc
+`;
+</code></p>
+
+<p>Template strings also support value substitution, so you could even write something like this, too:
+```js value substitution in template strings
+var name = &ldquo;AQL injection attempt \&rdquo; OR true OR \&ldquo;&rdquo;;</p>
+
+<p>var query = <code>
+FOR doc IN users
+  FILTER doc.name == ${JSON.stringify(name)}
+  RETURN doc
+</code>;
+```</p>
+
+<p>Note that while value substitution in template strings in convenient, you still have to be careful with
+user-generated values. Otherwise you might be subject to value injection attacks, as you would be with
+every other form of improper user value handling.</p>
+
+<h2>Enhanced object literals</h2>
+
+<p>Save some time when definining objects:</p>
+
+<p>```js using enhanced object literals
+var name = &ldquo;foobar&rdquo;;</p>
+
+<p>myObject = {
+  type : &ldquo;myType&rdquo;,   /<em> always worked </em>/
+  name,              /<em> same as &ldquo;name&rdquo; : name </em>/
+  save () {          /<em> same as &ldquo;save&rdquo; : function () &hellip; </em>/</p>
+
+<pre><code>console.log("save called!"); 
+</code></pre>
+
+<p>  }
+};</p>
+
+<p>{
+  &ldquo;type&rdquo; : &ldquo;myType&rdquo;,
+  &ldquo;name&rdquo; : &ldquo;foobar&rdquo;,
+  &ldquo;save&rdquo; : [Function &ldquo;console.log("save called!&rdquo;);&ldquo; &hellip;]
+}
+```</p>
+
+<p>As can be seen above, enhanced object literal declarations can save some typing and reduce redundancies
+in the code. Unfortunately we still cannot use object key names generated from expressions:</p>
+
+<p><code>js does not work yet
+myObject = {
+  [ "foo" + bar" ] : "foobar"
+};
+</code></p>
+
+<h2>Enhanced numeric literals</h2>
+
+<p>Numeric values can now be specified in binary or octal if required:</p>
+
+<p><code>js numeric literals                                                                                        
+var life = 0b101010;          /* binary, 42 in decimal */                                                     
+var filePermissions = 0o777;  /* octal, 511 in decimal */                                                     
+</code></p>
+
+<h2>Block scoping</h2>
+
+<p>As a mostly C++ programmer, I am always puzzled about the scoping of JavaScript variables.
+In the following example, variable <code>x</code> does not only live inside the curly brackets block in which
+it was declared, but also afterwards:</p>
+
+<p>```
+function work () {
+  {</p>
+
+<pre><code>var x = 1;
+</code></pre>
+
+<p>  }
+  return x;
+}
+```</p>
+
+<p>The reason is that the curly brackets around <code>var x = 1;</code> are not a scope at all in traditional
+JavaScript. This sucks, because variables can linger around in programs longer than necessary,
+leading to unwanted side-effects.</p>
+
+<p>With block-level scopes, this can be fixed. To use it, introduce variables not with the <code>var</code>
+keyword, but with <code>let</code>. <code>let</code> only works in strict mode, so make sure your function or module
+uses it.</p>
+
+<p>Now, with block-level scoping, the above snippet looks like this:
+```
+function work () {
+  &ldquo;use strict&rdquo;;
+  {</p>
+
+<pre><code>let x = 1; 
+</code></pre>
+
+<p>  }
+  return x;
+};
+```</p>
+
+<p>And it will actually produce an error when trying to access variable <code>x</code> in the <code>return</code> statement.
+The reason is that the life of <code>x</code> was over as soon as its scope was left. The scope of variable <code>x</code> is
+now only the one with the <code>let</code> declaration inside the curly brackets.</p>
+
+<p>Someone else said &ldquo;<em>let is the new var</em>&rdquo;, and I think there&rsquo;s not much to add.</p>
+
+<p>Additionally, the <code>const</code> keyword can be used to define a read-only variables. Trying to re-define a
+constant will produce an error in strict mode (the desired behavior), and do nothing in non-strict mode.
+Another reason to use the strict mode.</p>
+
+<h2>Additional String methods</h2>
+
+<p><code>String</code> objects now provide extra built-in methods:</p>
+
+<ul>
+<li><code>string.startsWith(what)</code></li>
+<li><code>string.endsWith(what)</code></li>
+<li><code>string.includes(what)</code></li>
+<li><code>string.repeat(count)</code></li>
+<li><code>string.normalize(method)</code></li>
+<li><code>string.codePointAt(position)</code></li>
+</ul>
+
+
+<p>There is also an extra &ldquo;static&rdquo; method:</p>
+
+<ul>
+<li><code>String.fromCodePoint(codePoint)</code></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Using Dynamic Attribute Names in AQL]]></title>
@@ -538,7 +790,7 @@ or arangosh, start them with the option <code>--javascript.v8-options="--harmony
 <ul>
 <li>string.startsWith(what)</li>
 <li>string.endsWith(what)</li>
-<li>string.contains(what)</li>
+<li>string.includes(what)</li>
 <li>string.repeat(count)</li>
 <li>string.normalize(method)</li>
 <li>string.codePointAt(position)</li>
@@ -1072,208 +1324,6 @@ this supports a service-oriented approach.</p>
 <p>To learn more about how to write server-side actions, please have a look
 at ArangoDB&rsquo;s <a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a>. It is all
 about making server-side actions available via REST APIs.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Speeding Up Server-side Operations]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/08/20/speeding-up-server-side-operations/"/>
-    <updated>2014-08-20T22:02:09+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/08/20/speeding-up-server-side-operations</id>
-    <content type="html"><![CDATA[<p>Sometimes it is easier to make server-side operations run a bit faster.
-In the following post I&rsquo;ll show a few low-level optimizations that can
-be applied to user-defined JavaScript code that is executed inside the
-ArangoDB server.</p>
-
-<!-- more -->
-
-
-<h1>Scope</h1>
-
-<p>Some data-access operations can be sped up by using the appropriate indexes,
-but that&rsquo;s not what I am going to show here.
-Instead, I want to demo a few easy optimizations that don&rsquo;t require any
-changes to the data. Only JavaScript code needs to be minimally adjusted
-to use them.</p>
-
-<p>Note that I am not talking about code that is executed in the ArangoShell
-here. I will only be looking at code that is executed inside the arangod
-server instance. The natural places for using custom JavaScript code in
-the ArangoDB server are for example:</p>
-
-<ul>
-<li><a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a> controllers</li>
-<li><a href="http://docs.arangodb.org/Transactions/TransactionInvocation.html">transactions</a></li>
-<li><a href="http://docs.arangodb.org/ModuleTasks/README.html">tasks</a></li>
-<li><a href="http://docs.arangodb.org/Traversals/README.html">traversals</a></li>
-</ul>
-
-
-<p>Of course it does not make much sense to optimize operations that are not
-called very often. The code changes I show will only be useful for server-side
-operations that are called very often, for example, from within loops or
-from batch processing actions.</p>
-
-<p>Before starting to change any code, please make sure that the code is executed
-often and that it accounts for a significant part of the total execution time.</p>
-
-<h2>Baseline</h2>
-
-<p>Imagine the following custom JavaScript code running somewhere inside ArangoDB:
-<code>js baseline
-for (var i = 0; i &lt; 100000; ++i) {
-  db.test.save({ value: 1 });
-}
-</code>
-This code inserts 100,000 documents into a collection <code>test</code>. Each document has
-one attribute only. These numbers are arbitrary, but good enough for a demo.</p>
-
-<p>What can we do to improve the runtime of the above code?</p>
-
-<h2>Non-optimizations</h2>
-
-<p>The <em>for</em> statement itself is not worth optimizing. It won&rsquo;t matter much if we used
-pre-increment or post-increment for the loop induction variable <code>i</code> or if we
-turned the <em>for</em> loop into a <em>while</em> loop. Any changes here might only save us a
-few nanoseconds in total, but are likely to make the code more unreadable.</p>
-
-<p>Let&rsquo;s not do that!</p>
-
-<h2>Avoiding accessors</h2>
-
-<p>Clearly, we should be looking at the <code>save</code> operation.</p>
-
-<p><code>db.test.save()</code> looks like a function call, and we learned that function are
-expensive. In this case, we cannot avoid the function call to <code>save()</code>, but we
-can avoid another <em>hidden function call</em>. Yes, <code>db.test</code> actually calls a function,
-though it does not look like it does.</p>
-
-<p>The <code>db</code> object has auto-magic member attributes. The <code>db</code> object will have a
-member attribute for existing collection. The member will automatically vanish when
-a collection gets dropped, and the member will rename itself when collections are
-renamed.</p>
-
-<p>This magic is made possible by late-binding attributes and using accessor functions
-for attribute accesses on the <code>db</code> object: whenever the attributes of the <code>db</code> object
-are queried, an accessor function (<em>property query</em>) is called internally to compile
-them. Accessing a specific attribute of the <code>db</code> object will also call an accessor
-function (<em>property get</em>). This is exactly what happens in our case when we access
-<code>db.test</code>.</p>
-
-<p>If this was too complicated, it may become more obvious if we modified the original
-code to this:
-<code>js using attribute lookup
-for (var i = 0; i &lt; 100000; ++i) {
-  db['test'].save({ value: 1 });
-}
-</code>
-Now it should be obvious that accessing <code>test</code> requires an attribute lookup on the
-<code>db</code> object, and behind the scenes the same will happen if we had written <code>db.test</code>
-instead.</p>
-
-<p>Let&rsquo;s avoid the repeated call to the accessor function inside the loop! This can
-easily be achieved by assigning <code>db.test</code> to a variable once and forever outside
-of the loop. This technique is called loop-invariant code motion, and it can be
-applied in a lot of other situations, too:
-<code>js loop-invariant code motion
-var collection = db.test;
-for (var i = 0; i &lt; 100000; ++i) {
-  collection.save({ value: 1 });
-}
-</code>
-(on a side note: you cannot assign <code>db.test.save</code> to a variable and call it as a
-function)</p>
-
-<h2>Enjoying the silence</h2>
-
-<p>The <code>save</code> operation is chatty. Every time it is called, it will return some meta
-data from the just-inserted document, e.g.:
-<code>json save result
-{
-  "_id" : "test/11443981931568",
-  "_rev" : "11443981931568",
-  "_key" : "11443981931568"
-}
-</code>
-In our case, we&rsquo;re not interested in these returned values, and we don&rsquo;t
-capture them in a variable.
-The <code>save</code> function doesn&rsquo;t know this and will happily assemble its
-result array. The array consists of three string values (six when also counting
-attribute names). Setting up the result definitely requires costly
-memory allocations and string copying.</p>
-
-<p>We can avoid all this by passing an <em>options</em> parameter into <code>save</code>, and setting
-its <code>silent</code> attribute to <code>true</code>:
-<code>js silence option
-for (var i = 0; i &lt; 100000; ++i) {
-  db.test.save({ value: 1 }, { silent: true });
-}
-</code>
-Now <code>save()</code> will only return a boolean value, which is much quicker.</p>
-
-<h2>Transactions</h2>
-
-<p>Yet another alternative is use to wrap the operations in the loop into a
-transaction. Transaction themselves won&rsquo;t buy us much feature-wise, so why use
-them? The reason is simple: if we do not use a transaction ourselves, each
-<code>save</code> operation will implicitly be executed in a transaction of its own.
-For a loop with 100,000 operations, that will be 100K transactions!</p>
-
-<p>So when we put all the operations into a single, now explicit transaction,
-we can save the overhead of 99,999 transaction begin and commit operations.
-Here&rsquo;s how to do it:
-```js transaction
-db._executeTransaction({
-  collections: {</p>
-
-<pre><code>write: "test"
-</code></pre>
-
-<p>  },
-  action: function () {</p>
-
-<pre><code>for (var i = 0; i &lt; 100000; ++i) { 
-  db.test.save({ value: 1 });
-}
-</code></pre>
-
-<p>  }
-});
-```</p>
-
-<h1>Results</h1>
-
-<p>How far have we got with these minimal code adjustments?</p>
-
-<p>I have put together a <a href="/downloads/code/speeding-up-server.js">script</a>
-that can be run in arangod. The script will run each version of the loop
-10 times and time the execution. The minimum, maximum and
-average execution times are printed (in seconds, less is better). Note that
-the absolute times do not matter much here. Please have a look at the percentage
-column, which shows the execution time of each variant in comparison to the
-baseline.</p>
-
-<p>Here&rsquo;s an excerpt of the script&rsquo;s output:</p>
-
-<p>```plain results</p>
-
-<h2>test name      |   total (s) |     min (s) |     max (s) |    avg2 (s) |       %</h2>
-
-<p>baseline       |     13.0940 |      1.2907 |      1.3357 |      1.3084 |  100.00
-loop-invariant |     10.6888 |      1.0506 |      1.1042 |      1.0667 |   81.53
-silence        |     11.7186 |      1.1512 |      1.2247 |      1.1678 |   89.25
-transaction    |     10.1521 |      0.9987 |      1.0346 |      1.0149 |   77.56
-combined       |      7.8545 |      0.7768 |      0.7977 |      0.7850 |   59.99</p>
-
-<p>```
-As can be seen, moving the loop-invariant accessor function call outside of the
-loop provided an almost 20% speedup (from 1.30 to 1.06 s). Using the silence
-option did also provide some, but not the same speedup. Using transactions reduced
-the execution time, and by putting all this together, a reduction of about 40 %
-was achieved.</p>
-
-<p>Your mileage may vary. Please feel free to adjust the test script and run your
-own tests.</p>
 ]]></content>
   </entry>
   
