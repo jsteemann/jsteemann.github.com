@@ -112,7 +112,7 @@
         <loc>
             http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/
         </loc>
-        <lastmod>2015-02-03T22:51:26+01:00</lastmod>
+        <lastmod>2015-02-26T11:50:21+01:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/02/05/using-arangodb-as-a-logstash-output/</loc>
@@ -125,8 +125,12 @@
         <lastmod>2015-02-07T18:04:07+01:00</lastmod>
     </url>
     <url>
+        <loc>http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25/</loc>
+        <lastmod>2015-02-26T11:53:16+01:00</lastmod>
+    </url>
+    <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2015-02-07T18:04:07+01:00</lastmod>
+        <lastmod>2015-02-26T11:53:16+01:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -134,6 +138,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2015-02-07T18:04:07+01:00</lastmod>
+        <lastmod>2015-02-26T11:53:16+01:00</lastmod>
     </url>
 </urlset>

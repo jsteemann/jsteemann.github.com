@@ -4,7 +4,7 @@
   <title><![CDATA[Category: JavaScript | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/javascript/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-02-08T00:24:57+01:00</updated>
+  <updated>2015-02-26T11:54:03+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -131,8 +131,8 @@ committed the feature yet. There might still be cases in which it doesn&rsquo;t 
 for the feature are also still missing. I hope I can finalize the implementation soon
 so it becomes available in some release.</del></p>
 
-<p><strong>UPDATE</strong>: tests have been added now, and there has been committed in devel. It will
-be included in AranoDB 2.5.</p>
+<p><strong>UPDATE</strong>: tests have been added, and the feature has been committed in devel. It is
+included in ArangoDB since version 2.5.</p>
 
 <p>Everyone is welcome to try it out already!</p>
 ]]></content>

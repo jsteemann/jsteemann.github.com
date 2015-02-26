@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-02-08T00:24:57+01:00</updated>
+  <updated>2015-02-26T11:54:03+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,191 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[AQL Improvements in 2.5]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25/"/>
+    <updated>2015-02-26T10:35:31+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25</id>
+    <content type="html"><![CDATA[<p>Contained in 2.5 are some small but useful AQL language improvements plus several AQL optimizer improvements.</p>
+
+<p>We are working on further AQL improvements for 2.5, but work is still ongoing.
+This post summarizes the improvements that are already completed and will be shipped with the initial ArangoDB
+2.5 release.</p>
+
+<!-- more -->
+
+
+<h1>Language improvements</h1>
+
+<h2>Dynamic attribute names</h2>
+
+<p>Often the need arises to dynamically name object attributes in return values.
+In AQL this was not directly possible so far, though there were some workarounds available to achieve about
+the same result. <a href="https://docs.arangodb.com/cookbook/UsingDynamicAttributeNames.html">This recipe</a> summarizes
+the options that are available to pre-ArangoDB 2.5 users.</p>
+
+<p>With ArangoDB 2.5, dynamic attribute names can be constructed much more easily and flexibly. Object
+attribute names in ArangoDB 2.5 can be specified using static string literals, bind parameters,
+and dynamic expressions.</p>
+
+<p>Dynamic expressions are most interesting, and to disambiguate them from other regular string literal attribute
+names, dynamic attribute names need to be enclosed in square brackets (<code>[</code> and <code>]</code>). I have written about
+that before in <a href="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/">this blog</a>.</p>
+
+<p>Here is an example query that uses the new syntax:</p>
+
+<p><code>plain example query using dynamic attribute names
+FOR i IN [ 17, 23, 42, 83 ]
+  RETURN { [ CONCAT('value-of-', i, ' * ', i) ] : i * i }
+</code></p>
+
+<p>This will produce:</p>
+
+<p>```json query result
+[
+  {</p>
+
+<pre><code>"value-of-17 * 17" : 289 
+</code></pre>
+
+<p>  },
+  {</p>
+
+<pre><code>"value-of-23 * 23" : 529 
+</code></pre>
+
+<p>  },
+  {</p>
+
+<pre><code>"value-of-42 * 42" : 1764 
+</code></pre>
+
+<p>  },
+  {</p>
+
+<pre><code>"value-of-83 * 83" : 6889 
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<h2>Functions added</h2>
+
+<p>The following AQL functions have been added in 2.5:</p>
+
+<ul>
+<li><code>MD5(value)</code>: produces the MD5 hash of <code>value</code></li>
+<li><code>SHA1(value)</code>: produces the SHA1 hash of <code>value</code></li>
+<li><code>RANDOM_TOKEN(length)</code>: produces a pseudo-random string of the specified length.
+ Such strings can be used for id or token generation. Tokens consist only of letters
+ (lower and upper case) plus digits, so they are also URL-safe</li>
+</ul>
+
+
+<h1>Optimizer improvements</h1>
+
+<h2>Optimizer rules</h2>
+
+<p>The following AQL optimizer rules have been added in ArangoDB 2.5:</p>
+
+<ul>
+<li><p><code>propagate-constant-attributes</code></p>
+
+<p>This rule will look inside <code>FILTER</code> conditions for constant value equality comparisons,
+and insert the constant values in other places in <code>FILTER</code>s. For example, the rule will
+insert <code>42</code> instead of <code>i.value</code> in the second <code>FILTER</code> of the following query:</p>
+
+<pre><code>FOR i IN c1 
+  FOR j IN c2 
+    FILTER i.value == 42 
+    FILTER j.value == i.value 
+    RETURN 1
+</code></pre></li>
+<li><p><code>move-calculations-down</code></p>
+
+<p>This rule moves calculations down in the execution plan as far as possible. The intention
+is to move calculations beyond filters, in order to avoid calculations and computations
+for documents that will be filtered away anyway.</p>
+
+<p>If a query contains a lot of computations and a lot of documents will be skipped because
+of filters, this rule might provide a big benefit.</p>
+
+<p>A more detailed example is provided in
+<a href="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/">this post</a>.</p></li>
+</ul>
+
+
+<p>The already existing optimizer rule <code>use-index-for-sort</code> was also improved in the following way:</p>
+
+<ul>
+<li><p>the rule can now remove <code>SORT</code>s also in case a non-sorted index (i.e. a hash index) is used
+for an equality lookup and all sort attributes are covered by the index.</p></li>
+<li><p>the rule can also remove <code>SORT</code>s in case the sort critieria excludes the left-most index attributes,
+but the left-most index attributes are used in a <code>FILTER</code> for equality-only lookups.</p>
+
+<p>Here is an example that will use an existing skiplist index on [ <code>value1</code>, <code>value2</code> ] for sorting,
+removing the extra <code>SORT</code>:</p>
+
+<pre><code>FOR doc IN collection 
+  FILTER doc.value1 == 1 
+  SORT doc.value2 
+  RETURN doc
+</code></pre></li>
+</ul>
+
+
+<h2>Index usage</h2>
+
+<p>The AQL optimizer now supports <a href="https://www.arangodb.com/2015/02/24/sparse-indexes-in-arangodb">sparse indexes</a>,
+a feature added in 2.5.</p>
+
+<p>It will use them automatically in queries when appropriate and when safe. Sparse indexes do exclude certain
+documents purposely, so the optimizer always has to figure out whether it can use a sparse index to satisfy
+a given <code>FILTER</code> condition.</p>
+
+<p>The optimizer will also take into account index selectivity estimates when there are multiple index candidates.</p>
+
+<h2>Estimates</h2>
+
+<p>The optimizer estimates for the number of documents to be returned by a query or a subquery are more accurate
+now for several types of queries. For example, if the optimizer can use a primary key, an edge index, or a hash
+index in a given query part, it will use the index selectivity estimates for calculating the number of return
+documents.</p>
+
+<p>These estimates will be a lot more accurate than the previoulsy hard-coded filtering factors, and can lead to
+better optimizer decisions and reporting (because estimates are returned in <code>explain</code> results, too).</p>
+
+<h2>Memory savings</h2>
+
+<p>Finally, the optimizer will now detect if the data-modification part in a data-modification query
+can be executed in lockstep with the data-retrieval part of the same query. Previously, a data-modification
+query always executed its data-retrieval part first, and then executed its data-modification part.
+This could have resulted in big intermediate result sets which to retrieval part constructed in order
+to pass them to the modification part of the query.</p>
+
+<p>Here&rsquo;s an example query:</p>
+
+<p><code>plain data-modification query
+FOR doc IN test
+  INSERT doc INTO backup
+</code></p>
+
+<p>In the above query, the <code>FOR</code> loop is the retrieval part, and the <code>INSERT</code> is the modification part.
+The optimizer in 2.5 will check if the two parts of the query are independent, and if it turns out they are,
+will execute them in lockstep instead of sequentially.</p>
+
+<p>The execution in lockstep is not necessarily faster than sequential execution, but it can save lots of
+memory if the data-retrieval part constructed big intermediate result sets.</p>
+
+<h1>Miscellaneous changes</h1>
+
+<p>The AQL query execution statistics now also provide an attribute <code>filtered</code>. Its value indicates how many
+documents were filtered by <code>FilterNode</code>s in the AQL query. This can be used as an indicator for whether
+indexes should be added, and for how effective indexes are used for filtering.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Using Dynamic Attribute Names in AQL]]></title>
@@ -131,8 +316,8 @@ committed the feature yet. There might still be cases in which it doesn&rsquo;t 
 for the feature are also still missing. I hope I can finalize the implementation soon
 so it becomes available in some release.</del></p>
 
-<p><strong>UPDATE</strong>: tests have been added now, and there has been committed in devel. It will
-be included in AranoDB 2.5.</p>
+<p><strong>UPDATE</strong>: tests have been added, and the feature has been committed in devel. It is
+included in ArangoDB since version 2.5.</p>
 
 <p>Everyone is welcome to try it out already!</p>
 ]]></content>
@@ -1035,171 +1220,6 @@ This should make it work from the ArangoShell (but not from the web interface).<
 the web interface, but as a backend developer, I am not able to do any
 serious UI work. I also put this together in my leisure time, and have to
 come to an end with it.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Returning Results From AQL INSERT/REMOVE/REPLACE Operations]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations/"/>
-    <updated>2015-01-13T22:53:40+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations</id>
-    <content type="html"><![CDATA[<p>ArangoDB provides many options for finding and modifying data. Though there are
-several more specialized operation, data-modification AQL queries are the most
-general solution in ArangoDB. They allow to find documents using arbitrary filter
-criteria, and to modify or remove the documents once found.</p>
-
-<p>Such <em>find-and-modify</em> operations can be executed with multiple queries (one for
-the find step, one for the modification step), or with a single query. Putting
-both steps into a single query will often save roundtrips between the application
-and the database and thus may be preferred over executing the steps separately.
-Putting both the find and the modify step into the same query also prevents other
-operations from interfering in between and tampering with the underlying data.</p>
-
-<p>Now what if the application not only requires the data to be updated, but also needs
-to keep track of which documents were found and modified by a <em>find-and-modify</em>
-query? This is often required when an application needs to keep database
-data in sync with data in some other datastore (e.g. the filesystem or a remote
-service).</p>
-
-<p>The pattern I would dub <em>find-modify-return</em> would be useful for this.</p>
-
-<!-- more -->
-
-
-<p>Unfortunately it hasn&rsquo;t been supported in AQL until very recently.
-We have been asked for this so many times that I stopped counting.</p>
-
-<p>I am glad that this got better with ArangoDB 2.4. Finding, modifying and returning
-documents is now possible from the same AQL query. The solution is not yet perfect,
-but at least it provides basic <em>find-modify-return</em> functionality for a lot of
-use cases, including multi-document, multi-collection queries.</p>
-
-<h2>INSERT</h2>
-
-<p>Let&rsquo;s start with an <code>INSERT</code> operation as it is the most simple to explain:</p>
-
-<p><code>plain insert query, not returning anything
-FOR i IN 1..10
-  INSERT { name: CONCAT("user", i), someValue: RAND() } IN testAccounts
-</code></p>
-
-<p>The above query does not explicitly specify the <code>_key</code> attribute for the inserted
-documents, meaning the database will create the documents keys automatically.
-Additionally, the query assigns a random value to an attribute <code>someValue</code>.
-Getting to know the created keys or random values required an extra lookup query
-before 2.4. Extra queries are something one wants to avoid for efficiency
-reasons.</p>
-
-<p>With 2.4, adding two lines at the end of the query will solve the problem so
-that everything can be done in one query:</p>
-
-<p><code>plain insert query, returning the inserted documents
-FOR i IN 1..10
-  INSERT { name: CONCAT("user", i), someValue: RAND() } IN testAccounts
-  LET inserted = NEW
-  RETURN inserted
-</code></p>
-
-<p>Using a <code>LET</code> with the pseudo-value of <code>NEW</code> after the <code>INSERT</code> together with
-a final <code>RETURN</code> statement will make the inserted documents appear in the query
-result. Note that the full documents will be returned and not just the specified
-attributes. This allows the application to track of all document attributes,
-even the auto-generated ones.</p>
-
-<h2>REMOVE</h2>
-
-<p>The mechanism works for <code>REMOVE</code> statements, too.</p>
-
-<p>Time to use a different example for this. Let&rsquo;s assume session metadata are
-stored in the database, and some bigger session files are stored somewhere
-in the filesystem. If the application needs to remove expired sessions, it
-will need to clean up in both places. It will first query the database to
-find the expired sessions, only to remove them from the filesystem (if the
-filesystem sessions were organized by session id from the database) and to
-finally remove the sessions from database itself.</p>
-
-<p>The following query could be used to find removal candidates:</p>
-
-<p><code>plain query for finding removal candidates
-FOR session IN sessions
-  FILTER session.dateExpires &lt; DATE_NOW()
-  LIMIT 1000
-  RETURN session._key
-</code></p>
-
-<p>The results of this query can be used for cleaning up sessions in the filesystem,
-and for finally removing the sessions from the database. However, this would require
-an extra <code>REMOVE</code> query. And didn&rsquo;t we say we would like to avoid extra queries?</p>
-
-<p>The good news is that in 2.4 we can by putting at least the database part into a
-single query:</p>
-
-<p><code>plain query for removing and returning expired sessions
-FOR session IN sessions
-  FILTER session.dateExpires &lt; DATE_NOW()
-  LIMIT 1000
-  REMOVE session IN sessions
-  LET removed = OLD
-  RETURN removed
-</code></p>
-
-<p>The last two lines of the above query make sure the removed sessions are
-returned to the application, so the application can perform any filesystem
-cleanup using the session ids from the database.</p>
-
-<p>Note that in case of <code>REMOVE</code> one has to use the pseudo-value <code>OLD</code> because
-<code>REMOVE</code> can only return documents before removal. In the case of <code>INSERT</code>
-we can only refer to the pseudo-value <code>NEW</code>.</p>
-
-<h2>UPDATE and REPLACE</h2>
-
-<p>So far we saw <code>INSERT</code> and <code>REMOVE</code>, but there are also <code>UPDATE</code> and <code>REPLACE</code>.
-I will handle <code>UPDATE</code> and <code>REPLACE</code> in one go. All the following refers to
-<code>UPDATE</code>, but does apply to <code>REPLACE</code> as well.</p>
-
-<p>The mechanism to return documents from a query is the same as
-already demonstrated: simply append the <code>LET ... RETURN</code> sequence to the end
-of the original query.</p>
-
-<p>In addition, <code>UPDATE</code> allows to return either the <em>old</em> document revisions
-(before modification) or the <em>new</em> document revisions (after modification).
-This can be expressed by using either <code>OLD</code> or <code>NEW</code> in the final <code>LET</code>
-statement.</p>
-
-<p>Following is a more complex example for an <code>UPDATE</code> query that aggregates data
-from one collection (<code>phraseOccurrences</code>) in order to find and modify matching
-documents in another collection (<code>phrases</code>). It will return the documents from
-<code>phrases</code> before they got modified:</p>
-
-<p><code>plain update query returning "old" documents
-FOR po IN phraseOccurrences
-  FILTER ! po.isSuspicious
-  FILTER po.dateMentioned &gt;= '2015-01-01' &amp;&amp; po.dateMentioned &lt;= '2015-01-09'
-  COLLECT phrase = po.phrase WITH COUNT INTO occurrences
-  FILTER occurrences % 42 != 23
-  LIMIT 13
-  UPDATE phrase WITH { isSuspicious: true } IN phrases
-  LET previous = OLD  /* returns document revisions before UPDATE */
-  RETURN previous
-</code></p>
-
-<p>If we are interested in what the documents in <code>phrases</code> look like with the
-<code>UPDATE</code> applied, we can use <code>NEW</code> instead:</p>
-
-<p><code>plain update query returning "new" documents
-FOR po IN phraseOccurrences
-  FILTER ! po.isSuspicious
-  FILTER po.dateMentioned &gt;= '2015-01-01' &amp;&amp; po.dateMentioned &lt;= '2015-01-09'
-  COLLECT phrase = po.phrase WITH COUNT INTO occurrences
-  FILTER occurrences % 42 != 23
-  LIMIT 13
-  UPDATE phrase WITH { isSuspicious: true } IN phrases
-  LET modified = NEW  /* returns document revisions after UPDATE */
-  RETURN modified
-</code></p>
-
-<p>Note that the full documents will be returned here, and not just the attributes
-specified in or modified by the <code>UPDATE</code> operation.</p>
 ]]></content>
   </entry>
   

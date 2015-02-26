@@ -1,0 +1,434 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>AQL Improvements in 2.5 - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="Contained in 2.5 are some small but useful AQL language improvements plus several AQL optimizer improvements. We are working on further AQL &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>Notes on ArangoDB development</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">AQL Improvements in 2.5</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-02-26T10:35:31+01:00" pubdate data-updated="true">Feb 26<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>Contained in 2.5 are some small but useful AQL language improvements plus several AQL optimizer improvements.</p>
+
+<p>We are working on further AQL improvements for 2.5, but work is still ongoing.
+This post summarizes the improvements that are already completed and will be shipped with the initial ArangoDB
+2.5 release.</p>
+
+<!-- more -->
+
+
+<h1>Language improvements</h1>
+
+<h2>Dynamic attribute names</h2>
+
+<p>Often the need arises to dynamically name object attributes in return values.
+In AQL this was not directly possible so far, though there were some workarounds available to achieve about
+the same result. <a href="https://docs.arangodb.com/cookbook/UsingDynamicAttributeNames.html">This recipe</a> summarizes
+the options that are available to pre-ArangoDB 2.5 users.</p>
+
+<p>With ArangoDB 2.5, dynamic attribute names can be constructed much more easily and flexibly. Object
+attribute names in ArangoDB 2.5 can be specified using static string literals, bind parameters,
+and dynamic expressions.</p>
+
+<p>Dynamic expressions are most interesting, and to disambiguate them from other regular string literal attribute
+names, dynamic attribute names need to be enclosed in square brackets (<code>[</code> and <code>]</code>). I have written about
+that before in <a href="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/">this blog</a>.</p>
+
+<p>Here is an example query that uses the new syntax:</p>
+
+<figure class='code'><figcaption><span>example query using dynamic attribute names</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN [ 17, 23, 42, 83 ]
+</span><span class='line'>  RETURN { [ CONCAT('value-of-', i, ' * ', i) ] : i * i }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will produce:</p>
+
+<figure class='code'><figcaption><span>query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="nt">&quot;value-of-17 * 17&quot;</span> <span class="p">:</span> <span class="mi">289</span>
+</span><span class='line'>  <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="nt">&quot;value-of-23 * 23&quot;</span> <span class="p">:</span> <span class="mi">529</span>
+</span><span class='line'>  <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="nt">&quot;value-of-42 * 42&quot;</span> <span class="p">:</span> <span class="mi">1764</span>
+</span><span class='line'>  <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="nt">&quot;value-of-83 * 83&quot;</span> <span class="p">:</span> <span class="mi">6889</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Functions added</h2>
+
+<p>The following AQL functions have been added in 2.5:</p>
+
+<ul>
+<li><code>MD5(value)</code>: produces the MD5 hash of <code>value</code></li>
+<li><code>SHA1(value)</code>: produces the SHA1 hash of <code>value</code></li>
+<li><code>RANDOM_TOKEN(length)</code>: produces a pseudo-random string of the specified length.
+ Such strings can be used for id or token generation. Tokens consist only of letters
+ (lower and upper case) plus digits, so they are also URL-safe</li>
+</ul>
+
+
+<h1>Optimizer improvements</h1>
+
+<h2>Optimizer rules</h2>
+
+<p>The following AQL optimizer rules have been added in ArangoDB 2.5:</p>
+
+<ul>
+<li><p><code>propagate-constant-attributes</code></p>
+
+<p>This rule will look inside <code>FILTER</code> conditions for constant value equality comparisons,
+and insert the constant values in other places in <code>FILTER</code>s. For example, the rule will
+insert <code>42</code> instead of <code>i.value</code> in the second <code>FILTER</code> of the following query:</p>
+
+<pre><code>FOR i IN c1 
+  FOR j IN c2 
+    FILTER i.value == 42 
+    FILTER j.value == i.value 
+    RETURN 1
+</code></pre></li>
+<li><p><code>move-calculations-down</code></p>
+
+<p>This rule moves calculations down in the execution plan as far as possible. The intention
+is to move calculations beyond filters, in order to avoid calculations and computations
+for documents that will be filtered away anyway.</p>
+
+<p>If a query contains a lot of computations and a lot of documents will be skipped because
+of filters, this rule might provide a big benefit.</p>
+
+<p>A more detailed example is provided in
+<a href="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/">this post</a>.</p></li>
+</ul>
+
+
+<p>The already existing optimizer rule <code>use-index-for-sort</code> was also improved in the following way:</p>
+
+<ul>
+<li><p>the rule can now remove <code>SORT</code>s also in case a non-sorted index (i.e. a hash index) is used
+for an equality lookup and all sort attributes are covered by the index.</p></li>
+<li><p>the rule can also remove <code>SORT</code>s in case the sort critieria excludes the left-most index attributes,
+but the left-most index attributes are used in a <code>FILTER</code> for equality-only lookups.</p>
+
+<p>Here is an example that will use an existing skiplist index on [ <code>value1</code>, <code>value2</code> ] for sorting,
+removing the extra <code>SORT</code>:</p>
+
+<pre><code>FOR doc IN collection 
+  FILTER doc.value1 == 1 
+  SORT doc.value2 
+  RETURN doc
+</code></pre></li>
+</ul>
+
+
+<h2>Index usage</h2>
+
+<p>The AQL optimizer now supports <a href="https://www.arangodb.com/2015/02/24/sparse-indexes-in-arangodb">sparse indexes</a>,
+a feature added in 2.5.</p>
+
+<p>It will use them automatically in queries when appropriate and when safe. Sparse indexes do exclude certain
+documents purposely, so the optimizer always has to figure out whether it can use a sparse index to satisfy
+a given <code>FILTER</code> condition.</p>
+
+<p>The optimizer will also take into account index selectivity estimates when there are multiple index candidates.</p>
+
+<h2>Estimates</h2>
+
+<p>The optimizer estimates for the number of documents to be returned by a query or a subquery are more accurate
+now for several types of queries. For example, if the optimizer can use a primary key, an edge index, or a hash
+index in a given query part, it will use the index selectivity estimates for calculating the number of return
+documents.</p>
+
+<p>These estimates will be a lot more accurate than the previoulsy hard-coded filtering factors, and can lead to
+better optimizer decisions and reporting (because estimates are returned in <code>explain</code> results, too).</p>
+
+<h2>Memory savings</h2>
+
+<p>Finally, the optimizer will now detect if the data-modification part in a data-modification query
+can be executed in lockstep with the data-retrieval part of the same query. Previously, a data-modification
+query always executed its data-retrieval part first, and then executed its data-modification part.
+This could have resulted in big intermediate result sets which to retrieval part constructed in order
+to pass them to the modification part of the query.</p>
+
+<p>Here&rsquo;s an example query:</p>
+
+<figure class='code'><figcaption><span>data-modification query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN test
+</span><span class='line'>  INSERT doc INTO backup</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In the above query, the <code>FOR</code> loop is the retrieval part, and the <code>INSERT</code> is the modification part.
+The optimizer in 2.5 will check if the two parts of the query are independent, and if it turns out they are,
+will execute them in lockstep instead of sequentially.</p>
+
+<p>The execution in lockstep is not necessarily faster than sequential execution, but it can save lots of
+memory if the data-retrieval part constructed big intermediate result sets.</p>
+
+<h1>Miscellaneous changes</h1>
+
+<p>The AQL query execution statistics now also provide an attribute <code>filtered</code>. Its value indicates how many
+documents were filtered by <code>FilterNode</code>s in the AQL query. This can be used as an indicator for whether
+indexes should be added, and for how effective indexes are used for filtering.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-02-26T10:35:31+01:00" pubdate data-updated="true">Feb 26<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/indexes/'>Indexes</a>, <a class='category' href='/blog/categories/performance/'>Performance</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/02/07/using-ccache-when-working-with-different-branches/" title="Previous Post: Using ccache when working with different branches">&laquo; Using ccache when working with different branches</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/02/26/aql-improvements-in-25/">AQL Improvements in 2.5</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/02/07/using-ccache-when-working-with-different-branches/">Using Ccache When Working With Different Branches</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/02/05/using-arangodb-as-a-logstash-output/">Using ArangoDB as a Logstash Output</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/02/03/using-dynamic-attribute-names-in-aql/">Using Dynamic Attribute Names in AQL</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/01/31/yaor-yet-another-optimizer-rule/">YAOR - Yet Another Optimizer Rule</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (9)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (21)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/foxx/'>Foxx (2)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (2)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (5)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (5)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (8)</li><ul class="month_list"><li class="month"><a href='/blog/2015/02/'>FEB (4)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-02-08T00:24:57+01:00</updated>
+  <updated>2015-02-26T11:54:03+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,195 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[AQL Improvements in 2.5]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25/"/>
+    <updated>2015-02-26T10:35:31+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25</id>
+    <content type="html"><![CDATA[<p>Contained in 2.5 are some small but useful AQL language improvements plus several AQL optimizer improvements.</p>
+
+<p>We are working on further AQL improvements for 2.5, but work is still ongoing.
+This post summarizes the improvements that are already completed and will be shipped with the initial ArangoDB
+2.5 release.</p>
+
+<!-- more -->
+
+
+<h1>Language improvements</h1>
+
+<h2>Dynamic attribute names</h2>
+
+<p>Often the need arises to dynamically name object attributes in return values.
+In AQL this was not directly possible so far, though there were some workarounds available to achieve about
+the same result. <a href="https://docs.arangodb.com/cookbook/UsingDynamicAttributeNames.html">This recipe</a> summarizes
+the options that are available to pre-ArangoDB 2.5 users.</p>
+
+<p>With ArangoDB 2.5, dynamic attribute names can be constructed much more easily and flexibly. Object
+attribute names in ArangoDB 2.5 can be specified using static string literals, bind parameters,
+and dynamic expressions.</p>
+
+<p>Dynamic expressions are most interesting, and to disambiguate them from other regular string literal attribute
+names, dynamic attribute names need to be enclosed in square brackets (<code>[</code> and <code>]</code>). I have written about
+that before in <a href="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/">this blog</a>.</p>
+
+<p>Here is an example query that uses the new syntax:</p>
+
+<figure class='code'><figcaption><span>example query using dynamic attribute names</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN [ 17, 23, 42, 83 ]
+</span><span class='line'>  RETURN { [ CONCAT('value-of-', i, ' * ', i) ] : i * i }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will produce:</p>
+
+<figure class='code'><figcaption><span>query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="nt">&quot;value-of-17 * 17&quot;</span> <span class="p">:</span> <span class="mi">289</span>
+</span><span class='line'>  <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="nt">&quot;value-of-23 * 23&quot;</span> <span class="p">:</span> <span class="mi">529</span>
+</span><span class='line'>  <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="nt">&quot;value-of-42 * 42&quot;</span> <span class="p">:</span> <span class="mi">1764</span>
+</span><span class='line'>  <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="nt">&quot;value-of-83 * 83&quot;</span> <span class="p">:</span> <span class="mi">6889</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Functions added</h2>
+
+<p>The following AQL functions have been added in 2.5:</p>
+
+<ul>
+<li><code>MD5(value)</code>: produces the MD5 hash of <code>value</code></li>
+<li><code>SHA1(value)</code>: produces the SHA1 hash of <code>value</code></li>
+<li><code>RANDOM_TOKEN(length)</code>: produces a pseudo-random string of the specified length.
+ Such strings can be used for id or token generation. Tokens consist only of letters
+ (lower and upper case) plus digits, so they are also URL-safe</li>
+</ul>
+
+
+<h1>Optimizer improvements</h1>
+
+<h2>Optimizer rules</h2>
+
+<p>The following AQL optimizer rules have been added in ArangoDB 2.5:</p>
+
+<ul>
+<li><p><code>propagate-constant-attributes</code></p>
+
+<p>This rule will look inside <code>FILTER</code> conditions for constant value equality comparisons,
+and insert the constant values in other places in <code>FILTER</code>s. For example, the rule will
+insert <code>42</code> instead of <code>i.value</code> in the second <code>FILTER</code> of the following query:</p>
+
+<pre><code>FOR i IN c1 
+  FOR j IN c2 
+    FILTER i.value == 42 
+    FILTER j.value == i.value 
+    RETURN 1
+</code></pre></li>
+<li><p><code>move-calculations-down</code></p>
+
+<p>This rule moves calculations down in the execution plan as far as possible. The intention
+is to move calculations beyond filters, in order to avoid calculations and computations
+for documents that will be filtered away anyway.</p>
+
+<p>If a query contains a lot of computations and a lot of documents will be skipped because
+of filters, this rule might provide a big benefit.</p>
+
+<p>A more detailed example is provided in
+<a href="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/">this post</a>.</p></li>
+</ul>
+
+
+<p>The already existing optimizer rule <code>use-index-for-sort</code> was also improved in the following way:</p>
+
+<ul>
+<li><p>the rule can now remove <code>SORT</code>s also in case a non-sorted index (i.e. a hash index) is used
+for an equality lookup and all sort attributes are covered by the index.</p></li>
+<li><p>the rule can also remove <code>SORT</code>s in case the sort critieria excludes the left-most index attributes,
+but the left-most index attributes are used in a <code>FILTER</code> for equality-only lookups.</p>
+
+<p>Here is an example that will use an existing skiplist index on [ <code>value1</code>, <code>value2</code> ] for sorting,
+removing the extra <code>SORT</code>:</p>
+
+<pre><code>FOR doc IN collection 
+  FILTER doc.value1 == 1 
+  SORT doc.value2 
+  RETURN doc
+</code></pre></li>
+</ul>
+
+
+<h2>Index usage</h2>
+
+<p>The AQL optimizer now supports <a href="https://www.arangodb.com/2015/02/24/sparse-indexes-in-arangodb">sparse indexes</a>,
+a feature added in 2.5.</p>
+
+<p>It will use them automatically in queries when appropriate and when safe. Sparse indexes do exclude certain
+documents purposely, so the optimizer always has to figure out whether it can use a sparse index to satisfy
+a given <code>FILTER</code> condition.</p>
+
+<p>The optimizer will also take into account index selectivity estimates when there are multiple index candidates.</p>
+
+<h2>Estimates</h2>
+
+<p>The optimizer estimates for the number of documents to be returned by a query or a subquery are more accurate
+now for several types of queries. For example, if the optimizer can use a primary key, an edge index, or a hash
+index in a given query part, it will use the index selectivity estimates for calculating the number of return
+documents.</p>
+
+<p>These estimates will be a lot more accurate than the previoulsy hard-coded filtering factors, and can lead to
+better optimizer decisions and reporting (because estimates are returned in <code>explain</code> results, too).</p>
+
+<h2>Memory savings</h2>
+
+<p>Finally, the optimizer will now detect if the data-modification part in a data-modification query
+can be executed in lockstep with the data-retrieval part of the same query. Previously, a data-modification
+query always executed its data-retrieval part first, and then executed its data-modification part.
+This could have resulted in big intermediate result sets which to retrieval part constructed in order
+to pass them to the modification part of the query.</p>
+
+<p>Here&rsquo;s an example query:</p>
+
+<figure class='code'><figcaption><span>data-modification query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN test
+</span><span class='line'>  INSERT doc INTO backup</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In the above query, the <code>FOR</code> loop is the retrieval part, and the <code>INSERT</code> is the modification part.
+The optimizer in 2.5 will check if the two parts of the query are independent, and if it turns out they are,
+will execute them in lockstep instead of sequentially.</p>
+
+<p>The execution in lockstep is not necessarily faster than sequential execution, but it can save lots of
+memory if the data-retrieval part constructed big intermediate result sets.</p>
+
+<h1>Miscellaneous changes</h1>
+
+<p>The AQL query execution statistics now also provide an attribute <code>filtered</code>. Its value indicates how many
+documents were filtered by <code>FilterNode</code>s in the AQL query. This can be used as an indicator for whether
+indexes should be added, and for how effective indexes are used for filtering.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Using Ccache When Working With Different Branches]]></title>
@@ -462,8 +651,8 @@ committed the feature yet. There might still be cases in which it doesn&rsquo;t 
 for the feature are also still missing. I hope I can finalize the implementation soon
 so it becomes available in some release.</del></p>
 
-<p><strong>UPDATE</strong>: tests have been added now, and there has been committed in devel. It will
-be included in AranoDB 2.5.</p>
+<p><strong>UPDATE</strong>: tests have been added, and the feature has been committed in devel. It is
+included in ArangoDB since version 2.5.</p>
 
 <p>Everyone is welcome to try it out already!</p>
 ]]></content>
@@ -4792,196 +4981,6 @@ The application can be downloaded <a href="http://jsteemann.github.io/downloads/
 
 <p>Please note that the example application requires ArangoDB 2.3, which is currently
 in development.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Understanding Where Operations Are Executed]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed/"/>
-    <updated>2014-08-30T22:38:42+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed</id>
-    <content type="html"><![CDATA[<p>I recently had to deal with some data processing operation that took
-about 20 minutes to complete. When looking into this, I found that the
-easiest and most beneficial change to the whole setup was to make the
-operation a <em>server-side</em> operation instead of executing it <em>client-side</em>.</p>
-
-<p>This change reduced the operation&rsquo;s total execution time to a few seconds.</p>
-
-<!-- more -->
-
-
-<p>I can&rsquo;t show the original processing task here, so I&rsquo;ll start with a
-contrived example. Imagine the following <em>for</em> loop inserting 100K documents
-into a collection named <code>test</code>:</p>
-
-<figure class='code'><figcaption><span>inserting 100k documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="k">for</span> <span class="p">(</span><span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="mi">100000</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">db</span><span class="p">.</span><span class="nx">test</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">value</span><span class="o">:</span> <span class="nx">i</span> <span class="p">});</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Now we only need a client application to execute the operation. As I don&rsquo;t
-have a presentable client application right now, I will use the ArangoShell as
-my client application.</p>
-
-<h2>What&rsquo;s in a for loop?</h2>
-
-<p>Running the above <em>for</em> loop inside the ArangoShell will lead to the loop being
-executed inside the <em>arangosh</em> process.</p>
-
-<p>In order to save a document in the collection, arangosh (our client) must make a
-call to the ArangoDB server. This means issuing an HTTP POST request
-to the server&rsquo;s REST API at <code>/_api/document/?collection=test</code>.
-The server process will receive this request, insert the document, and
-respond with an HTTP status code 201 or 202 to our client.
-The client will then continue the loop until all documents have been inserted.</p>
-
-<p>Now it&rsquo;s easy to see that the simple 3-line loop will issue 100,000 HTTP requests
-in total. This means lots of data being pushed through the network stack(s).
-It is pretty easy to imagine that this will come at a cost.</p>
-
-<p>If we instead execute the above loop directly inside the ArangoDB server, we
-can get rid of all the network overhead. The server has no need to send HTTP
-calls to itself. It can simply execute the 100K inserts and is then done.
-We therefore assume the loop to run somewhat faster when executed server-side.</p>
-
-<p>A quick test on a crap laptop produced the following execution times for running
-the loops:</p>
-
-<ul>
-<li>server-side execution (arangod): 1.34 seconds</li>
-<li>client-side execution (arangosh): 17.32 seconds</li>
-</ul>
-
-
-<p><strong>Ouch</strong>. It looks like the client-server request-response overhead matters.</p>
-
-<p>The following sections deal with how to get rid of some or even all the
-client-server ping pong.</p>
-
-<h2>Graph traversals</h2>
-
-<p>The above <em>for</em> loop example was contrived, but imagine running
-a client-side graph traversal instead. In fact, the original problem mentioned
-in the introduction has been a graph traversal.</p>
-
-<p>The problem of a graph traversal is that is often iterative and highly
-dynamic. Decisions are made during the traversal as nodes are encountered,
-leading to dynamic inclusion or exclusion etc. This means that it makes sense to
-process nodes and edges only when needed, at the point when they are visited.</p>
-
-<p>Even if the client can employ some sort of caching for already visited
-nodes, the client still needs to ask the server about each visited
-node&rsquo;s connections at least once. Otherwise it could not follow them.</p>
-
-<p>This normally means lots of requests and responses. Compare this to the
-<em>single</em> request-response alternative in which a client kicks off a server-side
-traversal, and finally receives the overal result once it is assembled.</p>
-
-<p><strong>Conclusion</strong>: traversals on anything but very small graphs should be run server-side.
-A server-side action (see below) is a good way to do this. Please note that
-running a server-side traversal does not mean giving up flexibility and
-control flow functionality. Server-side traversals remain highly configurable
-through custom JavaScript functions that allow implementation of user-defined
-business logic.</p>
-
-<h2>AQL queries</h2>
-
-<p>We won&rsquo;t have your application send a series of 100,000 individual
-insert statements to the relational database of our choice. We already
-know from the past that this is going to be rather slow, so we have
-learned to avoid this. In the relational context, we rather use SQL queries
-that create or modify many rows in one go, e.g. an <code>INSERT INTO ... SELECT ...</code>,
-bulk inserts etc.</p>
-
-<p>ArangoDB is no different. In general, you should try to avoid issuing lots
-of individual queries to the database from a client application. Instead and if
-the queries look alike, try converting multiple individual operations into a
-single AQL query. This will already save a lot of network overhead.</p>
-
-<p>AQL provides multi-document operations to insert, update, and remove data. An
-overview is given <a href="http://docs.arangodb.org/Aql/DataModification.html">here</a>.</p>
-
-<p>The above 100K inserts from the contrived example can easily be transformed
-into this single AQL query:</p>
-
-<figure class='code'><figcaption><span>inserting 100k documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">FOR</span> <span class="nx">i</span> <span class="nx">IN</span> <span class="mi">1</span><span class="p">..</span><span class="mi">100000</span> <span class="nx">INSERT</span> <span class="p">{</span> <span class="nx">value</span><span class="o">:</span> <span class="nx">i</span> <span class="p">}</span> <span class="nx">INTO</span> <span class="nx">test</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Bulk imports</h2>
-
-<p>For importing larger amounts of documents from files, there is the specialized
-<a href="http://docs.arangodb.org/Arangoimp/README.html">arangoimp</a> import tool. It can
-load data from JSON and CSV files into ArangoDB. The tool is shipped with
-ArangoDB.</p>
-
-<p>ArangoDB also provides a REST API for <a href="http://docs.arangodb.org/HttpBulkImports/README.html">bulk imports</a>
-of documents.</p>
-
-<h2>Joins</h2>
-
-<p>A special note about <em>joins</em>: the fact that several NoSQL databases do not
-provide join functionality has driven some people to emulate join functionality
-on the client-side, in their applications.</p>
-
-<p>This can be a recipe for disaster: client-side join implementation might lead
-to horrendous amounts of queries that might need to be sent to the database for
-fetching all the records. More than that, if data are queried individually,
-the overall result may lack consistency. By the way, the same is true for
-fetching referenced or linked documents.</p>
-
-<p>ArangoDB provides join functionality via AQL queries. Additionally, AQL queries
-can be used to fetch other documents with the original documents. Note that
-ArangoDB has no way of defining references or links between documents, but
-still AQL allows combining arbitrary documents in one query.</p>
-
-<p>In almost all cases it make more sense to use an AQL query that performs
-joins or reference-fetching server-side and close to the data than having to
-deal with that on the application-side of things.</p>
-
-<p>AQL joins are described <a href="http://docs.arangodb.org/AqlExamples/Join.html">here</a>.</p>
-
-<h2>Server-side actions</h2>
-
-<p>With <em>stored procedures</em>, relational databases provide another way for an
-application to trigger the execution of a large amount of queries. Stored
-procedures are executed server-side, too, so they allow avoiding a lot of
-request-response ping pong between the application and the database, at least
-for defined tasks. Additionally, stored procedures provide control flow
-functionality, which can also be handy when operations depend on each other.</p>
-
-<p>Coming back to ArangoDB: complex data-processing tasks that need to execute
-multiple operations or need control flow functionality might benefit if
-converted from multiple application-side operations into a single server-side
-action.</p>
-
-<p>Server-side actions run inside the ArangoDB server, closer to the data, and
-can be much faster than a series of client-side operations.
-A server-side action is called with just one HTTP request from the application,
-so it may lead to saving lots of request-response cycles and reduction in
-network overhead. Apart from that, server-side actions in ArangoDB can employ
-transactions and provide the necessary control over isolation and atomicity
-when executing a series of operations.</p>
-
-<p>Business logic and control flow functionality can be integrated
-easily because server-side actions in ArangoDB are JavaScript functions,
-with all of the language&rsquo;s programming features being available.</p>
-
-<p>But there&rsquo;s even more to it: a single server-side operation can be written
-to put together its result in a format most convenient for the client
-application. This can also lead to better encapsulation, because all an
-application needs to know about a server-side action is its API or contract.
-Any internals of the action can be hidden from the client application. Overall,
-this supports a service-oriented approach.</p>
-
-<p>To learn more about how to write server-side actions, please have a look
-at ArangoDB&rsquo;s <a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a>. It is all
-about making server-side actions available via REST APIs.</p>
 ]]></content>
   </entry>
   
