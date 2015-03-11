@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-03-11T12:33:21+01:00</updated>
+  <updated>2015-03-11T13:34:17+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,121 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Analyzing Git Commits With ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb/"/>
+    <updated>2015-03-11T12:37:58+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb</id>
+    <content type="html"><![CDATA[<p>I often find myself searching for certain commits using <code>git log</code> and friends. While I really love
+the power and flexibility that come with the git and other Unix command-line tools, sometimes it can be more
+convenient to use a database to filter and aggregate commit data.</p>
+
+<p>I gave it a quick try yesterday and imported the commit history of ArangoDB&rsquo;s Git repository into ArangoDB
+and ran some queries on the data. While the query results for our repository may not be interesting for everyone,
+I think it is still worth sharing what I did. Even though I didn&rsquo;t try it, I think the overall procedure is
+applicable with any other Git repository.</p>
+
+<!-- more -->
+
+
+<h2>Converting the Git history to JSON</h2>
+
+<p>The way to extract history and commit data from a local repository is to use <code>git log</code>. Though its output
+is greatly customizable, it does not provide an out-of-the-box solution for producing JSON. So I wrote a simple
+wrapper script (in PHP) around it. The script can be found <a href="https://gist.github.com/jsteemann/65ef221646449713b2c5">here</a>.</p>
+
+<p>Here&rsquo;s how to run it:
+<code>bash converting the git history to JSON
+cd path/to/local/git-repository
+wget https://gist.githubusercontent.com/jsteemann/65ef221646449713b2c5/raw/fef22c729e01dd0777b378ac1e17e951ea47c7dd/git-log-to-json.php
+php git-log-to-json.php &gt; arango-commits-master-201503.json
+</code></p>
+
+<p>The script may run a few minutes on bigger repositories such as ours. In the end, it should produce a JSON
+file named <code>arango-commits-master-201503.json</code>.</p>
+
+<p>I have also uploaded the JSON file <a href="/downloads/code/arango-commits-master-201503.json">here</a>. Note that the
+file only contains commits from the <code>master</code> branch and not all commits done in ArangoDB in total.</p>
+
+<h2>Importing the commits into ArangoDB</h2>
+
+<p>The simplest way to get the commits into ArangoDB is to use <code>arangoimp</code>:</p>
+
+<p><code>bash importing the commits into ArangoDB
+arangoimp                                   \
+  --collection commits                      \
+  --create-collection true                  \
+  --file arango-commits-master-201503.json  \
+  --overwrite true                          \
+  --batch-size 32000000
+</code></p>
+
+<p>This should have imported all the commits into a collection <code>commits</code> in the default database.</p>
+
+<h2>Querying the commit logs</h2>
+
+<p>Following are a few example queries that I ran on the data from the ArangoShell.
+As mentioned before, it should be possible to run the queries for other repositories' data.</p>
+
+<p><code>js getting all contributors
+query = 'FOR commit IN commits COLLECT author = commit.author.name RETURN author';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving the total number of commits
+query = 'FOR commit IN commits COLLECT WITH COUNT INTO count RETURN count';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving the number of commits by contributor
+query = 'FOR commit IN commits COLLECT author = commit.author.name WITH COUNT INTO count RETURN { author: author, count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving the tagged commits
+query = 'FOR commit IN commits FILTER commit.tag != null SORT commit.date RETURN KEEP(commit, [ "date", "message", "tag" ])';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving number of commits per year
+query = 'FOR commit IN commits COLLECT year = DATE_YEAR(commit.date) WITH COUNT INTO count RETURN { year: year, count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving number of commits per month / year
+query = 'FOR commit IN commits COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date)  WITH COUNT INTO count RETURN { month: CONCAT(year, "/", month), count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving number of commits per weekday
+query = 'FOR commit IN commits COLLECT day = DATE_DAYOFWEEK(commit.date) WITH COUNT INTO count RETURN { day: TRANSLATE(day, { "0": "Sunday", "1": "Monday", "2": "Tuesday", "3": "Wednesday", "4": "Thursday", "5": "Friday", "6": "Saturday" }), count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving commits with string "issue #" in commit message
+query = 'FOR commit IN commits FILTER LIKE(commit.message, "%issue #%") SORT commit.date DESC LIMIT 10 RETURN UNSET(commit, "files")';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving number of commits related to Foxx
+query = 'FOR commit IN commits FILTER LIKE(LOWER(commit.message), "%foxx%") COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date) WITH COUNT INTO count RETURN { month: CONCAT(year, "/", month), count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving commits that touched the most files
+query = 'FOR commit IN commits LET count = LENGTH(commit.files || []) SORT count DESC LIMIT 10 RETURN MERGE(UNSET(commit, "files"), { files: count })';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving files modified most often
+query = 'FOR commit IN commits FOR filename IN commit.files || [] COLLECT file = filename WITH COUNT INTO count SORT count DESC LIMIT 10 RETURN { file: file, count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p>Enjoy!</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[More ES6 Features]]></title>
@@ -747,78 +862,6 @@ so it becomes available in some release.</del></p>
 included in ArangoDB since version 2.5.</p>
 
 <p>Everyone is welcome to try it out already!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[YAOR - Yet Another Optimizer Rule]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/"/>
-    <updated>2015-01-31T18:51:30+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule</id>
-    <content type="html"><![CDATA[<p>A quick post that showcases the new optimizer rule <code>move-calculations-down</code> that was added
-in ArangoDB 2.5 (current <code>devel</code> branch).</p>
-
-<!-- more -->
-
-
-<p>Consider the following simple query:</p>
-
-<p><code>plain Example query
-FOR doc IN test
-  LET calculated = CONCAT('foo', doc.value)
-  FILTER doc.value &lt; 100
-  RETURN calculated
-</code></p>
-
-<p>If no indexes are present in collection <code>test</code>, the execution plan will look
-like this in 2.4:</p>
-
-<p><img src="/downloads/screenshots/explain-24.png"></p>
-
-<p>The plan can be improved a bit. While there are no indexes to exploit, the calculation
-for <code>calculated</code> can be pushed beyond the execution of the <code>FILTER</code>. This will be very
-beneficial if the calculation is expensive and the <code>FILTER</code> can prune a lot of documents.</p>
-
-<p>In 2.5, there is an optimizer rule <code>move-calculations-down</code> that will do this. It will
-move all eligible calculations as far down in the plan as possible. A calculation obviously can
-be moved down a step only if the successor step does not depend on its result.</p>
-
-<p>Additionally, a calculation will not be moved beyond a <code>COLLECT</code> operation, because
-<code>COLLECT</code> changes which variables are visible in a scope. Finally, a calculation will not
-be moved down inside a <code>FOR</code> loop, in order to avoid repeated calculations.</p>
-
-<p>In the example query, the step following the <code>LET</code> calculation was a <code>FILTER</code>.
-The filter condition does not depend on the result of <code>calcuated</code>, so the calculation is
-eligible for being moved down.</p>
-
-<p>The resulting execution plan will look like this in 2.5:</p>
-
-<p><img src="/downloads/screenshots/explain-25.png"></p>
-
-<p>As we can see from the changed id sequence on the left, the calculation was moved down.</p>
-
-<p>What does this buy us? For the simple query above, with the <code>test</code> collection containing
-100.000 documents with <code>value</code> ranging from 0 to 99,999, the results are as follows:</p>
-
-<ul>
-<li>if the filter leaves only 0.1 % of the documents pass, execution time goes down from
-0.87 seconds to 0.17 seconds thanks to the rule</li>
-<li>if the filter lets 1 % of the documents pass, execution time is 0.21 seconds with the rule,
-and 0.91 without</li>
-<li>if the filter lets 10 % of the documents pass, execution time is 0.25 s, vs. 0.91 seconds
-without.</li>
-<li>if the filter lets all documents pss, there is no difference in execution time</li>
-</ul>
-
-
-<p>This is quite a nice speedup, especially when taking into account how simple the optimizer
-rule is. The effects may be even greater for queries that contain multiple calculations
-that can be pushed beyond filters, or for more expensive calculations.</p>
-
-<p>Of course the best solution for the above query would be to use a skiplist index on
-<code>value</code>, but that&rsquo;s a different story. The optimizer rule shown here is orthogonal to
-using indexes, so queries already using indexes might still benefit from the rule if they
-contain additional calculations or further filters which cannot be satifisfied by indexes.</p>
 ]]></content>
   </entry>
   

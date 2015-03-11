@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-03-11T12:33:21+01:00</updated>
+  <updated>2015-03-11T13:34:17+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,173 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Analyzing Git Commits With ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb/"/>
+    <updated>2015-03-11T12:37:58+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb</id>
+    <content type="html"><![CDATA[<p>I often find myself searching for certain commits using <code>git log</code> and friends. While I really love
+the power and flexibility that come with the git and other Unix command-line tools, sometimes it can be more
+convenient to use a database to filter and aggregate commit data.</p>
+
+<p>I gave it a quick try yesterday and imported the commit history of ArangoDB&rsquo;s Git repository into ArangoDB
+and ran some queries on the data. While the query results for our repository may not be interesting for everyone,
+I think it is still worth sharing what I did. Even though I didn&rsquo;t try it, I think the overall procedure is
+applicable with any other Git repository.</p>
+
+<!-- more -->
+
+
+<h2>Converting the Git history to JSON</h2>
+
+<p>The way to extract history and commit data from a local repository is to use <code>git log</code>. Though its output
+is greatly customizable, it does not provide an out-of-the-box solution for producing JSON. So I wrote a simple
+wrapper script (in PHP) around it. The script can be found <a href="https://gist.github.com/jsteemann/65ef221646449713b2c5">here</a>.</p>
+
+<p>Here&rsquo;s how to run it:</p>
+
+<figure class='code'><figcaption><span>converting the git history to JSON</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">cd </span>path/to/local/git-repository
+</span><span class='line'>wget https://gist.githubusercontent.com/jsteemann/65ef221646449713b2c5/raw/fef22c729e01dd0777b378ac1e17e951ea47c7dd/git-log-to-json.php
+</span><span class='line'>php git-log-to-json.php &gt; arango-commits-master-201503.json
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The script may run a few minutes on bigger repositories such as ours. In the end, it should produce a JSON
+file named <code>arango-commits-master-201503.json</code>.</p>
+
+<p>I have also uploaded the JSON file <a href="http://jsteemann.github.io/downloads/code/arango-commits-master-201503.json">here</a>. Note that the
+file only contains commits from the <code>master</code> branch and not all commits done in ArangoDB in total.</p>
+
+<h2>Importing the commits into ArangoDB</h2>
+
+<p>The simplest way to get the commits into ArangoDB is to use <code>arangoimp</code>:</p>
+
+<figure class='code'><figcaption><span>importing the commits into ArangoDB</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangoimp                                   <span class="se">\</span>
+</span><span class='line'>  --collection commits                      <span class="se">\</span>
+</span><span class='line'>  --create-collection <span class="nb">true</span>                  <span class="se">\</span>
+</span><span class='line'>  --file arango-commits-master-201503.json  <span class="se">\</span>
+</span><span class='line'>  --overwrite <span class="nb">true</span>                          <span class="se">\</span>
+</span><span class='line'>  --batch-size 32000000
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This should have imported all the commits into a collection <code>commits</code> in the default database.</p>
+
+<h2>Querying the commit logs</h2>
+
+<p>Following are a few example queries that I ran on the data from the ArangoShell.
+As mentioned before, it should be possible to run the queries for other repositories&#8217; data.</p>
+
+<figure class='code'><figcaption><span>getting all contributors</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits COLLECT author = commit.author.name RETURN author&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>retrieving the total number of commits</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits COLLECT WITH COUNT INTO count RETURN count&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>retrieving the number of commits by contributor</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits COLLECT author = commit.author.name WITH COUNT INTO count RETURN { author: author, count: count }&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>retrieving the tagged commits </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits FILTER commit.tag != null SORT commit.date RETURN KEEP(commit, [ &quot;date&quot;, &quot;message&quot;, &quot;tag&quot; ])&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>retrieving number of commits per year </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits COLLECT year = DATE_YEAR(commit.date) WITH COUNT INTO count RETURN { year: year, count: count }&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>retrieving number of commits per month / year </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date)  WITH COUNT INTO count RETURN { month: CONCAT(year, &quot;/&quot;, month), count: count }&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>retrieving number of commits per weekday</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits COLLECT day = DATE_DAYOFWEEK(commit.date) WITH COUNT INTO count RETURN { day: TRANSLATE(day, { &quot;0&quot;: &quot;Sunday&quot;, &quot;1&quot;: &quot;Monday&quot;, &quot;2&quot;: &quot;Tuesday&quot;, &quot;3&quot;: &quot;Wednesday&quot;, &quot;4&quot;: &quot;Thursday&quot;, &quot;5&quot;: &quot;Friday&quot;, &quot;6&quot;: &quot;Saturday&quot; }), count: count }&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>retrieving commits with string &#8220;issue #&#8221; in commit message </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits FILTER LIKE(commit.message, &quot;%issue #%&quot;) SORT commit.date DESC LIMIT 10 RETURN UNSET(commit, &quot;files&quot;)&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>retrieving number of commits related to Foxx</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits FILTER LIKE(LOWER(commit.message), &quot;%foxx%&quot;) COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date) WITH COUNT INTO count RETURN { month: CONCAT(year, &quot;/&quot;, month), count: count }&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>retrieving commits that touched the most files</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits LET count = LENGTH(commit.files || []) SORT count DESC LIMIT 10 RETURN MERGE(UNSET(commit, &quot;files&quot;), { files: count })&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>retrieving files modified most often</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits FOR filename IN commit.files || [] COLLECT file = filename WITH COUNT INTO count SORT count DESC LIMIT 10 RETURN { file: file, count: count }&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Enjoy!</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[More ES6 Features]]></title>
@@ -4918,269 +5085,6 @@ Github repository, e.g.</p>
 
 <p>I have set up an <a href="https://github.com/jsteemann/travis-cxx11">example project on Github</a>
 that demonstrates how to use it.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[How to Compile ArangoDB From Source]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/"/>
-    <updated>2014-10-16T22:24:48+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source</id>
-    <content type="html"><![CDATA[<p>Though we provide a lot of pre-built packages for the stable
-versions of ArangoDB <a href="https://www.arangodb.org/install">here</a>, it
-is often more interesting to play with the bleeding edge development
-version. New ArangoDB features are normally added to the <em>devel</em>
-branch, where they can be tested, documented and improved. When a
-feature matures, it is either backported to a stable branch or will
-eventually be released when the next stable branch is forked from
-<em>devel</em>.</p>
-
-<p>Contributing to the core of ArangoDB is also much easier with a
-ready-to-go <em>devel</em> version. This post explains how to set one up
-from scratch.</p>
-
-<!-- more -->
-
-
-<p>The following instructions are for Ubuntu 14.04 LTS, which seems to
-be quite popular at the moment. Other flavors of Linux are probably
-quite similar, though package manager and packages names will likely
-be somewhat different.</p>
-
-<h2>Using Vagrant</h2>
-
-<p>If you don&rsquo;t have an Ubuntu 14 installation yet, you can easily
-install one using <a href="http://www.vagrantup.com">Vagrant</a>. If you happen
-to have a Linux installation already and are familiar with it, just
-skip this section.</p>
-
-<p>After installing Vagrant on your system, pick a suitable Vagrant box from
-<a href="http://www.vagrantbox.es">here</a>. For example, I picked this 32 bit
-box from the list:</p>
-
-<pre><code>vagrant box add ubuntu-14.04-32 https://cloud-images.ubuntu.com/vagrant/trusty/current/trusty-server-cloudimg-i386-vagrant-disk1.box
-</code></pre>
-
-<p>After downloading the box, it can be made available via these commands:</p>
-
-<pre><code>mkdir temp
-cd temp
-vagrant init ubuntu-14.04-32
-vagrant up
-</code></pre>
-
-<p>After the VM is booted, connect to it via SSH:</p>
-
-<pre><code>vagrant ssh
-</code></pre>
-
-<h2>Cloning the repository</h2>
-
-<p>You&rsquo;re now on the Ubuntu VM. Next step is fetch the ArangoDB source
-code from Github. Cloning the repository from there requires <code>git</code>. Let&rsquo;s
-install it and clone the <em>devel</em> branch of the repository into a
-directory named <em>devel</em> on the VM:</p>
-
-<pre><code>sudo apt-get install git 
-git clone -b devel https://github.com/arangodb/arangodb.git
-</code></pre>
-
-<p>The repository contains a lot of history so cloning may take a while.
-In case you don&rsquo;t need the full history, you can create a shallow
-clone like this:</p>
-
-<pre><code>git clone -b devel --single-branch --depth 1 https://github.com/arangodb/arangodb.git 
-</code></pre>
-
-<p>This will reduce the download size from (currently) 375 MB to 56 MB
-and should be much faster. The downside of using a shallow copy is
-that there is no history and pushing and merging won&rsquo;t work most of
-the time. So it&rsquo;s better used for throw-away tests only.</p>
-
-<h2>Installing build tools and libraries</h2>
-
-<p>Now that the repository has been cloned into directory <em>arangodb</em>,
-we can install the required tools and libraries we need to build
-from source:</p>
-
-<pre><code>sudo apt-get install automake g++ libssl-dev libreadline-dev
-</code></pre>
-
-<p>If you prefer to install a different C++ compiler, please make sure it
-has proper support for C++11.</p>
-
-<p>Go 1.2 is also required. The official list of downloadable Go
-versions can be found <a href="https://golang.org/dl/">here</a>. In the example,
-I am using the 32 bit version in this example:</p>
-
-<pre><code>wget https://storage.googleapis.com/golang/go1.2.2.linux-386.tar.gz
-sudo tar -C /usr/local -xzf go1.2.2.linux-386.tar.gz
-export PATH=$PATH:/usr/local/go/bin
-echo "export PATH=\$PATH:/usr/local/go/bin" &gt;&gt; $HOME/.profile
-</code></pre>
-
-<h2>Compiling ArangoDB</h2>
-
-<p>With all prerequisites set up, it&rsquo;s now time to compile ArangoDB.</p>
-
-<p>You probably noticed that no <code>configure</code> file is shipped with ArangoDB
-in the <code>devel</code> branch. To create it, we need to execute <code>make setup</code>
-once. After that, <code>configure</code> can be executed to create the <code>Makefile</code>.
-The <code>Makefile</code> finally contains the stuff that <code>make</code> needs:</p>
-
-<pre><code>make setup
-./configure --enable-relative 
-make
-</code></pre>
-
-<p>There first <code>make</code> run will take a while as it will compile all support
-libraries (ICU, V8, libev, zlib) before it will actually compile ArangoDB.
-Further invocations of <code>make</code> will not build these libraries again.
-Only any changed code will be rebuilt.</p>
-
-<p>Note that <code>make</code> can be parallelized if you have multiple processors
-available. For 4 parallel <code>make</code> processes, use <code>make -j4</code>.</p>
-
-<p><code>make</code> will produce a lot of output. The most important information, whether
-or not an error occurred, can be found in its last line of its output. If
-it does <strong>not</strong> say something like this, <code>make</code> has probably succeeded:</p>
-
-<pre><code>make: *** [all] Error 2
-</code></pre>
-
-<p>You can also execute the following command directly after <code>make</code> to check
-the exit status of the <code>make</code> process:</p>
-
-<pre><code>echo $?
-</code></pre>
-
-<p>This will print <code>0</code> if <code>make</code> was successful, and a non-zero value otherwise.</p>
-
-<h2>Starting ArangoDB</h2>
-
-<p>When finished, <code>make</code> should have created all binaries in the <code>bin</code>
-subdirectory. We can now start <code>arangod</code> and the binaries directly from
-there without running a <code>make install</code>. In fact, <code>make install</code> is
-awkward to do if you do many change-compile-test cycles.</p>
-
-<pre><code>mkdir data          # creates a data directory
-bin/arangod data    # starts the server
-</code></pre>
-
-<p>The server will be started as a foreground process (which is ideal
-when developing the server). To stop the server, simply press CTRL-C.</p>
-
-<h2>Connecting to ArangoDB</h2>
-
-<p>To verify ArangoDB is actually working, open a separate terminal and
-connect to it with the ArangoShell.</p>
-
-<p>Note that if you used Vagrant, you will first need to connect to the
-Vagrant box in the other terminal using <code>vagrant ssh</code> from the directory
-you ran the <code>vagrant init</code> in. When connect to the Vagrant box, don&rsquo;t
-forget to switch into the <code>arangodb</code> directory.</p>
-
-<p>Once you&rsquo;re in the correct directory, just issue this:</p>
-
-<pre><code>bin/arangosh
-</code></pre>
-
-<p>This should bring up the ArangoShell connected to your devel ArangoDB
-instance.</p>
-
-<h2>Making changes</h2>
-
-<p>Time to make some changes in the code. A good place to start is usually
-<code>main</code>. Here are a few places to get you started:</p>
-
-<pre><code>~/arangodb$ grep -r "int main" arangod/ arangosh/
-arangod/RestServer/arangod.cpp:int main (int argc, char* argv[]) {
-arangosh/Benchmark/arangob.cpp:int main (int argc, char* argv[]) {
-arangosh/V8Client/arangorestore.cpp:int main (int argc, char* argv[]) {
-arangosh/V8Client/arangodump.cpp:int main (int argc, char* argv[]) {
-arangosh/V8Client/arangoimp.cpp:int main (int argc, char* argv[]) {
-arangosh/V8Client/arangosh.cpp:int main (int argc, char* argv[]) {
-</code></pre>
-
-<p>Once you&rsquo;re done with your changes, you need to re-compile and run:</p>
-
-<pre><code>make
-bin/arangod data
-</code></pre>
-
-<p>Don&rsquo;t worry, <code>make</code> will only recompile what you changed plus what
-depends on it and finally link it all together. This won&rsquo;t take as long
-as on the previous run.</p>
-
-<p>If you are serious about contributing to the server code, please let us
-know <a href="https://groups.google.com/forum/#!forum/arangodb">here</a> so we can assist you.</p>
-
-<h2>Getting updates</h2>
-
-<p>We keep developing ArangoDB! To keep up to date and retrieve the latest
-changes from our repository, issue the following commands:</p>
-
-<pre><code>git pull origin devel
-make
-</code></pre>
-
-<p>If <code>make</code> complains about files not found etc., the <code>Makefile</code> may have
-changed. Then it&rsquo;s time for a cleanup:</p>
-
-<pre><code>make clean
-make setup
-./configure --enable-relative 
-make
-</code></pre>
-
-<p>By the way, if you used special configure options and forgot them, you
-can retrieve your previous options by typing <code>head config.log</code>.
-Note: as of December 2014 (ArangoDB 2.4), most configure options starting
-with <code>--enable-all-in-one-</code> have been removed. If your <code>config.log</code> still
-contains them, you can safely omit them in any future invocations of
-<code>configure</code>.</p>
-
-<p>Sometimes <code>make clean</code> isn&rsquo;t enough. <code>make</code> creates cache files for the
-object files, and if they are too outdated, it will complain about files which
-have been renamed already etc. In this case, you can forcefully delete its
-caches by running an additional</p>
-
-<pre><code>make superclean
-</code></pre>
-
-<p>This also cleans already built libraries in the 3rdParty directory. It
-also removes the <code>configure</code> file, so after <code>make superclean</code> everything
-will need to be built from again. This may take a long time, so you should
-only run <code>make superclean</code> if after a <code>make clean</code> run there are still linker
-errors or complaints about missing files.</p>
-
-<h2>Debugging</h2>
-
-<p>If you are making changes in the ArangoDB C++ code and want to test them,
-it will be sensible to install debugging tools such as <em>gdb</em> and <em>valgrind</em>:</p>
-
-<pre><code>sudo apt-get install gdb valgrind   
-</code></pre>
-
-<p>Additionally, you may want to enable core files. This can be done by executing</p>
-
-<pre><code>ulimit -c unlimited
-</code></pre>
-
-<p>in the shell, and by putting the above line in your home directory&rsquo;s <code>.bashrc</code>
-file to make it a permanent setting.</p>
-
-<p>Additionally, you may want to set environment variables in your <code>.bashrc</code> that
-control compilation options. For development, I&rsquo;d recommend using the following
-options:</p>
-
-<pre><code>export CFLAGS="-g -O0"
-export CXXFLAGS="-g -O0"
-</code></pre>
-
-<p>This will turn off all optimizations and also generate debug symbols.</p>
-
-<p>Enjoy!</p>
 ]]></content>
   </entry>
   

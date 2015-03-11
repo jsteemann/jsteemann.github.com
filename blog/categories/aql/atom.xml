@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-03-11T12:33:21+01:00</updated>
+  <updated>2015-03-11T13:34:17+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,121 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Analyzing Git Commits With ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb/"/>
+    <updated>2015-03-11T12:37:58+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb</id>
+    <content type="html"><![CDATA[<p>I often find myself searching for certain commits using <code>git log</code> and friends. While I really love
+the power and flexibility that come with the git and other Unix command-line tools, sometimes it can be more
+convenient to use a database to filter and aggregate commit data.</p>
+
+<p>I gave it a quick try yesterday and imported the commit history of ArangoDB&rsquo;s Git repository into ArangoDB
+and ran some queries on the data. While the query results for our repository may not be interesting for everyone,
+I think it is still worth sharing what I did. Even though I didn&rsquo;t try it, I think the overall procedure is
+applicable with any other Git repository.</p>
+
+<!-- more -->
+
+
+<h2>Converting the Git history to JSON</h2>
+
+<p>The way to extract history and commit data from a local repository is to use <code>git log</code>. Though its output
+is greatly customizable, it does not provide an out-of-the-box solution for producing JSON. So I wrote a simple
+wrapper script (in PHP) around it. The script can be found <a href="https://gist.github.com/jsteemann/65ef221646449713b2c5">here</a>.</p>
+
+<p>Here&rsquo;s how to run it:
+<code>bash converting the git history to JSON
+cd path/to/local/git-repository
+wget https://gist.githubusercontent.com/jsteemann/65ef221646449713b2c5/raw/fef22c729e01dd0777b378ac1e17e951ea47c7dd/git-log-to-json.php
+php git-log-to-json.php &gt; arango-commits-master-201503.json
+</code></p>
+
+<p>The script may run a few minutes on bigger repositories such as ours. In the end, it should produce a JSON
+file named <code>arango-commits-master-201503.json</code>.</p>
+
+<p>I have also uploaded the JSON file <a href="/downloads/code/arango-commits-master-201503.json">here</a>. Note that the
+file only contains commits from the <code>master</code> branch and not all commits done in ArangoDB in total.</p>
+
+<h2>Importing the commits into ArangoDB</h2>
+
+<p>The simplest way to get the commits into ArangoDB is to use <code>arangoimp</code>:</p>
+
+<p><code>bash importing the commits into ArangoDB
+arangoimp                                   \
+  --collection commits                      \
+  --create-collection true                  \
+  --file arango-commits-master-201503.json  \
+  --overwrite true                          \
+  --batch-size 32000000
+</code></p>
+
+<p>This should have imported all the commits into a collection <code>commits</code> in the default database.</p>
+
+<h2>Querying the commit logs</h2>
+
+<p>Following are a few example queries that I ran on the data from the ArangoShell.
+As mentioned before, it should be possible to run the queries for other repositories' data.</p>
+
+<p><code>js getting all contributors
+query = 'FOR commit IN commits COLLECT author = commit.author.name RETURN author';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving the total number of commits
+query = 'FOR commit IN commits COLLECT WITH COUNT INTO count RETURN count';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving the number of commits by contributor
+query = 'FOR commit IN commits COLLECT author = commit.author.name WITH COUNT INTO count RETURN { author: author, count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving the tagged commits
+query = 'FOR commit IN commits FILTER commit.tag != null SORT commit.date RETURN KEEP(commit, [ "date", "message", "tag" ])';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving number of commits per year
+query = 'FOR commit IN commits COLLECT year = DATE_YEAR(commit.date) WITH COUNT INTO count RETURN { year: year, count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving number of commits per month / year
+query = 'FOR commit IN commits COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date)  WITH COUNT INTO count RETURN { month: CONCAT(year, "/", month), count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving number of commits per weekday
+query = 'FOR commit IN commits COLLECT day = DATE_DAYOFWEEK(commit.date) WITH COUNT INTO count RETURN { day: TRANSLATE(day, { "0": "Sunday", "1": "Monday", "2": "Tuesday", "3": "Wednesday", "4": "Thursday", "5": "Friday", "6": "Saturday" }), count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving commits with string "issue #" in commit message
+query = 'FOR commit IN commits FILTER LIKE(commit.message, "%issue #%") SORT commit.date DESC LIMIT 10 RETURN UNSET(commit, "files")';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving number of commits related to Foxx
+query = 'FOR commit IN commits FILTER LIKE(LOWER(commit.message), "%foxx%") COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date) WITH COUNT INTO count RETURN { month: CONCAT(year, "/", month), count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving commits that touched the most files
+query = 'FOR commit IN commits LET count = LENGTH(commit.files || []) SORT count DESC LIMIT 10 RETURN MERGE(UNSET(commit, "files"), { files: count })';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving files modified most often
+query = 'FOR commit IN commits FOR filename IN commit.files || [] COLLECT file = filename WITH COUNT INTO count SORT count DESC LIMIT 10 RETURN { file: file, count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p>Enjoy!</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Improvements in 2.5]]></title>
@@ -1148,78 +1263,6 @@ LET params = {
 FOR result IN TRAVERSAL(v, e, &ldquo;v/world&rdquo;, &ldquo;inbound&rdquo;, params)
   RETURN result
 ```</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Explaining AQL Queries the Fancier Way]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/01/23/explaining-aql-queries-the-fancy-way/"/>
-    <updated>2015-01-23T01:00:03+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/01/23/explaining-aql-queries-the-fancy-way</id>
-    <content type="html"><![CDATA[<p>I have been looking at many AQL queries during the last few weeks.</p>
-
-<p>Looking back, I can say that the JSON query execution plans provided by
-the <code>explain()</code> method have provided me with a lot of useful information
-about how the AQL optimizer had transformed a given query. This has
-helped testing and improving the query optimizer a great deal.</p>
-
-<p>However, the JSON output produced by <code>explain()</code> is so detailed that even
-for the simplest cases queries it will span multiple screens. This is far
-too much for quicking assesing what a query will be doing and how it will
-be executed.</p>
-
-<p>I therefore quickly put together a function that provides a much more
-compact explain output. Its input parameter is a query string, which it
-will send to the ArangoDB server to have it explained.</p>
-
-<p>But it doesn&rsquo;t print a voluminous JSON object. This one is for developers
-with a full schedule.</p>
-
-<p><img src="/downloads/screenshots/explainer.png"></p>
-
-<!-- more -->
-
-
-<p>It prints the original query, the generated query execution plan, the
-applied optimizer rules plus the list of indexes that will be used. This
-is often the key information that one is interested in.</p>
-
-<p>It works best when the execution plan fits on a single screen and
-the execution plan is not nested too much. Subqueries are supported though.
-I have tried it with several queries this night and the results were quite
-promising from my point of view.</p>
-
-<p>For example, a poor man&rsquo;s graph query (using a subquery to join connected
-edges) still prints nicely:</p>
-
-<p><img src="/downloads/screenshots/explainer-inv.png"></p>
-
-<p>As usual, your mileage may vary. If you&rsquo;re inspecting complex queries
-with it, the lines printed may get too long and wrap. The output won&rsquo;t be
-very legible then, but it may still be helpful.</p>
-
-<p>I have added the feature to 2.4 and devel. Anyone compiling from source
-can use it by pulling the latest changes, compiling, and then typing the
-following on the ArangoShell or in the web interface:</p>
-
-<p><code>js
-var explain = require("org/arangodb/aql/explainer").explain;
-explain("FOR doc IN myCollection FILTER doc.value &lt; 23 RETURN doc");
-</code></p>
-
-<p>The feature will also be included in the next 2.4 package.</p>
-
-<p>Anyone on 2.3 or 2.4 users that can&rsquo;t wait until the next package can give
-it a try, too. The code for the explain function is contained in a single file,
-and it can be downloaded from
-<a href="https://github.com/arangodb/arangodb/blob/2.4/js/common/modules/org/arangodb/aql/explainer.js">Github</a>.
-and then be copied into the appropriate location inside ArangoDB&rsquo;s <code>js</code> directory.
-This should make it work from the ArangoShell (but not from the web interface).</p>
-
-<p>On a side note: I would also like to have some functionality like this in
-the web interface, but as a backend developer, I am not able to do any
-serious UI work. I also put this together in my leisure time, and have to
-come to an end with it.</p>
 ]]></content>
   </entry>
   

@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Git | J@ArangoDB]]></title>
+  <link href="http://jsteemann.github.io/blog/categories/git/atom.xml" rel="self"/>
+  <link href="http://jsteemann.github.io/"/>
+  <updated>2015-03-11T13:34:17+01:00</updated>
+  <id>http://jsteemann.github.io/</id>
+  <author>
+    <name><![CDATA[jsteemann]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Analyzing Git Commits With ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb/"/>
+    <updated>2015-03-11T12:37:58+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb</id>
+    <content type="html"><![CDATA[<p>I often find myself searching for certain commits using <code>git log</code> and friends. While I really love
+the power and flexibility that come with the git and other Unix command-line tools, sometimes it can be more
+convenient to use a database to filter and aggregate commit data.</p>
+
+<p>I gave it a quick try yesterday and imported the commit history of ArangoDB&rsquo;s Git repository into ArangoDB
+and ran some queries on the data. While the query results for our repository may not be interesting for everyone,
+I think it is still worth sharing what I did. Even though I didn&rsquo;t try it, I think the overall procedure is
+applicable with any other Git repository.</p>
+
+<!-- more -->
+
+
+<h2>Converting the Git history to JSON</h2>
+
+<p>The way to extract history and commit data from a local repository is to use <code>git log</code>. Though its output
+is greatly customizable, it does not provide an out-of-the-box solution for producing JSON. So I wrote a simple
+wrapper script (in PHP) around it. The script can be found <a href="https://gist.github.com/jsteemann/65ef221646449713b2c5">here</a>.</p>
+
+<p>Here&rsquo;s how to run it:
+<code>bash converting the git history to JSON
+cd path/to/local/git-repository
+wget https://gist.githubusercontent.com/jsteemann/65ef221646449713b2c5/raw/fef22c729e01dd0777b378ac1e17e951ea47c7dd/git-log-to-json.php
+php git-log-to-json.php &gt; arango-commits-master-201503.json
+</code></p>
+
+<p>The script may run a few minutes on bigger repositories such as ours. In the end, it should produce a JSON
+file named <code>arango-commits-master-201503.json</code>.</p>
+
+<p>I have also uploaded the JSON file <a href="/downloads/code/arango-commits-master-201503.json">here</a>. Note that the
+file only contains commits from the <code>master</code> branch and not all commits done in ArangoDB in total.</p>
+
+<h2>Importing the commits into ArangoDB</h2>
+
+<p>The simplest way to get the commits into ArangoDB is to use <code>arangoimp</code>:</p>
+
+<p><code>bash importing the commits into ArangoDB
+arangoimp                                   \
+  --collection commits                      \
+  --create-collection true                  \
+  --file arango-commits-master-201503.json  \
+  --overwrite true                          \
+  --batch-size 32000000
+</code></p>
+
+<p>This should have imported all the commits into a collection <code>commits</code> in the default database.</p>
+
+<h2>Querying the commit logs</h2>
+
+<p>Following are a few example queries that I ran on the data from the ArangoShell.
+As mentioned before, it should be possible to run the queries for other repositories' data.</p>
+
+<p><code>js getting all contributors
+query = 'FOR commit IN commits COLLECT author = commit.author.name RETURN author';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving the total number of commits
+query = 'FOR commit IN commits COLLECT WITH COUNT INTO count RETURN count';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving the number of commits by contributor
+query = 'FOR commit IN commits COLLECT author = commit.author.name WITH COUNT INTO count RETURN { author: author, count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving the tagged commits
+query = 'FOR commit IN commits FILTER commit.tag != null SORT commit.date RETURN KEEP(commit, [ "date", "message", "tag" ])';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving number of commits per year
+query = 'FOR commit IN commits COLLECT year = DATE_YEAR(commit.date) WITH COUNT INTO count RETURN { year: year, count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving number of commits per month / year
+query = 'FOR commit IN commits COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date)  WITH COUNT INTO count RETURN { month: CONCAT(year, "/", month), count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving number of commits per weekday
+query = 'FOR commit IN commits COLLECT day = DATE_DAYOFWEEK(commit.date) WITH COUNT INTO count RETURN { day: TRANSLATE(day, { "0": "Sunday", "1": "Monday", "2": "Tuesday", "3": "Wednesday", "4": "Thursday", "5": "Friday", "6": "Saturday" }), count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving commits with string "issue #" in commit message
+query = 'FOR commit IN commits FILTER LIKE(commit.message, "%issue #%") SORT commit.date DESC LIMIT 10 RETURN UNSET(commit, "files")';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving number of commits related to Foxx
+query = 'FOR commit IN commits FILTER LIKE(LOWER(commit.message), "%foxx%") COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date) WITH COUNT INTO count RETURN { month: CONCAT(year, "/", month), count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving commits that touched the most files
+query = 'FOR commit IN commits LET count = LENGTH(commit.files || []) SORT count DESC LIMIT 10 RETURN MERGE(UNSET(commit, "files"), { files: count })';
+db._query(query).toArray();
+</code></p>
+
+<p><code>js retrieving files modified most often
+query = 'FOR commit IN commits FOR filename IN commit.files || [] COLLECT file = filename WITH COUNT INTO count SORT count DESC LIMIT 10 RETURN { file: file, count: count }';
+db._query(query).toArray();
+</code></p>
+
+<p>Enjoy!</p>
+]]></content>
+  </entry>
+  
+</feed>
