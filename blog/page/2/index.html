@@ -10,8 +10,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="ArangoDB 2.4 will be shipped with an updated version of V8. The V8 version included in 2.4 will be 3.29.59. This version will replace the
-almost two &hellip;">
+  <meta name="description" content="ArangoDB provides many options for finding and modifying data. Though there are
+several more specialized operation, data-modification AQL queries are &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -80,6 +80,65 @@ almost two &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations/">Returning Results From AQL INSERT/REMOVE/REPLACE Operations</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-01-13T22:53:40+01:00" pubdate data-updated="true">Jan 13<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>ArangoDB provides many options for finding and modifying data. Though there are
+several more specialized operation, data-modification AQL queries are the most
+general solution in ArangoDB. They allow to find documents using arbitrary filter
+criteria, and to modify or remove the documents once found.</p>
+
+<p>Such <em>find-and-modify</em> operations can be executed with multiple queries (one for
+the find step, one for the modification step), or with a single query. Putting
+both steps into a single query will often save roundtrips between the application
+and the database and thus may be preferred over executing the steps separately.
+Putting both the find and the modify step into the same query also prevents other
+operations from interfering in between and tampering with the underlying data.</p>
+
+<p>Now what if the application not only requires the data to be updated, but also needs
+to keep track of which documents were found and modified by a <em>find-and-modify</em>
+query? This is often required when an application needs to keep database
+data in sync with data in some other datastore (e.g. the filesystem or a remote
+service).</p>
+
+<p>The pattern I would dub <em>find-modify-return</em> would be useful for this.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -559,52 +618,6 @@ for ArangoDB and all its client tools!</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">Using Travis CI for a C++11 Project</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-10-17T19:36:57+02:00" pubdate data-updated="true">Oct 17<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p><a href="http://travis-ci.com">TravisCI</a> is a very useful cloud service
-for continous integration. It can be integrated with Github, with each
-commit triggering a new build and reporting back when it broke something.</p>
-
-<p>Travis has support for many programming languages, among them C++.
-But it lacks support for C++11 features.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/3/">&larr; Older</a>
@@ -629,6 +642,10 @@ But it lacks support for C++11 features.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/03/27/preview-of-the-upsert-command/">Preview of the UPSERT Command</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/03/11/analyzing-git-commits-with-arangodb/">Analyzing Git Commits With ArangoDB</a>
       </li>
     
@@ -644,10 +661,6 @@ But it lacks support for C++11 features.</p>
         <a href="/blog/2015/02/07/using-ccache-when-working-with-different-branches/">Using Ccache When Working With Different Branches</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/02/05/using-arangodb-as-a-logstash-output/">Using ArangoDB as a Logstash Output</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -656,11 +669,11 @@ But it lacks support for C++11 features.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (10)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (23)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (2)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (5)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (11)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (24)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (2)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (5)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (10)</li><ul class="month_list"><li class="month"><a href='/blog/2015/03/'>MAR (1)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (11)</li><ul class="month_list"><li class="month"><a href='/blog/2015/03/'>MAR (2)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

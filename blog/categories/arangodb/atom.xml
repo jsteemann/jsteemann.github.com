@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-03-11T13:34:17+01:00</updated>
+  <updated>2015-03-27T23:26:50+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,276 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Preview of the UPSERT Command]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/03/27/preview-of-the-upsert-command/"/>
+    <updated>2015-03-27T21:37:09+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/03/27/preview-of-the-upsert-command</id>
+    <content type="html"><![CDATA[<p>This week saw the completion of the AQL <code>UPSERT</code> command.</p>
+
+<p>This command will be very helpful in a lot of use cases, including the following:</p>
+
+<ul>
+<li>ensure that a document exists</li>
+<li>update a document if it exists, otherwise create it</li>
+<li>replace a document if it exists, otherwise create it</li>
+</ul>
+
+
+<p>The <code>UPSERT</code> command is executed on the server side and so delivers client
+applications from issuing a fetch command followed by a separate, conditional <code>UPDATE</code>
+or <code>INSERT</code> command.</p>
+
+<!-- more -->
+
+
+<p>The general format of an <code>UPSERT</code> statement is:</p>
+
+<p><code>plain UPSERT format
+UPSERT search-document
+INSERT insert-expression
+UPDATE update-expression
+IN collection-name
+</code></p>
+
+<p>Following are a few example invocations of <code>UPSERT</code>.</p>
+
+<h2>Ensure a document exists</h2>
+
+<p>A simple use case of <code>UPSERT</code> is to ensure that a specific document exists.
+For example, the following query will ensure that that there will be a document
+with attribute <code>ip</code> equal to <code>192.168.173.13</code> in collection <code>hosts</code>:</p>
+
+<p><code>plain ensuring a document exists
+UPSERT { ip: '192.168.173.13' }
+INSERT { ip: '192.168.173.13', name: 'flittard' }
+UPDATE { }
+IN hosts
+</code></p>
+
+<p>If the document does not yet exist, the <code>INSERT</code> part will be carried out. If the
+document is already there, the empty <code>UPDATE</code> part will be run, which will not
+modify the document.</p>
+
+<p>After the query has finished, there will be a document with the specified <code>ip</code> value.</p>
+
+<p>There is no need for client applications to check for document existence first,
+and then to conditionally insert or update, or to try insert first and catch errors.</p>
+
+<p>Note: this is the same as ActiveRecord&rsquo;s <code>find_or_create</code>.</p>
+
+<h2>Update a document if it exists, otherwise create it</h2>
+
+<p>Another common use case is to check whether a specific document exists, and then update it.
+If it does not yet exist, the document shall be created.</p>
+
+<p>Counters are a good example for this, so let&rsquo;s demo this pattern with a counter, too:</p>
+
+<p><code>plain UPSERT example
+UPSERT { ip: '192.168.173.13' }
+INSERT { ip: '192.168.173.13', name: 'flittard', counter: 1 }
+UPDATE { counter : OLD.counter + 1 }
+IN hosts
+</code></p>
+
+<p>The above query will again look for a document with the specified <code>ip</code> attribute. If the
+document exists, its <code>counter</code> attribute will be increased by one. This is achieved by
+referring to the pseudo-value <code>OLD</code>, which in the <code>UPDATE</code> case contains the previous revision
+of the document.</p>
+
+<p>If the search document does not yet exist, the <code>INSERT</code>part will be carried out, inserting
+the document and setting the initial value of <code>counter</code> to 1.</p>
+
+<p>Assuming the collection was empty before, running the above query once will make the collection
+contain this data:</p>
+
+<p>```json collection contents after running query once
+[
+  {</p>
+
+<pre><code>"counter": 1,
+"ip": "192.168.173.13",
+"name": "flittard"
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<p>When running the <code>UPSERT</code> statement again, the collection will contain the updated document:</p>
+
+<p>```json collection contents after running the UPSERT command again:
+[
+  {</p>
+
+<pre><code>"counter": 2,
+"ip": "192.168.173.13",
+"name": "flittard"
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<p>Now let&rsquo;s run the query with adjusted <code>ip</code> and <code>name</code> values:</p>
+
+<p><code>plain UPSERT with different ip and name
+UPSERT { ip: '192.168.173.73' }
+INSERT { ip: '192.168.173.73', name: 'brueck', counter: 1 }
+UPDATE { counter : OLD.counter + 1 }
+IN hosts
+</code></p>
+
+<p>After that, the collection will contain two documents:</p>
+
+<p>```json collection contents
+[
+  {</p>
+
+<pre><code>"counter": 2,
+"ip": "192.168.173.13",
+"name": "flittard"
+</code></pre>
+
+<p>  },
+  {</p>
+
+<pre><code>"counter": 1,
+"name": "brueck",
+"ip": "192.168.173.73"
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<h2>Replace a document if it exists, otherwise create it</h2>
+
+<p>We&rsquo;ve seen <code>UPSERT</code> with an <code>INSERT</code> and an <code>UPDATE</code> clause so far.</p>
+
+<p><code>UPDATE</code> will partially update the previous revision of the document if present.
+Only those attributes specified in the <code>update-expression</code> will be updated, and
+all non-specified attributes of the original document revision will remain
+unchanged.</p>
+
+<p>If instead a full replacement of the original document is required, the <code>REPLACE</code>
+clause should be used instead of <code>UPDATE</code>. <code>REPLACE</code> will overwrite the previous
+revision completely with the <code>update-expression</code>.</p>
+
+<p><code>plain UPSERT with different ip and name
+UPSERT { ip: '192.168.173.73' }
+INSERT { ip: '192.168.173.73', name: 'brueck', counter: 1 }
+UPDATE { counter : OLD.counter + 1 }
+IN hosts
+</code></p>
+
+<h2>Returning documents</h2>
+
+<p><code>UPSERT</code> can be combined with a <code>RETURN</code> statement to return either the previous
+document revision (in case of <code>UPDATE</code> or <code>REPLACE</code>) or the new version of the
+document.</p>
+
+<p>Client applications can use this to check whether the <code>UPSERT</code> statement has
+inserted or updated the document. In case no previous revision was present, the
+pseudo-value <code>OLD</code> will be <code>null</code>.</p>
+
+<p><code>UPSERT</code> also provides a pseudo-value named <code>NEW</code> containing the insert, updated or
+replaced version of the document:</p>
+
+<p><code>plain UPSERT with a RETURN value
+UPSERT { ip: '192.168.173.187' }
+INSERT { ip: '192.168.173.187', name: 'kalk', counter: 1 }
+UPDATE { counter : OLD.counter + 1 }
+IN hosts
+RETURN { old: OLD, new: NEW }
+</code></p>
+
+<p>In the <code>INSERT</code> case, we&rsquo;ll get:</p>
+
+<p>```json query return value for INSERT case
+[
+  {</p>
+
+<pre><code>"old": null,
+"new": {
+  "counter": 1,
+  "name": "kalk",
+  "ip": "192.168.173.187"
+}
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<p>When running the query again, we&rsquo;ll get into the <code>UPDATE</code> case, and the same query
+will now return:</p>
+
+<p>```json query return value for the UPDATE case
+[
+  {</p>
+
+<pre><code>"old": {
+  "counter": 1,
+  "name": "kalk",
+  "ip": "192.168.173.187"
+},
+"new": {
+  "counter": 2,
+  "name": "kalk",
+  "ip": "192.168.173.187"
+}
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<h2>Complex updates</h2>
+
+<p>Updating and returning <code>OLD</code> and <code>NEW</code> will work with arbitrary calculations.
+For example, the following query adds a value <code>development</code> to the <code>tag</code> attribute
+only if not yet present in the search document:</p>
+
+<p><code>plain adding a value to an array if not yet present
+UPSERT { ip: '192.168.173.94' }                                                                              
+INSERT { ip: '192.168.173.94', name: 'chorweiler', tags: [ "development" ] }                                                    
+UPDATE { tags: PUSH(OLD.tags, "development", true) }                                                                          
+IN hosts                                                                                                      
+RETURN { old: OLD, new: NEW }
+</code></p>
+
+<p>Running the query multiple times will ensure that <code>tags</code> will contain the value
+<code>development</code> only once.</p>
+
+<p>Note: <code>PUSH</code> is a regular <a href="https://docs.arangodb.com/Aql/ArrayFunctions.html">AQL array function</a>.</p>
+
+<h2>Restrictions</h2>
+
+<p>The <code>search-value</code> needs to be an object literal, with attribute names being inspectable
+at query compile time. This means that neither variables nor bind parameters can be used
+for <code>search-value</code>.</p>
+
+<p>However, bind parameters and variables can be used <strong>inside</strong> <code>search-value</code>.
+Dynamic attribute names cannot be used for specifying attribute names in search-value`.</p>
+
+<p><code>UPSERT</code> does not require an index to be present on the attributes of <code>search-value</code>,
+but in reality queries will benefit from indexes to find matching documents.</p>
+
+<p>When more than one document in the collection matches <code>search-value</code>, one arbitrary match
+will be used for executing the <code>UPDATE</code> clause. It is therefore recommended to use
+<code>UPSERT</code> commands together with a unique index or to make sure from the client application
+that at most one document will match the <code>search-value</code>. Ironically, one way to achieve this is
+to use the <code>UPSERT</code> command for inserts&hellip;</p>
+
+<h2>Availability</h2>
+
+<p><code>UPSERT</code> is currently available in the <code>devel</code> branch of ArangoDB. This branch
+will eventually become release 2.6. Until then, everyone is welcome to try it out and
+provide feedback.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Analyzing Git Commits With ArangoDB]]></title>
@@ -737,131 +1007,6 @@ will be fixed in some future release.</p>
 <p>Though I think it will work perfectly, I am not at all an expert for Logstash or its plugins.
 I didn&rsquo;t spend much time with it yet, and I may have overlooked important things. So should you
 be interested in using it, please conduct your own tests first.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Using Dynamic Attribute Names in AQL]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/"/>
-    <updated>2015-02-03T00:12:39+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql</id>
-    <content type="html"><![CDATA[<p>On our mailing list, there is quite often the question whether attribute names in objects
-returned from AQL queries can be made dynamic.</p>
-
-<p>Here&rsquo;s a (non-working) example query for this:</p>
-
-<p><code>plain example query that does not work
-FOR doc IN collection
-  RETURN { doc.type : doc.value }
-</code></p>
-
-<p>The intention in the above query obviously is to use the dynamic value from <code>doc.type</code> as
-an attribute name in the result object and not to have an attribute named <code>"doc.type"</code>. This
-feature is probably in the top 20 of the most-often wished features.</p>
-
-<!-- more -->
-
-
-<p>However, the above query won&rsquo;t even parse. The AQL grammar only allows string values
-left of the colon in an object definition. Non-quoted strings are allowed there too, and are
-implicitly turned into quoted strings. It works similar to how object literals are defined
-in JavaScript:</p>
-
-<p><code>plain using unquoted and quoted string attribute names
-RETURN {
-  foo : "bar",
-  "baz" : "qux"
-}
-</code></p>
-
-<p>Why not allow arbitrary expression left of the colon? The reason is simple: this would cause
-ambiguity and probably have side-effects. For an example, have a look at the following query:</p>
-
-<p><code>plain which attribute name to use here?
-FOR doc IN collection
-  LET type = doc.type;
-  RETURN { type : doc.value }
-</code></p>
-
-<p>If the <code>type</code> attribute name inside the object definition is interpreted as a string literal
-as it currently is an AQL (and always was), then the resulting attribute name is just <code>"type"</code>.</p>
-
-<p>If the <code>type</code> attribute name would now be intepreted as an expression, it would get the value
-that was assigned to the variable <code>type</code> by the <code>LET</code> statement. Removing the <code>LET</code> from the
-query would change the attribute name in the result back to the string literal <code>"type"</code>.</p>
-
-<p>The ambiguity could be solved by telling the parser what to do in such cases. While technically
-this could be working, I think it may have too many unintended side-effects. I already mentioned
-that introducing a <code>LET</code> statement into the query would change the attribute name in the result.
-The same could also happen if a collection named <code>type</code> was added to the query. And it would
-break compatibility with existing queries.</p>
-
-<p>JavaScript has the same problem, and it wasn&rsquo;t solved portably yet. However, there is a proposal
-for ES6 that suggests enclosing attribute name expressions in <code>[</code> and <code>]</code>.</p>
-
-<p>To me, this looks like a good solution for the problem. It&rsquo;s two bytes more when keying in
-queries, but the syntax is easy and explicit. There are no ambiguities.</p>
-
-<p>I prototyped this solution for AQL, so I could write:</p>
-
-<p>```plain query using dynamic attribute names
-FOR i IN 1..5
-  RETURN {</p>
-
-<pre><code>[ CONCAT('test', i) ] : i, 
-[ SUBSTITUTE(CONCAT('i is ', (i &lt;= 3 ? 'small' : 'not small')), { ' ' :  '_' } ) ] : i 
-</code></pre>
-
-<p>  }</p>
-
-<p>[
-  {</p>
-
-<pre><code>"test1" : 1, 
-"i_is_small" : 1 
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"test2" : 2, 
-"i_is_small" : 2 
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"test3" : 3, 
-"i_is_small" : 3 
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"test4" : 4, 
-"i_is_not_small" : 4 
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"test5" : 5, 
-"i_is_not_small" : 5 
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<p>I ran a few queries with this, and they seemed to work. <del>However, I haven&rsquo;t
-committed the feature yet. There might still be cases in which it doesn&rsquo;t work. Tests
-for the feature are also still missing. I hope I can finalize the implementation soon
-so it becomes available in some release.</del></p>
-
-<p><strong>UPDATE</strong>: tests have been added, and the feature has been committed in devel. It is
-included in ArangoDB since version 2.5.</p>
-
-<p>Everyone is welcome to try it out already!</p>
 ]]></content>
   </entry>
   
