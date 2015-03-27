@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-03-27T23:26:50+01:00</updated>
+  <updated>2015-03-28T00:19:15+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,103 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Improvements for Data-modification Queries]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries/"/>
+    <updated>2015-03-27T23:29:19+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries</id>
+    <content type="html"><![CDATA[<p>Data-modification queries were enhanced in ArangoDB 2.4 to be able to also return
+the inserted, update or removed documents.</p>
+
+<p>For example, the following statement inserted a few documents and also returned
+them with all their attributes:</p>
+
+<p><code>plain AQL insert query returning documents
+FOR i IN 1..10
+  INSERT { value: i } IN test
+  LET inserted = NEW
+  RETURN inserted
+</code></p>
+
+<p>The syntax for returning documents from data-modification queries only supported
+the exact above format. Using a <code>LET</code> clause was required, and the <code>RETURN</code> clause
+was limited to returning the variable introduced by the <code>LET</code>.</p>
+
+<p>These syntax restrictions have been lifted in the <code>devel</code> branch, which will become
+release 2.6 eventually. The changes make returning values from data-modification
+statements easier and also more flexible.</p>
+
+<!-- more -->
+
+
+<h2>Simpler syntax</h2>
+
+<p>For example, specifying a <code>LET</code> clause is not required anymore (though still fully
+supported). Instead, the <code>RETURN</code> clause can directly refer to the <code>NEW</code> pseudo-value,
+making the query shorter and easier to write:</p>
+
+<p><code>plain AQL insert query returning documents
+FOR i IN 1..10
+  INSERT { value: i } IN test
+  RETURN NEW
+</code></p>
+
+<h2>Projections</h2>
+
+<p>It is now also possible to return a projection instead of returning the entire documents.
+This can be used to reduce the amount of data returned by queries.</p>
+
+<p>For example, the following query will return just the keys of the inserted documents:</p>
+
+<p><code>plain AQL insert query returning a projection
+FOR i IN 1..10
+  INSERT { value: i } IN test
+  RETURN NEW._key
+</code></p>
+
+<h2>Using OLD and NEW in the same query</h2>
+
+<p>In previous versions, <code>UPDATE</code> and <code>REPLACE</code> statements could refer to <strong>either</strong>
+the <code>OLD</code> or the <code>NEW</code> pseudo-value, but not to both. 2.6 lifts that restriction, so
+now these queries can refer to both. One can utilize that to return both the previous
+and the updated revision:</p>
+
+<p><code>plain AQL update query returning old and new revisions
+FOR doc IN test
+  UPDATE doc WITH { value: 42 } IN test
+  RETURN { old: OLD, new: NEW }
+</code></p>
+
+<h2>Calculations with OLD or NEW</h2>
+
+<p>It is now also possible to run additional calculations with <code>LET</code> statements between
+the data-modification part and the final <code>RETURN</code>:</p>
+
+<p><code>plain AQL upsert query with some extra calculations
+UPSERT { name: 'test' } INSERT { name: 'test' } UPDATE { } IN test
+LET previousRevisionExisted = ! IS_NULL(OLD)
+LET type = previousRevisionExisted ? 'update' : 'insert'
+RETURN { _key: NEW._key, type: type }
+</code></p>
+
+<h2>Restrictions</h2>
+
+<p>Still the following restrictions remain:</p>
+
+<ul>
+<li><p>a data-modification operation can optionally be followed by any number of <code>LET</code> clauses,
+and a final <code>RETURN</code> clause. No other operations (e.g. <code>FOR</code>, <code>SORT</code>, <code>COLLECT</code>) can be
+used after a data-modification operation</p></li>
+<li><p>calculations following a data-modification operation must not access data in collections,
+so using functions such as <code>GRAPH_TRAVERSAL</code> etc. is disallowed.</p></li>
+</ul>
+
+
+<p>The improvements are present in the <code>devel</code> branch and can be tested in there from now on.
+As usual, feedback is welcome!</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Preview of the UPSERT Command]]></title>
@@ -832,181 +929,6 @@ memory if the data-retrieval part constructed big intermediate result sets.</p>
 <p>The AQL query execution statistics now also provide an attribute <code>filtered</code>. Its value indicates how many
 documents were filtered by <code>FilterNode</code>s in the AQL query. This can be used as an indicator for whether
 indexes should be added, and for how effective indexes are used for filtering.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Using ArangoDB as a Logstash Output]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/02/05/using-arangodb-as-a-logstash-output/"/>
-    <updated>2015-02-05T23:39:23+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/02/05/using-arangodb-as-a-logstash-output</id>
-    <content type="html"><![CDATA[<p>Inspired by a question on <a href="http://stackoverflow.com/questions/28314711/logstash-output-for-arangodb">StackOverflow</a>,
-I did some investigation about how to make <a href="http://www.elasticsearch.org/overview/logstash/">Logstash</a>
-send log events to ArangoDB.</p>
-
-<p>There is no dedicated Logstash output plugin for ArangoDB on the
-<a href="https://github.com/logstash-plugins">Logstash plugins page</a>, so I had already accepted to write
-one on my own.</p>
-
-<p>Browsing the plugins page for inspiration, I found an
-<a href="https://github.com/logstash-plugins/logstash-output-http">HTTP output plugin for Logstash</a>.
-It seems to be general enough that it can send the log event in JSON format to any HTTP-speaking backend.</p>
-
-<p>ArangoDB&rsquo;s API is JSON over HTTP, so it sounded like a perfect match. I briefly tried it out and
-it seemed to work fine.</p>
-
-<!-- more -->
-
-
-<p>Here are the steps I carried out to connect the two:</p>
-
-<h2>Prepare an ArangoDB server</h2>
-
-<p>I started an ArangoDB server with default configuration (binding to IP address 127.0.0.1 and port
-8529). I then used the ArangoShell to create a collection named <code>logstash</code>:</p>
-
-<p><code>js
-db._create("logstash");
-</code></p>
-
-<p>This collection will be used for storing the log events sent by Logstash.</p>
-
-<h2>Download Logstash</h2>
-
-<p>In order to run Logstash, you must have Java installed, which I assume you already have.</p>
-
-<p>Now it&rsquo;s time to download Logstash. You can download and unpack it with the command following.
-The current version is 1.5.0 beta1 (<strong>warning: 100 MB download!</strong>):</p>
-
-<p><code>bash
-wget "http://download.elasticsearch.org/logstash/logstash/logstash-1.5.0.beta1.tar.gz"
-tar xvfz logstash-1.5.0.beta1.tar.gz
-cd Downloads/logstash-1.5.0.beta1
-</code></p>
-
-<h2>Connecting Logstash with ArangoDB</h2>
-
-<p>We are now ready to start Logstash. I&rsquo;ll start it in a mode that will send all input from
-stdin as log events to ArangoDB. I am using the <code>stdin</code> input plugin, and the <code>http</code> output
-plugin for this. The <code>http</code> output plugin needs to know the URL to send the log events to.</p>
-
-<p>The URL is ArangoDB&rsquo;s base URL plus the REST API method for storing a single document, with
-the name of the target collection (<code>logstash</code>) appended.</p>
-
-<p>Here is the full command:</p>
-
-<p><code>bash
-bin/logstash -e 'input { stdin } } output { http { http_method =&gt; "post" url =&gt; "http://127.0.0.1:8529/_api/document?collection=logstash" format =&gt; "json" } }'
-</code></p>
-
-<p>Logstash may need a few seconds to start. The HTTP plugin will print a message about itself
-being a milestone 1 release only, but it works. Anything entered in the terminal should now be
-sent as a log event to ArangoDB.</p>
-
-<p>For example, type <code>fingers crossed!</code> and hit enter:</p>
-
-<p><code>
-Using milestone 1 output plugin 'http'. This plugin should work, but would benefit from use by folks like you. Please let us know if you find bugs or have suggestions on how to improve this plugin.  For more information on plugin milestones, see http://logstash.net/docs/1.5.0.beta1/plugin-milestones {:level=&gt;:warn}
-fingers crossed!
-</code></p>
-
-<p>Let&rsquo;s check if the log event made it into ArangoDB. I have used the ArangoShell for this:</p>
-
-<p>```js
-db.logstash.toArray()
-[
-  {</p>
-
-<pre><code>"_id" : "logstash/3507690866496", 
-"_key" : "3507690866496", 
-"_rev" : "3507690866496", 
-"@version" : "1", 
-"host" : "kalk", 
-"message" : "fingers crossed!", 
-"@timestamp" : "2015-02-05T23:17:39.982Z" 
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<h3>Querying log events</h3>
-
-<p>So we&rsquo;re getting log events in from Logstash.</p>
-
-<p>We can use AQL to query the received log events in ArangoDB. But before we run a query,
-we probably want to index the <code>@timestamp</code> attribute of the events, so we can efficiently
-find and filter them by date and time:</p>
-
-<p><code>js
-db.logstash.ensureSkiplist("@timestamp");
-</code></p>
-
-<p>Now we can run the following AQL query to find the latest 5 log events:</p>
-
-<p><code>plain
-FOR l IN logstash
-  FILTER l.`@timestamp` &lt;= '2099' /* arbitrary max value */
-  SORT l.`@timestamp` DESC
-  LIMIT 5
-  RETURN l
-</code></p>
-
-<p>Note: the <code>@timestamp</code> attribute name needs to be enclosed in backticks because a <code>@</code> prefix
-is used to designate bind parameters in AQL. Enclosing the names in backticks will make AQL treat
-them as attribute name literals.</p>
-
-<p>For the simple types of events triggered by the <code>stdin</code> input plugin, this is already sufficient.
-However, log events may look different, depending on the type of input plugins that are used. For
-other inputs, other attributes may need to be indexed, too.</p>
-
-<h3>Adjusting IP, port and authentication</h3>
-
-<p>Above I have used the default configuration of ArangoDB, that is IP 127.0.0.1, port 8529, and no
-authentication. You probably want to change this.</p>
-
-<p>To make ArangoDB listen on any other IP address or port, change the <code>endpoint</code> setting in its
-configuration file <code>/etc/arangod.conf</code>. You may also want to set the <code>disable-authentication</code>
-flag to <code>false</code>, meaning authentication is turned on.</p>
-
-<p><code>
-[server]
-endpoint = tcp://192.168.173.13:9999
-disable-authentication = false
-</code></p>
-
-<p>Before activating the new configuration, let&rsquo;s create a dedicated ArangoDB user <code>logstash</code>.
-I will also change the default password of the <code>root</code> user. The following ArangoShell commands
-do this:</p>
-
-<p><code>js
-require("org/arangodb/users").save("logstash", "secret-logging", true);
-require("org/arangodb/users").save("root", "nobody-will-ever-guess", true);
-</code></p>
-
-<p>To make logstash use the above settings, we have to adjust the command-line:</p>
-
-<p><code>bash
-bin/logstash -e 'input { stdin } } output { http { http_method =&gt; "post" url =&gt; "http://logstash:secret-logging@192.168.173.13:9999/_api/document?collection=logstash" format =&gt; "json" } }'
-</code></p>
-
-<h3>Pitfalls</h3>
-
-<p>Though Logstash itself can write a logfile (<code>--log</code> option) and can provide debug information
-(<code>--debug</code>), I did not get it log or print errors when misconfiguring the HTTP output plugin.
-For example, specifying a wrong target URL will make all HTTP requests from Logstash to ArangoDB
-silently fail, with the log events being lost if not stored elsewhere.</p>
-
-<p>Maybe this is configurable somewhere, but then I didn&rsquo;t find it. It is also possible that this
-will be fixed in some future release.</p>
-
-<h3>Disclaimer</h3>
-
-<p>Please feel free to use this blog as a starting point but not as an endorsement.</p>
-
-<p>Though I think it will work perfectly, I am not at all an expert for Logstash or its plugins.
-I didn&rsquo;t spend much time with it yet, and I may have overlooked important things. So should you
-be interested in using it, please conduct your own tests first.</p>
 ]]></content>
   </entry>
   

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-03-27T23:26:50+01:00</updated>
+  <updated>2015-03-28T00:19:15+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,103 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Improvements for Data-modification Queries]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries/"/>
+    <updated>2015-03-27T23:29:19+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries</id>
+    <content type="html"><![CDATA[<p>Data-modification queries were enhanced in ArangoDB 2.4 to be able to also return
+the inserted, update or removed documents.</p>
+
+<p>For example, the following statement inserted a few documents and also returned
+them with all their attributes:</p>
+
+<p><code>plain AQL insert query returning documents
+FOR i IN 1..10
+  INSERT { value: i } IN test
+  LET inserted = NEW
+  RETURN inserted
+</code></p>
+
+<p>The syntax for returning documents from data-modification queries only supported
+the exact above format. Using a <code>LET</code> clause was required, and the <code>RETURN</code> clause
+was limited to returning the variable introduced by the <code>LET</code>.</p>
+
+<p>These syntax restrictions have been lifted in the <code>devel</code> branch, which will become
+release 2.6 eventually. The changes make returning values from data-modification
+statements easier and also more flexible.</p>
+
+<!-- more -->
+
+
+<h2>Simpler syntax</h2>
+
+<p>For example, specifying a <code>LET</code> clause is not required anymore (though still fully
+supported). Instead, the <code>RETURN</code> clause can directly refer to the <code>NEW</code> pseudo-value,
+making the query shorter and easier to write:</p>
+
+<p><code>plain AQL insert query returning documents
+FOR i IN 1..10
+  INSERT { value: i } IN test
+  RETURN NEW
+</code></p>
+
+<h2>Projections</h2>
+
+<p>It is now also possible to return a projection instead of returning the entire documents.
+This can be used to reduce the amount of data returned by queries.</p>
+
+<p>For example, the following query will return just the keys of the inserted documents:</p>
+
+<p><code>plain AQL insert query returning a projection
+FOR i IN 1..10
+  INSERT { value: i } IN test
+  RETURN NEW._key
+</code></p>
+
+<h2>Using OLD and NEW in the same query</h2>
+
+<p>In previous versions, <code>UPDATE</code> and <code>REPLACE</code> statements could refer to <strong>either</strong>
+the <code>OLD</code> or the <code>NEW</code> pseudo-value, but not to both. 2.6 lifts that restriction, so
+now these queries can refer to both. One can utilize that to return both the previous
+and the updated revision:</p>
+
+<p><code>plain AQL update query returning old and new revisions
+FOR doc IN test
+  UPDATE doc WITH { value: 42 } IN test
+  RETURN { old: OLD, new: NEW }
+</code></p>
+
+<h2>Calculations with OLD or NEW</h2>
+
+<p>It is now also possible to run additional calculations with <code>LET</code> statements between
+the data-modification part and the final <code>RETURN</code>:</p>
+
+<p><code>plain AQL upsert query with some extra calculations
+UPSERT { name: 'test' } INSERT { name: 'test' } UPDATE { } IN test
+LET previousRevisionExisted = ! IS_NULL(OLD)
+LET type = previousRevisionExisted ? 'update' : 'insert'
+RETURN { _key: NEW._key, type: type }
+</code></p>
+
+<h2>Restrictions</h2>
+
+<p>Still the following restrictions remain:</p>
+
+<ul>
+<li><p>a data-modification operation can optionally be followed by any number of <code>LET</code> clauses,
+and a final <code>RETURN</code> clause. No other operations (e.g. <code>FOR</code>, <code>SORT</code>, <code>COLLECT</code>) can be
+used after a data-modification operation</p></li>
+<li><p>calculations following a data-modification operation must not access data in collections,
+so using functions such as <code>GRAPH_TRAVERSAL</code> etc. is disallowed.</p></li>
+</ul>
+
+
+<p>The improvements are present in the <code>devel</code> branch and can be tested in there from now on.
+As usual, feedback is welcome!</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Preview of the UPSERT Command]]></title>
@@ -705,78 +802,6 @@ so it becomes available in some release.</del></p>
 included in ArangoDB since version 2.5.</p>
 
 <p>Everyone is welcome to try it out already!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[YAOR - Yet Another Optimizer Rule]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/"/>
-    <updated>2015-01-31T18:51:30+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule</id>
-    <content type="html"><![CDATA[<p>A quick post that showcases the new optimizer rule <code>move-calculations-down</code> that was added
-in ArangoDB 2.5 (current <code>devel</code> branch).</p>
-
-<!-- more -->
-
-
-<p>Consider the following simple query:</p>
-
-<p><code>plain Example query
-FOR doc IN test
-  LET calculated = CONCAT('foo', doc.value)
-  FILTER doc.value &lt; 100
-  RETURN calculated
-</code></p>
-
-<p>If no indexes are present in collection <code>test</code>, the execution plan will look
-like this in 2.4:</p>
-
-<p><img src="/downloads/screenshots/explain-24.png"></p>
-
-<p>The plan can be improved a bit. While there are no indexes to exploit, the calculation
-for <code>calculated</code> can be pushed beyond the execution of the <code>FILTER</code>. This will be very
-beneficial if the calculation is expensive and the <code>FILTER</code> can prune a lot of documents.</p>
-
-<p>In 2.5, there is an optimizer rule <code>move-calculations-down</code> that will do this. It will
-move all eligible calculations as far down in the plan as possible. A calculation obviously can
-be moved down a step only if the successor step does not depend on its result.</p>
-
-<p>Additionally, a calculation will not be moved beyond a <code>COLLECT</code> operation, because
-<code>COLLECT</code> changes which variables are visible in a scope. Finally, a calculation will not
-be moved down inside a <code>FOR</code> loop, in order to avoid repeated calculations.</p>
-
-<p>In the example query, the step following the <code>LET</code> calculation was a <code>FILTER</code>.
-The filter condition does not depend on the result of <code>calcuated</code>, so the calculation is
-eligible for being moved down.</p>
-
-<p>The resulting execution plan will look like this in 2.5:</p>
-
-<p><img src="/downloads/screenshots/explain-25.png"></p>
-
-<p>As we can see from the changed id sequence on the left, the calculation was moved down.</p>
-
-<p>What does this buy us? For the simple query above, with the <code>test</code> collection containing
-100.000 documents with <code>value</code> ranging from 0 to 99,999, the results are as follows:</p>
-
-<ul>
-<li>if the filter leaves only 0.1 % of the documents pass, execution time goes down from
-0.87 seconds to 0.17 seconds thanks to the rule</li>
-<li>if the filter lets 1 % of the documents pass, execution time is 0.21 seconds with the rule,
-and 0.91 without</li>
-<li>if the filter lets 10 % of the documents pass, execution time is 0.25 s, vs. 0.91 seconds
-without.</li>
-<li>if the filter lets all documents pss, there is no difference in execution time</li>
-</ul>
-
-
-<p>This is quite a nice speedup, especially when taking into account how simple the optimizer
-rule is. The effects may be even greater for queries that contain multiple calculations
-that can be pushed beyond filters, or for more expensive calculations.</p>
-
-<p>Of course the best solution for the above query would be to use a skiplist index on
-<code>value</code>, but that&rsquo;s a different story. The optimizer rule shown here is orthogonal to
-using indexes, so queries already using indexes might still benefit from the rule if they
-contain additional calculations or further filters which cannot be satifisfied by indexes.</p>
 ]]></content>
   </entry>
   
