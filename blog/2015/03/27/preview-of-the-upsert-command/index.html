@@ -280,17 +280,20 @@ unchanged.</p>
 
 <p>If instead a full replacement of the original document is required, the <code>REPLACE</code>
 clause should be used instead of <code>UPDATE</code>. <code>REPLACE</code> will overwrite the previous
-revision completely with the <code>update-expression</code>.</p>
+revision completely with what&rsquo;s in <code>update-expression</code>.</p>
 
-<figure class='code'><figcaption><span>UPSERT with different ip and name</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span>UPSERT replacing a document entirely</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
 </pre></td><td class='code'><pre><code class=''><span class='line'>UPSERT { ip: '192.168.173.73' }
 </span><span class='line'>INSERT { ip: '192.168.173.73', name: 'brueck', counter: 1 }
-</span><span class='line'>UPDATE { counter : OLD.counter + 1 } 
+</span><span class='line'>REPLACE { location: 'dc1' } 
 </span><span class='line'>IN hosts</span></code></pre></td></tr></table></div></figure>
 
+
+<p><em>note</em>: an older version of this blog post contained a wrong example here. Thanks
+Andy for pointing this out!</p>
 
 <h2>Returning documents</h2>
 

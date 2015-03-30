@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-03-28T00:19:15+01:00</updated>
+  <updated>2015-03-30T09:19:11+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -264,14 +264,17 @@ unchanged.</p>
 
 <p>If instead a full replacement of the original document is required, the <code>REPLACE</code>
 clause should be used instead of <code>UPDATE</code>. <code>REPLACE</code> will overwrite the previous
-revision completely with the <code>update-expression</code>.</p>
+revision completely with what&rsquo;s in <code>update-expression</code>.</p>
 
-<p><code>plain UPSERT with different ip and name
+<p><code>plain UPSERT replacing a document entirely
 UPSERT { ip: '192.168.173.73' }
 INSERT { ip: '192.168.173.73', name: 'brueck', counter: 1 }
-UPDATE { counter : OLD.counter + 1 }
+REPLACE { location: 'dc1' }
 IN hosts
 </code></p>
+
+<p><em>note</em>: an older version of this blog post contained a wrong example here. Thanks
+Andy for pointing this out!</p>
 
 <h2>Returning documents</h2>
 
