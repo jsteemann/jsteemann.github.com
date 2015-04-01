@@ -1,0 +1,432 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>Improvements for the Cursor API - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="This week we pushed some modifications for ArangoDB&rsquo;s cursor API into the devel branch.
+The change will result in less copying of AQL query &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>Notes on ArangoDB development</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Improvements for the Cursor API</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-01T13:59:22+02:00" pubdate data-updated="true">Apr 1<span>st</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>This week we pushed some modifications for ArangoDB&rsquo;s cursor API into the <code>devel</code> branch.
+The change will result in less copying of AQL query results between the AQL and the HTTP layers.
+As a positive side effect, this will reduce the amount of garbage collection the built-in V8
+has to do.</p>
+
+<p>These modifications should improve the cursor API performance significantly for many cases,
+while at the same time keeping its REST API stable.</p>
+
+<p>This blog post shows some first unscientific performance tests comparing the old cursor API with
+its new, improved implementation.</p>
+
+<!-- more -->
+
+
+<p>A good way to test the cursor API performance is to issue lots of queries from the
+ArangoShell. The ArangoShell will send the query to the server for execution. The server
+will respond with the first 1,000 results for the query.</p>
+
+<p>Additionally the server will create a server-side cursor if the result set is bigger than
+1,000 documents. In this case, the ArangoShell will issue subsequent HTTP requests that fetch
+the outstanding documents from the server.</p>
+
+<p>The above behavior is triggered automatically when <code>db._query(query).toArray()</code> is run in
+the ArangoShell.</p>
+
+<p>Here is a test function that executes a query <em>n</em> times and measures the total execution time.
+It will issue <em>n</em> HTTP requests to the server&rsquo;s cursor API for executing the query. It will
+also issue further HTTP requests if the total result set size is bigger than 1,000 documents.
+What is getting measured is thus the total execution time from the ArangoShell&rsquo;s point of view,
+including time spent in the server-side cursor functions as well as in HTTP traffic.</p>
+
+<figure class='code'><figcaption><span>function for testing the cursor API</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">test</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">query</span><span class="p">,</span> <span class="nx">n</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">time</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">time</span><span class="p">;</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">s</span> <span class="o">=</span> <span class="nx">time</span><span class="p">();</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">n</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">time</span><span class="p">()</span> <span class="o">-</span> <span class="nx">s</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The test function was run with different queries to check which types of queries will benefit
+from the cursor API change.</p>
+
+<p>Note that the ArangoShell will issue all its requests to the cursor API sequentially. This is
+ok for the purpose of this test, as the purpose was to measure the relative performance change
+between the old and the new API implementation.</p>
+
+<p>The ArangoShell and ArangoDB server were running on the same physical machine during the tests,
+so this is a <strong>localhost</strong> benchmark.</p>
+
+<h2>Detailed test results</h2>
+
+<p>Here are the results from my local machine.</p>
+
+<p>The first query was about the simplest one I could come up with. The query was sent to the
+server 10,000 times. The result set size per query ws 1, resulting in 10,000 calls to the cursor
+API with not much data to be transferred per call:</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;RETURN 1&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Execution took 7.225 s with the old API, and 5.195 s with the new API (<strong>28 % improvement</strong>).</p>
+
+<p>A query returning a slightly more complex result value:</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;RETURN { one: &#39;test&#39;, two: &#39;another-value&#39;, three: [ 1, 2, 3 ] }&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This took 8.046 s with the old API, and 5.829 s with the new one (<strong>27 % improvement</strong>).</p>
+
+<p>Another simple query, again executed 10,000 times, but now returning 10 values per query:</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;FOR i IN 1..10 RETURN i&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Execution of this query took 7.951 s with the old, and 5.779 s with the new API (<strong>27 % improvement</strong>).</p>
+
+<p>Now raising the number of return values per query from 10 to 1,000:</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;FOR i IN 1..1000 RETURN i&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This took 31.650 s with the old, and 28.504 s with the new API (<strong>10 % improvement</strong>).</p>
+
+<p>So far all query results contained 1,000 or less values. In this case the server is able to
+send the whole query result in response in one go, so there were only as many calls to the
+cursor API as there were queries. Even though the ArangoShell called the cursor API, the
+cursor only existed temporarily on the server but directly vanished when the server sent its
+response.</p>
+
+<p>Now let&rsquo;s run a query that returns more than 1,000 values each. The first call to the
+cursor API will then only return the first 1,000 results and additionally establish a
+server-side cursor so the client can fetch more results. This will mean that for each client
+query, there will be multiple HTTP requests.</p>
+
+<p>The following run issues 100,000 calls to the cursor API (10,000 queries times 10 batches per
+query):</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;FOR i IN 1..10000 RETURN i&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This took 307.108 s with the old API, in contrast to 232.322 s with the new API (<strong>24 % improvement</strong>).</p>
+
+<p>The next queries I tested were collection-based. They returned data from a collection named
+<code>docs</code>. The collection contained 10,000 documents, and each document in the collection had
+5 attributes.</p>
+
+<p>The first query returned only a single one (random) document from the collection per query.</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;FOR i IN docs LIMIT 1 RETURN i&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This took 8.689 s with the old API and 6.245 s with the new API (<strong>28 % improvement</strong>).</p>
+
+<p>The next query returned all the documents from the collection. The query was executed
+only 1,000 times because the result sets already got quite big. The combined size of all
+result sets was 1,000,000 documents (10,000 documents, 1,000 queries).</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;FOR i IN docs RETURN i&quot;</span><span class="p">,</span> <span class="mi">1000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This took 453.736 s with the old, and 197.543 s with the new API (<strong>56 % improvement</strong>).</p>
+
+<p>The final query returned all document keys from the collection. The combined size of all result
+sets was 10,000,000 values (10,000 documents, 10,000 queries):</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;FOR i IN docs RETURN i._key&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>With the old API, this took 529.765 s, and with the new API it took 348.243 s (<strong>34 % improvement</strong>).</p>
+
+<h2>Summary</h2>
+
+<p>The new cursor API was faster than its old counterpart for all queries tested here. Total execution
+time as measured by the ArangoShell (representative for any other client program sending queries to
+ArangoDB) was consistenly lower than it was with the old API implementation.</p>
+
+<p>The improvements measured were varying. For the queries tested, the improvements fell into a range
+of 10 % to even more than 50 % improvement.</p>
+
+<p>How much gain can be achieved in reality obviously depends on the type of query executed. There will
+also be queries that do not benefit from the new API implementation. For example, queries that do not
+return any results will not benefit much. This is because most of the optimizations done affect
+the buffering and the data transport internals of the cursor API. Furthermore, queries that run for
+a very long time but return only small amounts of data may not benefit considerably for the same reason.
+However, there should not be any queries which are negatively affected by the change.</p>
+
+<p>All in all, this looks quite promising, especially as the change will come <strong>for free</strong> for client
+applications. Client programs do not need to be adjusted to reap the benefits. This is because all
+that has changed were the <em>internals</em> of the cursor API. Its public REST interface remains unchanged.</p>
+
+<p>The changes are included in the <code>devel</code> branch and can be tested there.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-01T13:59:22+02:00" pubdate data-updated="true">Apr 1<span>st</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/performance/'>performance</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/03/27/improvements-for-data-modification-queries/" title="Previous Post: Improvements for data-modification queries">&laquo; Improvements for data-modification queries</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/04/01/improvements-for-the-cursor-api/">Improvements for the Cursor API</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/27/improvements-for-data-modification-queries/">Improvements for Data-modification Queries</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/27/preview-of-the-upsert-command/">Preview of the UPSERT Command</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/11/analyzing-git-commits-with-arangodb/">Analyzing Git Commits With ArangoDB</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/02/26/more-es6-features/">More ES6 Features</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (12)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (26)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (2)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (5)</a></li><li><a href='/blog/categories/performance/'>performance (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (13)</li><ul class="month_list"><li class="month"><a href='/blog/2015/04/'>APR (1)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

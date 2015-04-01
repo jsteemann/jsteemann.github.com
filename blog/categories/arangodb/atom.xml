@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-03-30T09:19:11+02:00</updated>
+  <updated>2015-04-01T19:32:51+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,179 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Improvements for the Cursor API]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/"/>
+    <updated>2015-04-01T13:59:22+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api</id>
+    <content type="html"><![CDATA[<p>This week we pushed some modifications for ArangoDB&rsquo;s cursor API into the <code>devel</code> branch.
+The change will result in less copying of AQL query results between the AQL and the HTTP layers.
+As a positive side effect, this will reduce the amount of garbage collection the built-in V8
+has to do.</p>
+
+<p>These modifications should improve the cursor API performance significantly for many cases,
+while at the same time keeping its REST API stable.</p>
+
+<p>This blog post shows some first unscientific performance tests comparing the old cursor API with
+its new, improved implementation.</p>
+
+<!-- more -->
+
+
+<p>A good way to test the cursor API performance is to issue lots of queries from the
+ArangoShell. The ArangoShell will send the query to the server for execution. The server
+will respond with the first 1,000 results for the query.</p>
+
+<p>Additionally the server will create a server-side cursor if the result set is bigger than
+1,000 documents. In this case, the ArangoShell will issue subsequent HTTP requests that fetch
+the outstanding documents from the server.</p>
+
+<p>The above behavior is triggered automatically when <code>db._query(query).toArray()</code> is run in
+the ArangoShell.</p>
+
+<p>Here is a test function that executes a query <em>n</em> times and measures the total execution time.
+It will issue <em>n</em> HTTP requests to the server&rsquo;s cursor API for executing the query. It will
+also issue further HTTP requests if the total result set size is bigger than 1,000 documents.
+What is getting measured is thus the total execution time from the ArangoShell&rsquo;s point of view,
+including time spent in the server-side cursor functions as well as in HTTP traffic.</p>
+
+<p>```js function for testing the cursor API
+var test = function(query, n) {
+  var time = require(&ldquo;internal&rdquo;).time;
+  var s = time();
+  for (var i = 0; i &lt; n; ++i) {</p>
+
+<pre><code>db._query(query).toArray(); 
+</code></pre>
+
+<p>  }
+  return time() &ndash; s;
+};
+```</p>
+
+<p>The test function was run with different queries to check which types of queries will benefit
+from the cursor API change.</p>
+
+<p>Note that the ArangoShell will issue all its requests to the cursor API sequentially. This is
+ok for the purpose of this test, as the purpose was to measure the relative performance change
+between the old and the new API implementation.</p>
+
+<p>The ArangoShell and ArangoDB server were running on the same physical machine during the tests,
+so this is a <strong>localhost</strong> benchmark.</p>
+
+<h2>Detailed test results</h2>
+
+<p>Here are the results from my local machine.</p>
+
+<p>The first query was about the simplest one I could come up with. The query was sent to the
+server 10,000 times. The result set size per query ws 1, resulting in 10,000 calls to the cursor
+API with not much data to be transferred per call:</p>
+
+<p><code>js test query
+test("RETURN 1", 10000);
+</code></p>
+
+<p>Execution took 7.225 s with the old API, and 5.195 s with the new API (<strong>28 % improvement</strong>).</p>
+
+<p>A query returning a slightly more complex result value:</p>
+
+<p><code>js test query
+test("RETURN { one: 'test', two: 'another-value', three: [ 1, 2, 3 ] }", 10000);
+</code></p>
+
+<p>This took 8.046 s with the old API, and 5.829 s with the new one (<strong>27 % improvement</strong>).</p>
+
+<p>Another simple query, again executed 10,000 times, but now returning 10 values per query:</p>
+
+<p><code>js test query
+test("FOR i IN 1..10 RETURN i", 10000);
+</code></p>
+
+<p>Execution of this query took 7.951 s with the old, and 5.779 s with the new API (<strong>27 % improvement</strong>).</p>
+
+<p>Now raising the number of return values per query from 10 to 1,000:</p>
+
+<p><code>js test query
+test("FOR i IN 1..1000 RETURN i", 10000);
+</code></p>
+
+<p>This took 31.650 s with the old, and 28.504 s with the new API (<strong>10 % improvement</strong>).</p>
+
+<p>So far all query results contained 1,000 or less values. In this case the server is able to
+send the whole query result in response in one go, so there were only as many calls to the
+cursor API as there were queries. Even though the ArangoShell called the cursor API, the
+cursor only existed temporarily on the server but directly vanished when the server sent its
+response.</p>
+
+<p>Now let&rsquo;s run a query that returns more than 1,000 values each. The first call to the
+cursor API will then only return the first 1,000 results and additionally establish a
+server-side cursor so the client can fetch more results. This will mean that for each client
+query, there will be multiple HTTP requests.</p>
+
+<p>The following run issues 100,000 calls to the cursor API (10,000 queries times 10 batches per
+query):</p>
+
+<p><code>js test query
+test("FOR i IN 1..10000 RETURN i", 10000);
+</code></p>
+
+<p>This took 307.108 s with the old API, in contrast to 232.322 s with the new API (<strong>24 % improvement</strong>).</p>
+
+<p>The next queries I tested were collection-based. They returned data from a collection named
+<code>docs</code>. The collection contained 10,000 documents, and each document in the collection had
+5 attributes.</p>
+
+<p>The first query returned only a single one (random) document from the collection per query.</p>
+
+<p><code>js test query
+test("FOR i IN docs LIMIT 1 RETURN i", 10000);
+</code></p>
+
+<p>This took 8.689 s with the old API and 6.245 s with the new API (<strong>28 % improvement</strong>).</p>
+
+<p>The next query returned all the documents from the collection. The query was executed
+only 1,000 times because the result sets already got quite big. The combined size of all
+result sets was 1,000,000 documents (10,000 documents, 1,000 queries).</p>
+
+<p><code>js test query
+test("FOR i IN docs RETURN i", 1000);
+</code></p>
+
+<p>This took 453.736 s with the old, and 197.543 s with the new API (<strong>56 % improvement</strong>).</p>
+
+<p>The final query returned all document keys from the collection. The combined size of all result
+sets was 10,000,000 values (10,000 documents, 10,000 queries):</p>
+
+<p><code>js test query
+test("FOR i IN docs RETURN i._key", 10000);
+</code></p>
+
+<p>With the old API, this took 529.765 s, and with the new API it took 348.243 s (<strong>34 % improvement</strong>).</p>
+
+<h2>Summary</h2>
+
+<p>The new cursor API was faster than its old counterpart for all queries tested here. Total execution
+time as measured by the ArangoShell (representative for any other client program sending queries to
+ArangoDB) was consistenly lower than it was with the old API implementation.</p>
+
+<p>The improvements measured were varying. For the queries tested, the improvements fell into a range
+of 10 % to even more than 50 % improvement.</p>
+
+<p>How much gain can be achieved in reality obviously depends on the type of query executed. There will
+also be queries that do not benefit from the new API implementation. For example, queries that do not
+return any results will not benefit much. This is because most of the optimizations done affect
+the buffering and the data transport internals of the cursor API. Furthermore, queries that run for
+a very long time but return only small amounts of data may not benefit considerably for the same reason.
+However, there should not be any queries which are negatively affected by the change.</p>
+
+<p>All in all, this looks quite promising, especially as the change will come <strong>for free</strong> for client
+applications. Client programs do not need to be adjusted to reap the benefits. This is because all
+that has changed were the <em>internals</em> of the cursor API. Its public REST interface remains unchanged.</p>
+
+<p>The changes are included in the <code>devel</code> branch and can be tested there.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Improvements for Data-modification Queries]]></title>
@@ -747,191 +920,6 @@ Another reason to use the strict mode.</p>
 <li><code>String.fromCodePoint(codePoint)</code></li>
 </ul>
 
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Improvements in 2.5]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25/"/>
-    <updated>2015-02-26T10:35:31+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25</id>
-    <content type="html"><![CDATA[<p>Contained in 2.5 are some small but useful AQL language improvements plus several AQL optimizer improvements.</p>
-
-<p>We are working on further AQL improvements for 2.5, but work is still ongoing.
-This post summarizes the improvements that are already completed and will be shipped with the initial ArangoDB
-2.5 release.</p>
-
-<!-- more -->
-
-
-<h1>Language improvements</h1>
-
-<h2>Dynamic attribute names</h2>
-
-<p>Often the need arises to dynamically name object attributes in return values.
-In AQL this was not directly possible so far, though there were some workarounds available to achieve about
-the same result. <a href="https://docs.arangodb.com/cookbook/UsingDynamicAttributeNames.html">This recipe</a> summarizes
-the options that are available to pre-ArangoDB 2.5 users.</p>
-
-<p>With ArangoDB 2.5, dynamic attribute names can be constructed much more easily and flexibly. Object
-attribute names in ArangoDB 2.5 can be specified using static string literals, bind parameters,
-and dynamic expressions.</p>
-
-<p>Dynamic expressions are most interesting, and to disambiguate them from other regular string literal attribute
-names, dynamic attribute names need to be enclosed in square brackets (<code>[</code> and <code>]</code>). I have written about
-that before in <a href="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/">this blog</a>.</p>
-
-<p>Here is an example query that uses the new syntax:</p>
-
-<p><code>plain example query using dynamic attribute names
-FOR i IN [ 17, 23, 42, 83 ]
-  RETURN { [ CONCAT('value-of-', i, ' * ', i) ] : i * i }
-</code></p>
-
-<p>This will produce:</p>
-
-<p>```json query result
-[
-  {</p>
-
-<pre><code>"value-of-17 * 17" : 289 
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"value-of-23 * 23" : 529 
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"value-of-42 * 42" : 1764 
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"value-of-83 * 83" : 6889 
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<h2>Functions added</h2>
-
-<p>The following AQL functions have been added in 2.5:</p>
-
-<ul>
-<li><code>MD5(value)</code>: produces the MD5 hash of <code>value</code></li>
-<li><code>SHA1(value)</code>: produces the SHA1 hash of <code>value</code></li>
-<li><code>RANDOM_TOKEN(length)</code>: produces a pseudo-random string of the specified length.
- Such strings can be used for id or token generation. Tokens consist only of letters
- (lower and upper case) plus digits, so they are also URL-safe</li>
-</ul>
-
-
-<h1>Optimizer improvements</h1>
-
-<h2>Optimizer rules</h2>
-
-<p>The following AQL optimizer rules have been added in ArangoDB 2.5:</p>
-
-<ul>
-<li><p><code>propagate-constant-attributes</code></p>
-
-<p>This rule will look inside <code>FILTER</code> conditions for constant value equality comparisons,
-and insert the constant values in other places in <code>FILTER</code>s. For example, the rule will
-insert <code>42</code> instead of <code>i.value</code> in the second <code>FILTER</code> of the following query:</p>
-
-<pre><code>FOR i IN c1 
-  FOR j IN c2 
-    FILTER i.value == 42 
-    FILTER j.value == i.value 
-    RETURN 1
-</code></pre></li>
-<li><p><code>move-calculations-down</code></p>
-
-<p>This rule moves calculations down in the execution plan as far as possible. The intention
-is to move calculations beyond filters, in order to avoid calculations and computations
-for documents that will be filtered away anyway.</p>
-
-<p>If a query contains a lot of computations and a lot of documents will be skipped because
-of filters, this rule might provide a big benefit.</p>
-
-<p>A more detailed example is provided in
-<a href="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/">this post</a>.</p></li>
-</ul>
-
-
-<p>The already existing optimizer rule <code>use-index-for-sort</code> was also improved in the following way:</p>
-
-<ul>
-<li><p>the rule can now remove <code>SORT</code>s also in case a non-sorted index (i.e. a hash index) is used
-for an equality lookup and all sort attributes are covered by the index.</p></li>
-<li><p>the rule can also remove <code>SORT</code>s in case the sort critieria excludes the left-most index attributes,
-but the left-most index attributes are used in a <code>FILTER</code> for equality-only lookups.</p>
-
-<p>Here is an example that will use an existing skiplist index on [ <code>value1</code>, <code>value2</code> ] for sorting,
-removing the extra <code>SORT</code>:</p>
-
-<pre><code>FOR doc IN collection 
-  FILTER doc.value1 == 1 
-  SORT doc.value2 
-  RETURN doc
-</code></pre></li>
-</ul>
-
-
-<h2>Index usage</h2>
-
-<p>The AQL optimizer now supports <a href="https://www.arangodb.com/2015/02/24/sparse-indexes-in-arangodb">sparse indexes</a>,
-a feature added in 2.5.</p>
-
-<p>It will use them automatically in queries when appropriate and when safe. Sparse indexes do exclude certain
-documents purposely, so the optimizer always has to figure out whether it can use a sparse index to satisfy
-a given <code>FILTER</code> condition.</p>
-
-<p>The optimizer will also take into account index selectivity estimates when there are multiple index candidates.</p>
-
-<h2>Estimates</h2>
-
-<p>The optimizer estimates for the number of documents to be returned by a query or a subquery are more accurate
-now for several types of queries. For example, if the optimizer can use a primary key, an edge index, or a hash
-index in a given query part, it will use the index selectivity estimates for calculating the number of return
-documents.</p>
-
-<p>These estimates will be a lot more accurate than the previoulsy hard-coded filtering factors, and can lead to
-better optimizer decisions and reporting (because estimates are returned in <code>explain</code> results, too).</p>
-
-<h2>Memory savings</h2>
-
-<p>Finally, the optimizer will now detect if the data-modification part in a data-modification query
-can be executed in lockstep with the data-retrieval part of the same query. Previously, a data-modification
-query always executed its data-retrieval part first, and then executed its data-modification part.
-This could have resulted in big intermediate result sets which to retrieval part constructed in order
-to pass them to the modification part of the query.</p>
-
-<p>Here&rsquo;s an example query:</p>
-
-<p><code>plain data-modification query
-FOR doc IN test
-  INSERT doc INTO backup
-</code></p>
-
-<p>In the above query, the <code>FOR</code> loop is the retrieval part, and the <code>INSERT</code> is the modification part.
-The optimizer in 2.5 will check if the two parts of the query are independent, and if it turns out they are,
-will execute them in lockstep instead of sequentially.</p>
-
-<p>The execution in lockstep is not necessarily faster than sequential execution, but it can save lots of
-memory if the data-retrieval part constructed big intermediate result sets.</p>
-
-<h1>Miscellaneous changes</h1>
-
-<p>The AQL query execution statistics now also provide an attribute <code>filtered</code>. Its value indicates how many
-documents were filtered by <code>FilterNode</code>s in the AQL query. This can be used as an indicator for whether
-indexes should be added, and for how effective indexes are used for filtering.</p>
 ]]></content>
   </entry>
   

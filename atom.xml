@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-03-30T09:19:11+02:00</updated>
+  <updated>2015-04-01T19:32:51+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,192 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Improvements for the Cursor API]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/"/>
+    <updated>2015-04-01T13:59:22+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api</id>
+    <content type="html"><![CDATA[<p>This week we pushed some modifications for ArangoDB&rsquo;s cursor API into the <code>devel</code> branch.
+The change will result in less copying of AQL query results between the AQL and the HTTP layers.
+As a positive side effect, this will reduce the amount of garbage collection the built-in V8
+has to do.</p>
+
+<p>These modifications should improve the cursor API performance significantly for many cases,
+while at the same time keeping its REST API stable.</p>
+
+<p>This blog post shows some first unscientific performance tests comparing the old cursor API with
+its new, improved implementation.</p>
+
+<!-- more -->
+
+
+<p>A good way to test the cursor API performance is to issue lots of queries from the
+ArangoShell. The ArangoShell will send the query to the server for execution. The server
+will respond with the first 1,000 results for the query.</p>
+
+<p>Additionally the server will create a server-side cursor if the result set is bigger than
+1,000 documents. In this case, the ArangoShell will issue subsequent HTTP requests that fetch
+the outstanding documents from the server.</p>
+
+<p>The above behavior is triggered automatically when <code>db._query(query).toArray()</code> is run in
+the ArangoShell.</p>
+
+<p>Here is a test function that executes a query <em>n</em> times and measures the total execution time.
+It will issue <em>n</em> HTTP requests to the server&rsquo;s cursor API for executing the query. It will
+also issue further HTTP requests if the total result set size is bigger than 1,000 documents.
+What is getting measured is thus the total execution time from the ArangoShell&rsquo;s point of view,
+including time spent in the server-side cursor functions as well as in HTTP traffic.</p>
+
+<figure class='code'><figcaption><span>function for testing the cursor API</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">test</span> <span class="o">=</span> <span class="kd">function</span><span class="p">(</span><span class="nx">query</span><span class="p">,</span> <span class="nx">n</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">time</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">time</span><span class="p">;</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">s</span> <span class="o">=</span> <span class="nx">time</span><span class="p">();</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">n</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">time</span><span class="p">()</span> <span class="o">-</span> <span class="nx">s</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The test function was run with different queries to check which types of queries will benefit
+from the cursor API change.</p>
+
+<p>Note that the ArangoShell will issue all its requests to the cursor API sequentially. This is
+ok for the purpose of this test, as the purpose was to measure the relative performance change
+between the old and the new API implementation.</p>
+
+<p>The ArangoShell and ArangoDB server were running on the same physical machine during the tests,
+so this is a <strong>localhost</strong> benchmark.</p>
+
+<h2>Detailed test results</h2>
+
+<p>Here are the results from my local machine.</p>
+
+<p>The first query was about the simplest one I could come up with. The query was sent to the
+server 10,000 times. The result set size per query ws 1, resulting in 10,000 calls to the cursor
+API with not much data to be transferred per call:</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;RETURN 1&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Execution took 7.225 s with the old API, and 5.195 s with the new API (<strong>28 % improvement</strong>).</p>
+
+<p>A query returning a slightly more complex result value:</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;RETURN { one: &#39;test&#39;, two: &#39;another-value&#39;, three: [ 1, 2, 3 ] }&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This took 8.046 s with the old API, and 5.829 s with the new one (<strong>27 % improvement</strong>).</p>
+
+<p>Another simple query, again executed 10,000 times, but now returning 10 values per query:</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;FOR i IN 1..10 RETURN i&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Execution of this query took 7.951 s with the old, and 5.779 s with the new API (<strong>27 % improvement</strong>).</p>
+
+<p>Now raising the number of return values per query from 10 to 1,000:</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;FOR i IN 1..1000 RETURN i&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This took 31.650 s with the old, and 28.504 s with the new API (<strong>10 % improvement</strong>).</p>
+
+<p>So far all query results contained 1,000 or less values. In this case the server is able to
+send the whole query result in response in one go, so there were only as many calls to the
+cursor API as there were queries. Even though the ArangoShell called the cursor API, the
+cursor only existed temporarily on the server but directly vanished when the server sent its
+response.</p>
+
+<p>Now let&rsquo;s run a query that returns more than 1,000 values each. The first call to the
+cursor API will then only return the first 1,000 results and additionally establish a
+server-side cursor so the client can fetch more results. This will mean that for each client
+query, there will be multiple HTTP requests.</p>
+
+<p>The following run issues 100,000 calls to the cursor API (10,000 queries times 10 batches per
+query):</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;FOR i IN 1..10000 RETURN i&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This took 307.108 s with the old API, in contrast to 232.322 s with the new API (<strong>24 % improvement</strong>).</p>
+
+<p>The next queries I tested were collection-based. They returned data from a collection named
+<code>docs</code>. The collection contained 10,000 documents, and each document in the collection had
+5 attributes.</p>
+
+<p>The first query returned only a single one (random) document from the collection per query.</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;FOR i IN docs LIMIT 1 RETURN i&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This took 8.689 s with the old API and 6.245 s with the new API (<strong>28 % improvement</strong>).</p>
+
+<p>The next query returned all the documents from the collection. The query was executed
+only 1,000 times because the result sets already got quite big. The combined size of all
+result sets was 1,000,000 documents (10,000 documents, 1,000 queries).</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;FOR i IN docs RETURN i&quot;</span><span class="p">,</span> <span class="mi">1000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This took 453.736 s with the old, and 197.543 s with the new API (<strong>56 % improvement</strong>).</p>
+
+<p>The final query returned all document keys from the collection. The combined size of all result
+sets was 10,000,000 values (10,000 documents, 10,000 queries):</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">test</span><span class="p">(</span><span class="s2">&quot;FOR i IN docs RETURN i._key&quot;</span><span class="p">,</span> <span class="mi">10000</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>With the old API, this took 529.765 s, and with the new API it took 348.243 s (<strong>34 % improvement</strong>).</p>
+
+<h2>Summary</h2>
+
+<p>The new cursor API was faster than its old counterpart for all queries tested here. Total execution
+time as measured by the ArangoShell (representative for any other client program sending queries to
+ArangoDB) was consistenly lower than it was with the old API implementation.</p>
+
+<p>The improvements measured were varying. For the queries tested, the improvements fell into a range
+of 10 % to even more than 50 % improvement.</p>
+
+<p>How much gain can be achieved in reality obviously depends on the type of query executed. There will
+also be queries that do not benefit from the new API implementation. For example, queries that do not
+return any results will not benefit much. This is because most of the optimizations done affect
+the buffering and the data transport internals of the cursor API. Furthermore, queries that run for
+a very long time but return only small amounts of data may not benefit considerably for the same reason.
+However, there should not be any queries which are negatively affected by the change.</p>
+
+<p>All in all, this looks quite promising, especially as the change will come <strong>for free</strong> for client
+applications. Client programs do not need to be adjusted to reap the benefits. This is because all
+that has changed were the <em>internals</em> of the cursor API. Its public REST interface remains unchanged.</p>
+
+<p>The changes are included in the <code>devel</code> branch and can be tested there.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Improvements for Data-modification Queries]]></title>
@@ -4883,414 +5069,6 @@ Otherwise backtraces might reveal less useful information for debugging.</p>
 
 <p>On a side note: the <a href="http://lint.travis-ci.org/">Travis WebLint</a> is a
 handy tool for validating <code>.travis.yml</code> files <em>before</em> pushing them.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[What I Most Like About C++11]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/"/>
-    <updated>2014-10-23T23:02:12+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11</id>
-    <content type="html"><![CDATA[<p>About half a year ago we started compiling our code with <code>-std=c++11</code>.</p>
-
-<p>We had to fix a few, but not too many code parts for this. That was
-the easy part.</p>
-
-<p>Getting C++11 to work on all supported platforms, build and testing
-environments was a bit more challenging, but we finally managed to do it.</p>
-
-<p>Having used C++11 for some time now, I think it&rsquo;s time to share a few
-of improvements in C++11 that solve common problems.</p>
-
-<!-- more -->
-
-
-<p>First of all, I don&rsquo;t regret we changed to it. In my opinion,
-<strong>C++11 makes coding easier and safer.</strong> I will try to demonstrate that
-with a few examples in a second.</p>
-
-<p>Before I go into details, just let me state that I will only show a few
-of my personal favorites here. There are so many more improvements in C++11
-that are all worth having a look. If you haven&rsquo;t looked into C++11 much,
-I recommend getting started at the <a href="http://en.wikipedia.org/wiki/C%2B%2B11">Wikipedia page about C++11</a>.</p>
-
-<h2>Auto</h2>
-
-<p>From a developer perspective, one of the most compelling features of
-C++11 is the revamped <code>auto</code> keyword. Consider the following C++98/C++03 code:</p>
-
-<figure class='code'><figcaption><span>C++03 version</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&gt;::</span><span class="n">iterator</span> <span class="n">it</span> <span class="o">=</span> <span class="n">resultHeaders</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">value</span><span class="p">);</span>
-</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">it</span> <span class="o">!=</span> <span class="n">resultHeaders</span><span class="p">.</span><span class="n">end</span><span class="p">())</span> <span class="p">{</span>
-</span><span class='line'>  <span class="c1">// do something with value</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In C++11 this code can be simplified to:</p>
-
-<figure class='code'><figcaption><span>C++11 version with auto</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">auto</span> <span class="n">it</span> <span class="o">=</span> <span class="n">resultHeaders</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">value</span><span class="p">);</span>
-</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">it</span> <span class="o">!=</span> <span class="n">resultHeaders</span><span class="p">.</span><span class="n">end</span><span class="p">())</span> <span class="p">{</span>
-</span><span class='line'>  <span class="c1">// do something with value</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In the C++11 version of the code, the compiler can figure out the type of
-variable <code>it</code> all by itself. This allows writing less (i.e. better) code.</p>
-
-<p>The more complex the types are, the more helpful this gets. Compare the
-following two lines and check for yourself which one you prefer:</p>
-
-<figure class='code'><figcaption><span>C++03 version</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">CollectionID</span><span class="p">,</span> <span class="n">std</span><span class="o">::</span><span class="n">shared_ptr</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">std</span><span class="o">::</span><span class="n">string</span><span class="o">&gt;</span> <span class="o">&gt;</span> <span class="o">&gt;::</span><span class="n">iterator</span> <span class="n">it</span> <span class="o">=</span> <span class="n">shards</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">collectionID</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>C++11 version with auto</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">auto</span> <span class="n">it</span> <span class="o">=</span> <span class="n">shards</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">collectionID</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><code>auto</code> provides an <em>extra benefit</em>:
-when using <code>auto</code> it is not necessary to repeat the type information
-throughout the code. This is helpful when types need to be changed and the
-change needs to be reflected everywhere. With <code>auto</code>, chances are that less
-code needs to be adjusted. And it is not necessary to set up extra
-typedefs for this.</p>
-
-<p>If you think <code>auto</code> obfuscates the meaning too much, you can be a bit more
-expressive, e.g.</p>
-
-<figure class='code'><figcaption><span>C++11 version with auto, const reference</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">auto</span> <span class="k">const</span><span class="o">&amp;</span> <span class="n">it</span> <span class="o">=</span> <span class="n">resultHeaders</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">value</span><span class="p">);</span>
-</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">it</span> <span class="o">!=</span> <span class="n">resultHeaders</span><span class="p">.</span><span class="n">end</span><span class="p">())</span> <span class="p">{</span>
-</span><span class='line'>  <span class="c1">// do something with value</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Range-based loops</h2>
-
-<p>We all have written a lot of code that iterates over a ranges, like this:</p>
-
-<figure class='code'><figcaption><span>C++03: iterating over a range</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="n">std</span><span class="o">::</span><span class="n">map</span><span class="o">&lt;</span><span class="n">string</span><span class="p">,</span> <span class="n">AgencyCommResultEntry</span><span class="o">&gt;::</span><span class="n">iterator</span> <span class="n">it</span><span class="p">;</span>
-</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="n">it</span> <span class="o">=</span> <span class="n">result</span><span class="p">.</span><span class="n">values</span><span class="p">.</span><span class="n">begin</span><span class="p">();</span> <span class="n">it</span> <span class="o">!=</span> <span class="n">result</span><span class="p">.</span><span class="n">values</span><span class="p">.</span><span class="n">end</span><span class="p">();</span> <span class="o">++</span><span class="n">it</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="c1">// do something with it</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>C++11 provides a special range-based syntax for <code>for</code> loops, which makes
-this a lot easier and compact:</p>
-
-<figure class='code'><figcaption><span>C++11: iterating over a range</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">for</span> <span class="p">(</span><span class="k">auto</span> <span class="n">it</span> <span class="o">:</span> <span class="n">result</span><span class="p">.</span><span class="n">values</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="c1">// do something with it</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Decltype</h2>
-
-<p>As we have seen, the compiler can deduce the type of expressions
-automatically. C++11 also allows using this type information with the
-<code>decltype</code> keyword. This allows to write more generic and maintainable code.</p>
-
-<p>In the following code, the type of variable <code>document</code> is a pointer to a
-<code>Document</code>. Variable <code>myDocument</code> has the same type:</p>
-
-<figure class='code'><figcaption><span>C++03 explicit type specification </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="n">Document</span><span class="o">*</span> <span class="n">document</span> <span class="o">=</span> <span class="n">res</span><span class="o">-&gt;</span><span class="n">getDocumentCollection</span><span class="p">(</span><span class="n">registerId</span><span class="p">);</span>
-</span><span class='line'><span class="n">Document</span><span class="o">*</span> <span class="n">myDocument</span> <span class="o">=</span> <span class="n">document</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In C++03, we couldn&rsquo;t tell the compiler that the two variables should
-always have the same types. In C++11, we can explicitly give <code>myDocument</code>
-the same type as <code>document</code>, without any typedefs:</p>
-
-<figure class='code'><figcaption><span>C++11 automatic type deduction</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="err">```</span><span class="n">c</span><span class="o">++</span> <span class="n">C</span><span class="o">++</span><span class="mi">11</span> <span class="n">automatic</span> <span class="n">type</span> <span class="n">deduction</span>
-</span><span class='line'><span class="k">auto</span><span class="o">*</span> <span class="n">document</span> <span class="o">=</span> <span class="n">res</span><span class="o">-&gt;</span><span class="n">getDocumentCollection</span><span class="p">(</span><span class="n">registerId</span><span class="p">);</span>
-</span><span class='line'><span class="n">decltype</span><span class="p">(</span><span class="n">document</span><span class="p">)</span> <span class="n">myDocument</span> <span class="o">=</span> <span class="n">document</span><span class="p">;</span>  <span class="c1">// myDocument has same type as document</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p><code>decltype</code> can also be used to deduce the type of expressions.</p>
-
-<h2>Lambdas / Closures</h2>
-
-<p>Lambdas are available in most other mainstream languages today, and they
-are available in C++11, too.</p>
-
-<p>Probably one of the most common use cases for a lambda is a custom
-comparator function for sorting:</p>
-
-<figure class='code'><figcaption><span>custom comparator function using a lambda </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="n">std</span><span class="o">::</span><span class="n">sort</span><span class="p">(</span><span class="n">operations</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span>
-</span><span class='line'>          <span class="n">operations</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span>
-</span><span class='line'>          <span class="p">[]</span> <span class="p">(</span><span class="n">Operation</span> <span class="k">const</span><span class="o">*</span> <span class="n">left</span><span class="p">,</span> <span class="n">Operation</span> <span class="k">const</span><span class="o">*</span> <span class="n">right</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">return</span> <span class="p">(</span><span class="n">left</span><span class="o">-&gt;</span><span class="n">id</span> <span class="o">&lt;</span> <span class="n">right</span><span class="o">-&gt;</span><span class="n">id</span><span class="p">);</span>
-</span><span class='line'><span class="p">});</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In the above example, the lambda has two input parameters and produces a
-boolean result. Note that the type of the result was not explicitly specified.
-Again the compiler is able to figure it out automatically.</p>
-
-<p>A lambda can be assigned to a variable, and it can be passed as a parameter
-to another function/method. Lambdas can optionally have access to the
-variables of the scope they were created in.</p>
-
-<p>The following code defines a struct <code>ScopeGuard</code> that executes a lambda
-in its constructor and another lambda in its destructor:</p>
-
-<figure class='code'><figcaption><span>lambdas as function parameters</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="c1">// define ScopeGuard struct</span>
-</span><span class='line'><span class="k">struct</span> <span class="n">ScopeGuard</span> <span class="p">{</span>
-</span><span class='line'>  <span class="n">ScopeGuard</span> <span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">void</span><span class="p">()</span><span class="o">&gt;</span> <span class="n">onEnter</span><span class="p">,</span>
-</span><span class='line'>              <span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">void</span><span class="p">()</span><span class="o">&gt;</span> <span class="n">onExit</span><span class="p">)</span>
-</span><span class='line'>    <span class="o">:</span> <span class="n">onExit</span><span class="p">(</span><span class="n">onExit</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>      <span class="n">onEnter</span><span class="p">();</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="o">~</span><span class="n">ScopeGuard</span> <span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>    <span class="n">onExit</span><span class="p">();</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="n">std</span><span class="o">::</span><span class="n">function</span><span class="o">&lt;</span><span class="kt">void</span><span class="p">()</span><span class="o">&gt;</span> <span class="n">onExit</span><span class="p">;</span>
-</span><span class='line'><span class="p">};</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// lambda to be executed in constructor</span>
-</span><span class='line'><span class="k">auto</span> <span class="n">onEnter</span> <span class="o">=</span> <span class="p">[</span><span class="o">&amp;</span><span class="n">engine</span><span class="p">]()</span> <span class="o">-&gt;</span> <span class="kt">void</span> <span class="p">{</span>
-</span><span class='line'>  <span class="n">engine</span><span class="o">-&gt;</span><span class="n">getQuery</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">enterContext</span><span class="p">();</span>
-</span><span class='line'><span class="p">};</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// lambda to be executed in destructor</span>
-</span><span class='line'><span class="k">auto</span> <span class="n">onExit</span> <span class="o">=</span> <span class="p">[</span><span class="o">&amp;</span><span class="p">]()</span> <span class="o">-&gt;</span> <span class="kt">void</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="k">auto</span> <span class="n">expression</span> <span class="o">:</span> <span class="n">allVariableBoundExpressions</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>    <span class="n">expression</span><span class="o">-&gt;</span><span class="n">invalidate</span><span class="p">();</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="n">engine</span><span class="o">-&gt;</span><span class="n">getQuery</span><span class="p">()</span><span class="o">-&gt;</span><span class="n">exitContext</span><span class="p">();</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// create guard object with the lambdas </span>
-</span><span class='line'><span class="c1">// this will instantly execute `onEnter`</span>
-</span><span class='line'><span class="n">ScopeGuard</span> <span class="n">guard</span><span class="p">(</span><span class="n">onEnter</span><span class="p">,</span> <span class="n">onExit</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// do something...</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// when scope is left, `onExit` will be executed</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>As mentioned before, <code>decltype</code> can be used to determine the
-return type of a function automatically. Here&rsquo;s an example:</p>
-
-<figure class='code'><figcaption><span>function with automatic return type deduction</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">auto</span> <span class="n">add</span> <span class="o">=</span> <span class="p">[](</span><span class="kt">int</span> <span class="n">a</span><span class="p">,</span> <span class="kt">int</span> <span class="n">b</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">decltype</span><span class="p">(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">return</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">;</span>
-</span><span class='line'><span class="p">};</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>As can be seen in the examples above, C++11 has introduced an
-alternative function declaration syntax, with the type of the
-function result following a <code>-&gt;</code>. The return type can be omitted
-if it can be unambiguously determined by the compiler. The new
-function declaration syntax is mainly useful for lambdas, but
-it can be used for regular functions, too.</p>
-
-<h2>Enum class</h2>
-
-<p>Enums in C++ are useful but just <em>don&rsquo;t feel right</em>: persisting a
-struct that contains an enum value is not portable as the
-underlying data type for the enum is implementation-dependent.</p>
-
-<p>Additionally, enum values can be compared to almost any other values,
-which in most cases doesn&rsquo;t make sense but obfuscates coding errors.
-There were also <em>scoping issues</em> with enum values.</p>
-
-<p>C++11 enum classes fix these problems. First of all, the underlying
-data type for an enum can be specified. For example, this creates
-an enum based with its value stored in an <code>std::uint8_t</code>:</p>
-
-<figure class='code'><figcaption><span>enum class with specified data type</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">enum</span> <span class="k">class</span> <span class="nc">StatusType</span> <span class="o">:</span> <span class="n">std</span><span class="o">::</span><span class="n">uint8_t</span> <span class="p">{</span>
-</span><span class='line'>  <span class="n">UNINITIALIZED</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span>
-</span><span class='line'>  <span class="n">STARTING</span><span class="p">,</span>
-</span><span class='line'>  <span class="n">RUNNING</span><span class="p">,</span>
-</span><span class='line'>  <span class="n">STOPPING</span><span class="p">,</span>
-</span><span class='line'>  <span class="n">STOPPED</span>
-</span><span class='line'><span class="p">};</span>
-</span><span class='line'>
-</span><span class='line'><span class="n">StatusType</span> <span class="n">status</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Regarding the comparison of enum values to other values, C++11
-enum classes are much stronger typed than regular enums.
-Comparing the <code>status</code> variable from the above example to anything
-but a value from its enum class won&rsquo;t even compile.</p>
-
-<p>This provides much greater type safety than when using the old,
-implicitly converting enums:</p>
-
-<figure class='code'><figcaption><span>invalid usage of enums</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">status</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>  <span class="c1">// won&#39;t compile in C++11</span>
-</span><span class='line'>  <span class="c1">// ...</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="n">status</span> <span class="o">==</span> <span class="n">StatusType</span><span class="o">::</span><span class="n">UNINITIALIZED</span><span class="p">)</span> <span class="p">{</span>  <span class="c1">// this would work</span>
-</span><span class='line'>  <span class="c1">// ...</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Finally, enum classes fix the scoping problems of regular enums.
-In C++03, the following code did not complile because two enums
-contained the same member name:</p>
-
-<figure class='code'><figcaption><span>two enums with same member name</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">enum</span> <span class="n">DirectionType</span> <span class="p">{</span>
-</span><span class='line'>  <span class="n">LEFT</span><span class="p">,</span>
-</span><span class='line'>  <span class="n">RIGHT</span>
-</span><span class='line'><span class="p">};</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">enum</span> <span class="n">AnswerType</span> <span class="p">{</span>
-</span><span class='line'>  <span class="n">RIGHT</span><span class="p">,</span>  <span class="c1">// won&#39;t compile in C++03 and C++11</span>
-</span><span class='line'>  <span class="n">WRONG</span>
-</span><span class='line'><span class="p">};</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>With C++11 enum classes, the following code is all fine:</p>
-
-<figure class='code'><figcaption><span>two enums class with same member name</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='c++'><span class='line'><span class="k">enum</span> <span class="k">class</span> <span class="nc">DirectionType</span> <span class="p">{</span>
-</span><span class='line'>  <span class="n">LEFT</span><span class="p">,</span>
-</span><span class='line'>  <span class="n">RIGHT</span>
-</span><span class='line'><span class="p">};</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">enum</span> <span class="k">class</span> <span class="nc">AnswerType</span> <span class="p">{</span>
-</span><span class='line'>  <span class="n">RIGHT</span><span class="p">,</span>  <span class="c1">// works!</span>
-</span><span class='line'>  <span class="n">WRONG</span>
-</span><span class='line'><span class="p">};</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Additional containers</h2>
-
-<p>C++11 provides the hash-based containers <code>std::unordered_map</code>
-and <code>std::unordered_set</code> (plus their non-unique counterparts).
-These containers are not sorted, so they can be more efficient
-than <code>std::map</code> and <code>std::set</code>.</p>
-
-<p>Turning an <code>std::map</code> into an <code>std::unordered_map</code> is simple as
-the APIs are more or less identical.</p>
-
-<p>There is now also a singly-linked list container, named
-<code>std::forward_list</code>. This obviously allows forward iteration
-only, but is more space efficient than the already existing
-doubly-linked list container.</p>
-
-<h2>More</h2>
-
-<p>Other improvements include move semantics, atomic variables and
-operations, a dedicated type for NULL pointers, STL support for
-threads and mutexes, regular expressions, more Unicode support,
-override, final &ndash; to name only a few&hellip;</p>
 ]]></content>
   </entry>
   

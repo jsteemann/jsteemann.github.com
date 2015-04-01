@@ -10,8 +10,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="Data-modification queries were enhanced in ArangoDB 2.4 to be able to also return
-the inserted, update or removed documents. For example, the &hellip;">
+  <meta name="description" content="This week we pushed some modifications for ArangoDB&rsquo;s cursor API into the devel branch.
+The change will result in less copying of AQL query &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -80,6 +80,56 @@ the inserted, update or removed documents. For example, the &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/04/01/improvements-for-the-cursor-api/">Improvements for the Cursor API</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-01T13:59:22+02:00" pubdate data-updated="true">Apr 1<span>st</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>This week we pushed some modifications for ArangoDB&rsquo;s cursor API into the <code>devel</code> branch.
+The change will result in less copying of AQL query results between the AQL and the HTTP layers.
+As a positive side effect, this will reduce the amount of garbage collection the built-in V8
+has to do.</p>
+
+<p>These modifications should improve the cursor API performance significantly for many cases,
+while at the same time keeping its REST API stable.</p>
+
+<p>This blog post shows some first unscientific performance tests comparing the old cursor API with
+its new, improved implementation.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/04/01/improvements-for-the-cursor-api/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -556,61 +606,6 @@ in ArangoDB 2.5 (current <code>devel</code> branch).</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/01/28/using-custom-visitors-in-aql-graph-traversals/">Using Custom Visitors in AQL Graph Traversals</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-01-28T22:21:35+01:00" pubdate data-updated="true">Jan 28<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>This post is about some recent extensions for the AQL graph traversal functionality
-in ArangoDB.</p>
-
-<p>These extensions allow invoking user-defined JavaScript code for filtering
-and results generation in AQL queries that contain traversals.</p>
-
-<p>This should make AQL graph traversals much more powerful than before.
-Additionally, AQL graph traversals get more configurable, allowing to write
-traversal functions with control-flow logic and complex filtering. As a
-side-effect, this change facilitates writing specialized traversal functions
-with much higher efficiency than the general-purpose, cover-all-cases default
-ones.</p>
-
-<p>The extensions are currently available in the devel branch of ArangoDB on in the
-2.4 branch (with 2.4.2 being the first release to include them).</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/01/28/using-custom-visitors-in-aql-graph-traversals/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -633,6 +628,10 @@ ones.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/04/01/improvements-for-the-cursor-api/">Improvements for the Cursor API</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/03/27/improvements-for-data-modification-queries/">Improvements for Data-modification Queries</a>
       </li>
     
@@ -648,10 +647,6 @@ ones.</p>
         <a href="/blog/2015/02/26/more-es6-features/">More ES6 Features</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/02/26/aql-improvements-in-25/">AQL Improvements in 2.5</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -660,11 +655,11 @@ ones.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (12)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (25)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (2)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (5)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (12)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (26)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (2)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (5)</a></li><li><a href='/blog/categories/performance/'>performance (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (12)</li><ul class="month_list"><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (13)</li><ul class="month_list"><li class="month"><a href='/blog/2015/04/'>APR (1)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>
