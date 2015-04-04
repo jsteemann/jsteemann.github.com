@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-05T01:10:27+02:00</updated>
+  <updated>2015-04-05T01:12:07+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -324,7 +324,7 @@ time as measured by the ArangoShell (representative for any other client program
 ArangoDB) was consistenly lower than it was with the old API implementation.</p>
 
 <p>The improvements measured were varying. For the queries tested, the improvements fell into a range
-of 10 % to even more than 50 % improvement.</p>
+of <strong>10 % to even more than 50 % speedup</strong>.</p>
 
 <p>How much gain can be achieved in reality obviously depends on the type of query executed. There will
 also be queries that do not benefit from the new API implementation. For example, queries that do not
