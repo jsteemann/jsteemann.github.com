@@ -1,0 +1,408 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>More Efficient Data Exports - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="I recently wrote about the performance improvements for the cursor API
+made in ArangoDB 2.6. The performance improvements are due to a rewrite of the &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>Notes on ArangoDB development</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">More Efficient Data Exports</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-04T21:51:33+02:00" pubdate data-updated="true">Apr 4<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>I recently wrote about the <a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">performance improvements for the cursor API</a>
+made in ArangoDB 2.6. The performance improvements are due to a rewrite of the cursor API&rsquo;s internals.</p>
+
+<p>As a byproduct of this rewrite, an extra API was created for exporting all documents from a
+collection to a client application. With this being its only use case, it is clear that the new
+API will not solve every data export problem. However, the API&rsquo;s limitedness facilitated a very efficient
+implementation, resulting in <strong>nice speedups</strong> and <strong>lower memory usage</strong> when compared to the alternative
+way of exporting all documents into a client application.</p>
+
+<!-- more -->
+
+
+<p>There did not exist an <em>official</em> export API before. So users often ran AQL queries like the following
+to export all documents from a collection:</p>
+
+<figure class='code'><figcaption><span>AQL query to export all documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
+</span><span class='line'>  RETURN doc</span></code></pre></td></tr></table></div></figure>
+
+
+<p>While such AQL queries will work for smaller result sets, they will get problematic when results get
+bigger. The reason is that the AQL very will effectively create a snapshot of all the documents present
+in the collection. Creating the snapshot is required for data consistency. Once the snapshot is created,
+clients can incrementally fetch the data from the snapshot and will still get a consistent result even
+if the underlying collections get modified.</p>
+
+<p>For smaller result sets, snapshotting is not a big issue. But when exporting all documents from a
+bigger collection, big result sets will be produced. In this case, the snapshotting can become expensive
+in terms of CPU time and also memory consumption.</p>
+
+<p>We couldn&rsquo;t get around the snapshotting completely, but we could take advantage of the fact that when exporting
+documents from a collection, all that can be snapshotted are documents. This is different to snapshotting
+arbitrary AQL queries, which can produce any kind and combination of JSON.</p>
+
+<p>Dealing only with documents allowed us to take an efficiency shortcut: instead of copying the complete
+documents it will only copy pointers to the document revisions presently in th collection. Not only is this
+much faster than doing a full copy of the document, but it also saves a lot of memory.</p>
+
+<h2>Invoking the API</h2>
+
+<p>While the invocation of the cursor API and the export API is slightly different, their result formats
+have intentionally been kept similar. This way client programs do not need to be adjusted much to consume
+the export API instead of the cursor API.</p>
+
+<p>An example command for exporting via the cursor API is:</p>
+
+<figure class='code'><figcaption><span>exporting all documents via the cursor API</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>curl -X POST <span class="se">\</span>
+</span><span class='line'>     <span class="s2">&quot;http://127.0.0.1:8529/_api/cursor&quot;</span> <span class="se">\</span>
+</span><span class='line'>     --data <span class="s1">&#39;{&quot;query&quot;:&quot;FOR doc IN collection RETURN docs&quot;}&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>A command for exporting via the new export API is:</p>
+
+<figure class='code'><figcaption><span>exporting all documents via the export API</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>curl -X POST <span class="se">\</span>
+</span><span class='line'>     <span class="s2">&quot;http://127.0.0.1:8529/_api/export?collection=docs&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In both cases, the result will look like this:</p>
+
+<figure class='code'><figcaption><span>API results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span>
+</span><span class='line'>  <span class="nt">&quot;result&quot;</span><span class="p">:</span> <span class="p">[</span>
+</span><span class='line'>    <span class="err">...</span>
+</span><span class='line'>  <span class="p">],</span>
+</span><span class='line'>  <span class="nt">&quot;hasMore&quot;</span><span class="p">:</span><span class="kc">true</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="s2">&quot;2221050516478&quot;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The <code>result</code> attribute will contain the first few (1,000 by default) documents. The
+<code>hasMore</code> attribute will indicate whether there are more documents to fetch from the
+server. In this case the client can use the cursor id specified in the <code>id</code> attribute
+to fetch more result.</p>
+
+<p>The API can be invoked via any HTTP-capable client such as <code>curl</code> (as shown above).</p>
+
+<p>I have also added <a href="https://github.com/arangodb/arangodb-php/blob/devel/README.md#exporting_data">bindings to the ArangoDB-PHP driver</a>
+today (contained in the driver&rsquo;s <code>devel</code> branch).</p>
+
+<h2>API performance</h2>
+
+<p>Now, what can be gained by using the export API?</p>
+
+<p>The following table shows the execution times for fetching the first 1,000 documents
+from collections of different sizes, both with via the cursor API and the export API.
+Figures for the cursor API are shown for ArangoDB 2.5 and 2.6 (the version in which
+it was rewritten):</p>
+
+<figure class='code'><figcaption><span>execution times for cursor API and export API</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># of documents    cursor API (2.5)    cursor API (2.6)      export API
+</span><span class='line'>--------------    ----------------    ----------------      ----------
+</span><span class='line'>       100,000               1.9 s               0.3 s          0.04 s
+</span><span class='line'>       500,000               9.5 s               1,4 s          0.08 s
+</span><span class='line'>     1,000,000              19.0 s               2.8 s          0.14 s
+</span><span class='line'>     2,000,000              39,0 s               7.5 s          0.19 s
+</span><span class='line'>     5,000,000               n/a                 n/a            0.55 s
+</span><span class='line'>    10,000,000               n/a                 n/a            1.32 s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Execution times are from my laptop, which only has 4 GB of RAM and a slow disk.</p>
+
+<p>As can be seen, the rewritten cursor API in 2.6 is already much faster than the one
+in 2.5. However, for exporting documents from one collection only, the new export API
+is superior.</p>
+
+<p>The export API also uses a lot less memory for snapshotting, as can be nicely seen in the
+two bottom rows of the results. For these cases, the snapshots done by the cursor API
+were bigger than the available RAM and the OS started swapping heavily. Snapshotting
+didn&rsquo;t complete within 15 minutes, so no results are shown above.</p>
+
+<p>Good news is that this didn&rsquo;t happen with the export API, due to the fact that the
+snapshots it creates are much more compact.</p>
+
+<p>Another nice side effect of the speedup is that the first results will arrive much
+earlier in the client application. This will help in reducing client connection timeouts
+in case clients are enforcing them on temporarily non-responding connections.</p>
+
+<h2>Summary</h2>
+
+<p>ArangoDB 2.6 provides a specialized export API for exporting all documents from a
+collection and shipping them to a client application. It is rather limited but
+faster than the general-purpose AQL cursor API and can store its snapshots using less
+memory.</p>
+
+<p>Therefore, exporting all documents from bigger collections calls for using the new
+export API from 2.6 on. The new export API is present in the <code>devel</code> branch, which
+will eventually turn into a 2.6 release.</p>
+
+<p>For other cases, when still using the cursor API, 2.6 will also provide significant
+performance improvements when compared to 2.5. This can be seen from the comparison
+table above and also from the observations made
+<a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">here</a>.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-04T21:51:33+02:00" pubdate data-updated="true">Apr 4<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/performance/'>Performance</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/04/01/improvements-for-the-cursor-api/" title="Previous Post: Improvements for the cursor API">&laquo; Improvements for the cursor API</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/04/04/more-efficient-data-exports/">More Efficient Data Exports</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/01/improvements-for-the-cursor-api/">Improvements for the Cursor API</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/27/improvements-for-data-modification-queries/">Improvements for Data-modification Queries</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/27/preview-of-the-upsert-command/">Preview of the UPSERT Command</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/11/analyzing-git-commits-with-arangodb/">Analyzing Git Commits With ArangoDB</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (14)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (27)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (2)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (7)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (14)</li><ul class="month_list"><li class="month"><a href='/blog/2015/04/'>APR (2)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

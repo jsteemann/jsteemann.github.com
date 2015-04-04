@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-01T19:32:51+02:00</updated>
+  <updated>2015-04-05T01:10:27+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,161 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[More Efficient Data Exports]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/"/>
+    <updated>2015-04-04T21:51:33+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports</id>
+    <content type="html"><![CDATA[<p>I recently wrote about the <a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">performance improvements for the cursor API</a>
+made in ArangoDB 2.6. The performance improvements are due to a rewrite of the cursor API&rsquo;s internals.</p>
+
+<p>As a byproduct of this rewrite, an extra API was created for exporting all documents from a
+collection to a client application. With this being its only use case, it is clear that the new
+API will not solve every data export problem. However, the API&rsquo;s limitedness facilitated a very efficient
+implementation, resulting in <strong>nice speedups</strong> and <strong>lower memory usage</strong> when compared to the alternative
+way of exporting all documents into a client application.</p>
+
+<!-- more -->
+
+
+<p>There did not exist an <em>official</em> export API before. So users often ran AQL queries like the following
+to export all documents from a collection:</p>
+
+<p><code>plain AQL query to export all documents
+FOR doc IN collection
+  RETURN doc
+</code></p>
+
+<p>While such AQL queries will work for smaller result sets, they will get problematic when results get
+bigger. The reason is that the AQL very will effectively create a snapshot of all the documents present
+in the collection. Creating the snapshot is required for data consistency. Once the snapshot is created,
+clients can incrementally fetch the data from the snapshot and will still get a consistent result even
+if the underlying collections get modified.</p>
+
+<p>For smaller result sets, snapshotting is not a big issue. But when exporting all documents from a
+bigger collection, big result sets will be produced. In this case, the snapshotting can become expensive
+in terms of CPU time and also memory consumption.</p>
+
+<p>We couldn&rsquo;t get around the snapshotting completely, but we could take advantage of the fact that when exporting
+documents from a collection, all that can be snapshotted are documents. This is different to snapshotting
+arbitrary AQL queries, which can produce any kind and combination of JSON.</p>
+
+<p>Dealing only with documents allowed us to take an efficiency shortcut: instead of copying the complete
+documents it will only copy pointers to the document revisions presently in th collection. Not only is this
+much faster than doing a full copy of the document, but it also saves a lot of memory.</p>
+
+<h2>Invoking the API</h2>
+
+<p>While the invocation of the cursor API and the export API is slightly different, their result formats
+have intentionally been kept similar. This way client programs do not need to be adjusted much to consume
+the export API instead of the cursor API.</p>
+
+<p>An example command for exporting via the cursor API is:</p>
+
+<p>```bash exporting all documents via the cursor API
+curl -X POST \</p>
+
+<pre><code> "http://127.0.0.1:8529/_api/cursor" \
+ --data '{"query":"FOR doc IN collection RETURN docs"}'
+</code></pre>
+
+<p>```</p>
+
+<p>A command for exporting via the new export API is:</p>
+
+<p>```bash exporting all documents via the export API
+curl -X POST \</p>
+
+<pre><code> "http://127.0.0.1:8529/_api/export?collection=docs"
+</code></pre>
+
+<p>```</p>
+
+<p>In both cases, the result will look like this:
+```json API results
+{
+  &ldquo;result&rdquo;: [</p>
+
+<pre><code>...
+</code></pre>
+
+<p>  ],
+  &ldquo;hasMore&rdquo;:true,
+  &ldquo;id&rdquo;:&ldquo;2221050516478&rdquo;
+}
+```</p>
+
+<p>The <code>result</code> attribute will contain the first few (1,000 by default) documents. The
+<code>hasMore</code> attribute will indicate whether there are more documents to fetch from the
+server. In this case the client can use the cursor id specified in the <code>id</code> attribute
+to fetch more result.</p>
+
+<p>The API can be invoked via any HTTP-capable client such as <code>curl</code> (as shown above).</p>
+
+<p>I have also added <a href="https://github.com/arangodb/arangodb-php/blob/devel/README.md#exporting_data">bindings to the ArangoDB-PHP driver</a>
+today (contained in the driver&rsquo;s <code>devel</code> branch).</p>
+
+<h2>API performance</h2>
+
+<p>Now, what can be gained by using the export API?</p>
+
+<p>The following table shows the execution times for fetching the first 1,000 documents
+from collections of different sizes, both with via the cursor API and the export API.
+Figures for the cursor API are shown for ArangoDB 2.5 and 2.6 (the version in which
+it was rewritten):</p>
+
+<p>```plain execution times for cursor API and export API</p>
+
+<h1>of documents    cursor API (2.5)    cursor API (2.6)      export API</h1>
+
+<hr />
+
+<pre><code>   100,000               1.9 s               0.3 s          0.04 s
+   500,000               9.5 s               1,4 s          0.08 s
+ 1,000,000              19.0 s               2.8 s          0.14 s
+ 2,000,000              39,0 s               7.5 s          0.19 s
+ 5,000,000               n/a                 n/a            0.55 s
+10,000,000               n/a                 n/a            1.32 s
+</code></pre>
+
+<p>```</p>
+
+<p>Execution times are from my laptop, which only has 4 GB of RAM and a slow disk.</p>
+
+<p>As can be seen, the rewritten cursor API in 2.6 is already much faster than the one
+in 2.5. However, for exporting documents from one collection only, the new export API
+is superior.</p>
+
+<p>The export API also uses a lot less memory for snapshotting, as can be nicely seen in the
+two bottom rows of the results. For these cases, the snapshots done by the cursor API
+were bigger than the available RAM and the OS started swapping heavily. Snapshotting
+didn&rsquo;t complete within 15 minutes, so no results are shown above.</p>
+
+<p>Good news is that this didn&rsquo;t happen with the export API, due to the fact that the
+snapshots it creates are much more compact.</p>
+
+<p>Another nice side effect of the speedup is that the first results will arrive much
+earlier in the client application. This will help in reducing client connection timeouts
+in case clients are enforcing them on temporarily non-responding connections.</p>
+
+<h2>Summary</h2>
+
+<p>ArangoDB 2.6 provides a specialized export API for exporting all documents from a
+collection and shipping them to a client application. It is rather limited but
+faster than the general-purpose AQL cursor API and can store its snapshots using less
+memory.</p>
+
+<p>Therefore, exporting all documents from bigger collections calls for using the new
+export API from 2.6 on. The new export API is present in the <code>devel</code> branch, which
+will eventually turn into a 2.6 release.</p>
+
+<p>For other cases, when still using the cursor API, 2.6 will also provide significant
+performance improvements when compared to 2.5. This can be seen from the comparison
+table above and also from the observations made
+<a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">here</a>.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Improvements for the Cursor API]]></title>
@@ -668,258 +823,6 @@ db._query(query).toArray();
 </code></p>
 
 <p>Enjoy!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[More ES6 Features]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/02/26/more-es6-features/"/>
-    <updated>2015-02-26T12:00:46+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/02/26/more-es6-features</id>
-    <content type="html"><![CDATA[<p>ArangoDB 2.5 comes with an upgraded version of V8, Google&rsquo;s open source JavaScript engine.</p>
-
-<p>The built-in version of V8 has been upgraded from 3.29.54 to 3.31.74.1.</p>
-
-<p>In addition to several already usable ES6 features (detailed in
-<a href="https://jsteemann.github.io/blog/2014/12/19/using-es6-features-in-arangodb/">this blog</a>,
-the following ES6 features are activated in ArangoDB 2.5 by default:</p>
-
-<ul>
-<li>iterators and generators</li>
-<li>template strings</li>
-<li>enhanced object literals</li>
-<li>enhanced numeric literals</li>
-<li>block scoping with <code>let</code> and constant variables using <code>const</code></li>
-<li>additional String methods (such as <code>startsWith</code>, <code>repeat</code> etc.)</li>
-</ul>
-
-
-<p>The above features are available in ArangoDB 2.5, and can now be used for scripting purposes
-in the ArangoShell and in server-side Foxx actions inside the database.</p>
-
-<p>This blog post briefly explains the features provides some quick examples for using them.</p>
-
-<!-- more -->
-
-
-<h2>Iterators and generators</h2>
-
-<p>Iterator and generator support was optional in 2.4, but is turned on by default since 2.5.</p>
-
-<p>For everyone who is not familiar with generators in JavaScript, here&rsquo;s how they work:</p>
-
-<p>Generators are special functions tagged with an asterisk (<code>*</code>). Values are returned to the
-caller using the <code>yield</code> keyword:</p>
-
-<p><code>js a simple generator that generates two values                                                            
-function* generate () {                                                                                       
-  yield 23;                                                                                                   
-  yield 42;                                                                                                   
-}                                                                                                            
-</code></p>
-
-<p>Calling the function with initialize/reset the generator. Calling the <code>next()</code> method on
-the generator&rsquo;s initial call return value produces the next sequence element. The element
-is returned in a <code>value</code> attribute. The <code>done</code> attribute indicates whether the sequence
-has come to an end:</p>
-
-<p><code>js invoking the generator
-var generator = generate();                                                                                   
-console.log(generator.next());  /* { "value" : 23, "done" : false } */                                        
-console.log(generator.next());  /* { "value" : 42, "done" : false } */                                        
-console.log(generator.next());  /* { "value" : undefined, "done" : true } */                                  
-</code></p>
-
-<p>Sequences produced by generators can also be consumed via a <code>for...of</code> loop:</p>
-
-<p>```js consuming all values from a generator function
-var generator = generate();</p>
-
-<p>for (var value of generator) {
-  console.log(value);
-}
-```</p>
-
-<p>In general, every object that is iteratable can be consumed using the <code>of</code> operator.
-Some built-in objects provide pre-defined iterators (e.g. <code>Map.keys()</code> or <code>Map.values()</code>),
-but you can also create iterators for your own objects:</p>
-
-<p>```js creating an iterator for an object
-function Sentence (text) {
-  this.text = text;
-}</p>
-
-<p>Sentence.prototype[Symbol.iterator] = function*() {
-  var regex = /\S+/g;
-  var text = this.text;
-  var match;
-  while (match = regex.exec(text)) {</p>
-
-<pre><code>yield match[0]; 
-</code></pre>
-
-<p>  }
-};</p>
-
-<p>var sentence = new Sentence(&ldquo;The quick brown fox jumped over the lazy dog&rdquo;);
-for (var word of sentence) {
-  console.log(word);
-}
-```</p>
-
-<h2>Template strings</h2>
-
-<p>I know there are query string generators and such, but for the sake of the example, let&rsquo;s assume you
-wanted to write a query string in JavaScript. You might end up with something like this:</p>
-
-<p><code>js multi-line query string
-var query =
-  'FOR doc IN users\n' +
-  '  FILTER doc.name == @name\n' +
-  '  RETURN doc\n';
-</code></p>
-
-<p>This is hardly legible, and it is also very prone to errors.</p>
-
-<p>ES6 template strings provide a way to define multi-line string literals in a much easier and simpler way.
-Here&rsquo;s how to do it (note the backticks instead of the regular string quotes):</p>
-
-<p><code>js using a multi-line template string
-var query = `
-FOR doc IN users
-  FILTER doc.name == @name
-  RETURN doc
-`;
-</code></p>
-
-<p>Template strings also support value substitution, so you could even write something like this, too:
-```js value substitution in template strings
-var name = &ldquo;AQL injection attempt \&rdquo; OR true OR \&ldquo;&rdquo;;</p>
-
-<p>var query = <code>
-FOR doc IN users
-  FILTER doc.name == ${JSON.stringify(name)}
-  RETURN doc
-</code>;
-```</p>
-
-<p>Note that while value substitution in template strings in convenient, you still have to be careful with
-user-generated values. Otherwise you might be subject to value injection attacks, as you would be with
-every other form of improper user value handling.</p>
-
-<h2>Enhanced object literals</h2>
-
-<p>Save some time when definining objects:</p>
-
-<p>```js using enhanced object literals
-var name = &ldquo;foobar&rdquo;;</p>
-
-<p>myObject = {
-  type : &ldquo;myType&rdquo;,   /<em> always worked </em>/
-  name,              /<em> same as &ldquo;name&rdquo; : name </em>/
-  save () {          /<em> same as &ldquo;save&rdquo; : function () &hellip; </em>/</p>
-
-<pre><code>console.log("save called!"); 
-</code></pre>
-
-<p>  }
-};</p>
-
-<p>{
-  &ldquo;type&rdquo; : &ldquo;myType&rdquo;,
-  &ldquo;name&rdquo; : &ldquo;foobar&rdquo;,
-  &ldquo;save&rdquo; : [Function &ldquo;console.log("save called!&rdquo;);&ldquo; &hellip;]
-}
-```</p>
-
-<p>As can be seen above, enhanced object literal declarations can save some typing and reduce redundancies
-in the code. Unfortunately we still cannot use object key names generated from expressions:</p>
-
-<p><code>js does not work yet
-myObject = {
-  [ "foo" + bar" ] : "foobar"
-};
-</code></p>
-
-<h2>Enhanced numeric literals</h2>
-
-<p>Numeric values can now be specified in binary or octal if required:</p>
-
-<p><code>js numeric literals                                                                                        
-var life = 0b101010;          /* binary, 42 in decimal */                                                     
-var filePermissions = 0o777;  /* octal, 511 in decimal */                                                     
-</code></p>
-
-<h2>Block scoping</h2>
-
-<p>As a mostly C++ programmer, I am always puzzled about the scoping of JavaScript variables.
-In the following example, variable <code>x</code> does not only live inside the curly brackets block in which
-it was declared, but also afterwards:</p>
-
-<p>```
-function work () {
-  {</p>
-
-<pre><code>var x = 1;
-</code></pre>
-
-<p>  }
-  return x;
-}
-```</p>
-
-<p>The reason is that the curly brackets around <code>var x = 1;</code> are not a scope at all in traditional
-JavaScript. This sucks, because variables can linger around in programs longer than necessary,
-leading to unwanted side-effects.</p>
-
-<p>With block-level scopes, this can be fixed. To use it, introduce variables not with the <code>var</code>
-keyword, but with <code>let</code>. <code>let</code> only works in strict mode, so make sure your function or module
-uses it.</p>
-
-<p>Now, with block-level scoping, the above snippet looks like this:
-```
-function work () {
-  &ldquo;use strict&rdquo;;
-  {</p>
-
-<pre><code>let x = 1; 
-</code></pre>
-
-<p>  }
-  return x;
-};
-```</p>
-
-<p>And it will actually produce an error when trying to access variable <code>x</code> in the <code>return</code> statement.
-The reason is that the life of <code>x</code> was over as soon as its scope was left. The scope of variable <code>x</code> is
-now only the one with the <code>let</code> declaration inside the curly brackets.</p>
-
-<p>Someone else said &ldquo;<em>let is the new var</em>&rdquo;, and I think there&rsquo;s not much to add.</p>
-
-<p>Additionally, the <code>const</code> keyword can be used to define a read-only variables. Trying to re-define a
-constant will produce an error in strict mode (the desired behavior), and do nothing in non-strict mode.
-Another reason to use the strict mode.</p>
-
-<h2>Additional String methods</h2>
-
-<p><code>String</code> objects now provide extra built-in methods:</p>
-
-<ul>
-<li><code>string.startsWith(what)</code></li>
-<li><code>string.endsWith(what)</code></li>
-<li><code>string.includes(what)</code></li>
-<li><code>string.repeat(count)</code></li>
-<li><code>string.normalize(method)</code></li>
-<li><code>string.codePointAt(position)</code></li>
-</ul>
-
-
-<p>There is also an extra &ldquo;static&rdquo; method:</p>
-
-<ul>
-<li><code>String.fromCodePoint(codePoint)</code></li>
-</ul>
-
 ]]></content>
   </entry>
   

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-01T19:32:51+02:00</updated>
+  <updated>2015-04-05T01:10:27+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,161 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[More Efficient Data Exports]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/"/>
+    <updated>2015-04-04T21:51:33+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports</id>
+    <content type="html"><![CDATA[<p>I recently wrote about the <a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">performance improvements for the cursor API</a>
+made in ArangoDB 2.6. The performance improvements are due to a rewrite of the cursor API&rsquo;s internals.</p>
+
+<p>As a byproduct of this rewrite, an extra API was created for exporting all documents from a
+collection to a client application. With this being its only use case, it is clear that the new
+API will not solve every data export problem. However, the API&rsquo;s limitedness facilitated a very efficient
+implementation, resulting in <strong>nice speedups</strong> and <strong>lower memory usage</strong> when compared to the alternative
+way of exporting all documents into a client application.</p>
+
+<!-- more -->
+
+
+<p>There did not exist an <em>official</em> export API before. So users often ran AQL queries like the following
+to export all documents from a collection:</p>
+
+<p><code>plain AQL query to export all documents
+FOR doc IN collection
+  RETURN doc
+</code></p>
+
+<p>While such AQL queries will work for smaller result sets, they will get problematic when results get
+bigger. The reason is that the AQL very will effectively create a snapshot of all the documents present
+in the collection. Creating the snapshot is required for data consistency. Once the snapshot is created,
+clients can incrementally fetch the data from the snapshot and will still get a consistent result even
+if the underlying collections get modified.</p>
+
+<p>For smaller result sets, snapshotting is not a big issue. But when exporting all documents from a
+bigger collection, big result sets will be produced. In this case, the snapshotting can become expensive
+in terms of CPU time and also memory consumption.</p>
+
+<p>We couldn&rsquo;t get around the snapshotting completely, but we could take advantage of the fact that when exporting
+documents from a collection, all that can be snapshotted are documents. This is different to snapshotting
+arbitrary AQL queries, which can produce any kind and combination of JSON.</p>
+
+<p>Dealing only with documents allowed us to take an efficiency shortcut: instead of copying the complete
+documents it will only copy pointers to the document revisions presently in th collection. Not only is this
+much faster than doing a full copy of the document, but it also saves a lot of memory.</p>
+
+<h2>Invoking the API</h2>
+
+<p>While the invocation of the cursor API and the export API is slightly different, their result formats
+have intentionally been kept similar. This way client programs do not need to be adjusted much to consume
+the export API instead of the cursor API.</p>
+
+<p>An example command for exporting via the cursor API is:</p>
+
+<p>```bash exporting all documents via the cursor API
+curl -X POST \</p>
+
+<pre><code> "http://127.0.0.1:8529/_api/cursor" \
+ --data '{"query":"FOR doc IN collection RETURN docs"}'
+</code></pre>
+
+<p>```</p>
+
+<p>A command for exporting via the new export API is:</p>
+
+<p>```bash exporting all documents via the export API
+curl -X POST \</p>
+
+<pre><code> "http://127.0.0.1:8529/_api/export?collection=docs"
+</code></pre>
+
+<p>```</p>
+
+<p>In both cases, the result will look like this:
+```json API results
+{
+  &ldquo;result&rdquo;: [</p>
+
+<pre><code>...
+</code></pre>
+
+<p>  ],
+  &ldquo;hasMore&rdquo;:true,
+  &ldquo;id&rdquo;:&ldquo;2221050516478&rdquo;
+}
+```</p>
+
+<p>The <code>result</code> attribute will contain the first few (1,000 by default) documents. The
+<code>hasMore</code> attribute will indicate whether there are more documents to fetch from the
+server. In this case the client can use the cursor id specified in the <code>id</code> attribute
+to fetch more result.</p>
+
+<p>The API can be invoked via any HTTP-capable client such as <code>curl</code> (as shown above).</p>
+
+<p>I have also added <a href="https://github.com/arangodb/arangodb-php/blob/devel/README.md#exporting_data">bindings to the ArangoDB-PHP driver</a>
+today (contained in the driver&rsquo;s <code>devel</code> branch).</p>
+
+<h2>API performance</h2>
+
+<p>Now, what can be gained by using the export API?</p>
+
+<p>The following table shows the execution times for fetching the first 1,000 documents
+from collections of different sizes, both with via the cursor API and the export API.
+Figures for the cursor API are shown for ArangoDB 2.5 and 2.6 (the version in which
+it was rewritten):</p>
+
+<p>```plain execution times for cursor API and export API</p>
+
+<h1>of documents    cursor API (2.5)    cursor API (2.6)      export API</h1>
+
+<hr />
+
+<pre><code>   100,000               1.9 s               0.3 s          0.04 s
+   500,000               9.5 s               1,4 s          0.08 s
+ 1,000,000              19.0 s               2.8 s          0.14 s
+ 2,000,000              39,0 s               7.5 s          0.19 s
+ 5,000,000               n/a                 n/a            0.55 s
+10,000,000               n/a                 n/a            1.32 s
+</code></pre>
+
+<p>```</p>
+
+<p>Execution times are from my laptop, which only has 4 GB of RAM and a slow disk.</p>
+
+<p>As can be seen, the rewritten cursor API in 2.6 is already much faster than the one
+in 2.5. However, for exporting documents from one collection only, the new export API
+is superior.</p>
+
+<p>The export API also uses a lot less memory for snapshotting, as can be nicely seen in the
+two bottom rows of the results. For these cases, the snapshots done by the cursor API
+were bigger than the available RAM and the OS started swapping heavily. Snapshotting
+didn&rsquo;t complete within 15 minutes, so no results are shown above.</p>
+
+<p>Good news is that this didn&rsquo;t happen with the export API, due to the fact that the
+snapshots it creates are much more compact.</p>
+
+<p>Another nice side effect of the speedup is that the first results will arrive much
+earlier in the client application. This will help in reducing client connection timeouts
+in case clients are enforcing them on temporarily non-responding connections.</p>
+
+<h2>Summary</h2>
+
+<p>ArangoDB 2.6 provides a specialized export API for exporting all documents from a
+collection and shipping them to a client application. It is rather limited but
+faster than the general-purpose AQL cursor API and can store its snapshots using less
+memory.</p>
+
+<p>Therefore, exporting all documents from bigger collections calls for using the new
+export API from 2.6 on. The new export API is present in the <code>devel</code> branch, which
+will eventually turn into a 2.6 release.</p>
+
+<p>For other cases, when still using the cursor API, 2.6 will also provide significant
+performance improvements when compared to 2.5. This can be seen from the comparison
+table above and also from the observations made
+<a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">here</a>.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Improvements for the Cursor API]]></title>
@@ -183,6 +338,502 @@ applications. Client programs do not need to be adjusted to reap the benefits. T
 that has changed were the <em>internals</em> of the cursor API. Its public REST interface remains unchanged.</p>
 
 <p>The changes are included in the <code>devel</code> branch and can be tested there.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[AQL Improvements in 2.5]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25/"/>
+    <updated>2015-02-26T10:35:31+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25</id>
+    <content type="html"><![CDATA[<p>Contained in 2.5 are some small but useful AQL language improvements plus several AQL optimizer improvements.</p>
+
+<p>We are working on further AQL improvements for 2.5, but work is still ongoing.
+This post summarizes the improvements that are already completed and will be shipped with the initial ArangoDB
+2.5 release.</p>
+
+<!-- more -->
+
+
+<h1>Language improvements</h1>
+
+<h2>Dynamic attribute names</h2>
+
+<p>Often the need arises to dynamically name object attributes in return values.
+In AQL this was not directly possible so far, though there were some workarounds available to achieve about
+the same result. <a href="https://docs.arangodb.com/cookbook/UsingDynamicAttributeNames.html">This recipe</a> summarizes
+the options that are available to pre-ArangoDB 2.5 users.</p>
+
+<p>With ArangoDB 2.5, dynamic attribute names can be constructed much more easily and flexibly. Object
+attribute names in ArangoDB 2.5 can be specified using static string literals, bind parameters,
+and dynamic expressions.</p>
+
+<p>Dynamic expressions are most interesting, and to disambiguate them from other regular string literal attribute
+names, dynamic attribute names need to be enclosed in square brackets (<code>[</code> and <code>]</code>). I have written about
+that before in <a href="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/">this blog</a>.</p>
+
+<p>Here is an example query that uses the new syntax:</p>
+
+<p><code>plain example query using dynamic attribute names
+FOR i IN [ 17, 23, 42, 83 ]
+  RETURN { [ CONCAT('value-of-', i, ' * ', i) ] : i * i }
+</code></p>
+
+<p>This will produce:</p>
+
+<p>```json query result
+[
+  {</p>
+
+<pre><code>"value-of-17 * 17" : 289 
+</code></pre>
+
+<p>  },
+  {</p>
+
+<pre><code>"value-of-23 * 23" : 529 
+</code></pre>
+
+<p>  },
+  {</p>
+
+<pre><code>"value-of-42 * 42" : 1764 
+</code></pre>
+
+<p>  },
+  {</p>
+
+<pre><code>"value-of-83 * 83" : 6889 
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<h2>Functions added</h2>
+
+<p>The following AQL functions have been added in 2.5:</p>
+
+<ul>
+<li><code>MD5(value)</code>: produces the MD5 hash of <code>value</code></li>
+<li><code>SHA1(value)</code>: produces the SHA1 hash of <code>value</code></li>
+<li><code>RANDOM_TOKEN(length)</code>: produces a pseudo-random string of the specified length.
+ Such strings can be used for id or token generation. Tokens consist only of letters
+ (lower and upper case) plus digits, so they are also URL-safe</li>
+</ul>
+
+
+<h1>Optimizer improvements</h1>
+
+<h2>Optimizer rules</h2>
+
+<p>The following AQL optimizer rules have been added in ArangoDB 2.5:</p>
+
+<ul>
+<li><p><code>propagate-constant-attributes</code></p>
+
+<p>This rule will look inside <code>FILTER</code> conditions for constant value equality comparisons,
+and insert the constant values in other places in <code>FILTER</code>s. For example, the rule will
+insert <code>42</code> instead of <code>i.value</code> in the second <code>FILTER</code> of the following query:</p>
+
+<pre><code>FOR i IN c1 
+  FOR j IN c2 
+    FILTER i.value == 42 
+    FILTER j.value == i.value 
+    RETURN 1
+</code></pre></li>
+<li><p><code>move-calculations-down</code></p>
+
+<p>This rule moves calculations down in the execution plan as far as possible. The intention
+is to move calculations beyond filters, in order to avoid calculations and computations
+for documents that will be filtered away anyway.</p>
+
+<p>If a query contains a lot of computations and a lot of documents will be skipped because
+of filters, this rule might provide a big benefit.</p>
+
+<p>A more detailed example is provided in
+<a href="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/">this post</a>.</p></li>
+</ul>
+
+
+<p>The already existing optimizer rule <code>use-index-for-sort</code> was also improved in the following way:</p>
+
+<ul>
+<li><p>the rule can now remove <code>SORT</code>s also in case a non-sorted index (i.e. a hash index) is used
+for an equality lookup and all sort attributes are covered by the index.</p></li>
+<li><p>the rule can also remove <code>SORT</code>s in case the sort critieria excludes the left-most index attributes,
+but the left-most index attributes are used in a <code>FILTER</code> for equality-only lookups.</p>
+
+<p>Here is an example that will use an existing skiplist index on [ <code>value1</code>, <code>value2</code> ] for sorting,
+removing the extra <code>SORT</code>:</p>
+
+<pre><code>FOR doc IN collection 
+  FILTER doc.value1 == 1 
+  SORT doc.value2 
+  RETURN doc
+</code></pre></li>
+</ul>
+
+
+<h2>Index usage</h2>
+
+<p>The AQL optimizer now supports <a href="https://www.arangodb.com/2015/02/24/sparse-indexes-in-arangodb">sparse indexes</a>,
+a feature added in 2.5.</p>
+
+<p>It will use them automatically in queries when appropriate and when safe. Sparse indexes do exclude certain
+documents purposely, so the optimizer always has to figure out whether it can use a sparse index to satisfy
+a given <code>FILTER</code> condition.</p>
+
+<p>The optimizer will also take into account index selectivity estimates when there are multiple index candidates.</p>
+
+<h2>Estimates</h2>
+
+<p>The optimizer estimates for the number of documents to be returned by a query or a subquery are more accurate
+now for several types of queries. For example, if the optimizer can use a primary key, an edge index, or a hash
+index in a given query part, it will use the index selectivity estimates for calculating the number of return
+documents.</p>
+
+<p>These estimates will be a lot more accurate than the previoulsy hard-coded filtering factors, and can lead to
+better optimizer decisions and reporting (because estimates are returned in <code>explain</code> results, too).</p>
+
+<h2>Memory savings</h2>
+
+<p>Finally, the optimizer will now detect if the data-modification part in a data-modification query
+can be executed in lockstep with the data-retrieval part of the same query. Previously, a data-modification
+query always executed its data-retrieval part first, and then executed its data-modification part.
+This could have resulted in big intermediate result sets which to retrieval part constructed in order
+to pass them to the modification part of the query.</p>
+
+<p>Here&rsquo;s an example query:</p>
+
+<p><code>plain data-modification query
+FOR doc IN test
+  INSERT doc INTO backup
+</code></p>
+
+<p>In the above query, the <code>FOR</code> loop is the retrieval part, and the <code>INSERT</code> is the modification part.
+The optimizer in 2.5 will check if the two parts of the query are independent, and if it turns out they are,
+will execute them in lockstep instead of sequentially.</p>
+
+<p>The execution in lockstep is not necessarily faster than sequential execution, but it can save lots of
+memory if the data-retrieval part constructed big intermediate result sets.</p>
+
+<h1>Miscellaneous changes</h1>
+
+<p>The AQL query execution statistics now also provide an attribute <code>filtered</code>. Its value indicates how many
+documents were filtered by <code>FilterNode</code>s in the AQL query. This can be used as an indicator for whether
+indexes should be added, and for how effective indexes are used for filtering.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Improved Non-unique Hash Indexes in 2.3]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/11/07/improved-non-unique-hash-indexes/"/>
+    <updated>2014-11-07T20:51:12+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/11/07/improved-non-unique-hash-indexes</id>
+    <content type="html"><![CDATA[<p>With ArangoDB 2.3 now getting into the <a href="https://www.arangodb.com/install-beta-version">beta stage</a>,
+it&rsquo;s time to spread the word about new features and improvements.</p>
+
+<p>Today&rsquo;s post will be about the changes made to non-unique hash
+indexes.</p>
+
+<!-- more -->
+
+
+<p>Hash indexes allow looking up documents quickly if the indexed
+attributes are all provided in a search query. They are not
+suitable for range queries, but are the perfect choice if equality
+comparisons are all that&rsquo;s needed.</p>
+
+<p>Hash indexes have been available in ArangoDB ever since. There
+have always been two variants of them:</p>
+
+<ul>
+<li>unique hash indexes</li>
+<li>non-unique hash indexes</li>
+</ul>
+
+
+<p>There wasn&rsquo;t much to be done for unique hash indexes, and so there
+haven&rsquo;t been any changes to them in 2.3. However, the non-unique
+hash indexes were improved significantly in the new version.</p>
+
+<p>The non-unique indexes already performed quite well if most of the
+indexed values were unique and only few repetitions occurred. But their
+performance suffered severly if the indexed attribute values repeated
+a lot &ndash; that is, when the indexed value had a <strong>low cardinality</strong> and thus
+the index had a <strong>low selectivity</strong>.</p>
+
+<p>This was a problem because it slowed down inserting new documents into
+a collection with such an index. And it also slowed down loading collections
+with low cardinality hash indexes.</p>
+
+<p>I am happy to state that in ArangoDB 2.3 this has been fixed, and the insert
+performance of non-unique hash indexes has been improved significantly.
+The index insertion time now scales quite well with the number
+of indexed documents regardless of the cardinality of the indexed
+attribute.</p>
+
+<p>Following are a few measurements of non-unique hash index insertion
+times from ArangoDB 2.3, for different cardinalities of the indexed
+attribute.</p>
+
+<p>The times reported are the net non-unique hash index
+insertion times (the documents were present already, just the index
+was created on them and index creation time was measured).</p>
+
+<p>Let&rsquo;s start with a not too challenging case: indexing documents in
+a collection with 100,000 different index values (<em>cardinality 100,000</em>):</p>
+
+<p><code>text index insertion times for cardinality 100,000
+number of documents:    128,000    =&gt;    time:   0.144 s
+number of documents:    256,000    =&gt;    time:   0.231 s
+number of documents:    512,000    =&gt;    time:   0.347 s
+number of documents:  1,024,000    =&gt;    time:   0.694 s
+number of documents:  2,048,000    =&gt;    time:   1.379 s
+</code></p>
+
+<p>The picture doesn&rsquo;t change much when reducing the cardinality
+by a factor or 10 (i.e. <em>cardinality 10,000</em>):</p>
+
+<p><code>text index insertion times for cardinality 10,000
+number of documents:    128,000    =&gt;    time:   0.169 s
+number of documents:    256,000    =&gt;    time:   0.194 s
+number of documents:    512,000    =&gt;    time:   0.355 s
+number of documents:  1,024,000    =&gt;    time:   0.668 s
+number of documents:  2,048,000    =&gt;    time:   1.325 s
+</code></p>
+
+<p>Let&rsquo;s again divide cardinality by 10 (now <em>cardinality 1,000</em>):</p>
+
+<p><code>text index insertion times for cardinality 1,000
+number of documents:    128,000    =&gt;    time:   0.130 s
+number of documents:    256,000    =&gt;    time:   0.152 s
+number of documents:    512,000    =&gt;    time:   0.261 s
+number of documents:  1,024,000    =&gt;    time:   0.524 s
+number of documents:  2,048,000    =&gt;    time:   0.934 s
+</code></p>
+
+<p><em>Cardinality 100</em>:</p>
+
+<p><code>text index insertion times for cardinality 100
+number of documents:    128,000    =&gt;    time:   0.114 s
+number of documents:    256,000    =&gt;    time:   0.148 s
+number of documents:    512,000    =&gt;    time:   0.337 s
+number of documents:  1,024,000    =&gt;    time:   0.452 s
+number of documents:  2,048,000    =&gt;    time:   0.907 s
+</code></p>
+
+<p><em>Cardinality 10</em>:</p>
+
+<p><code>text index insertion times for cardinality 10
+number of documents:    128,000    =&gt;    time:   0.130 s
+number of documents:    256,000    =&gt;    time:   0.327 s
+number of documents:    512,000    =&gt;    time:   0.239 s
+number of documents:  1,024,000    =&gt;    time:   0.442 s
+number of documents:  2,048,000    =&gt;    time:   0.827 s
+</code></p>
+
+<p>Finally we get to <em>cardinality 1</em>, the definitive indicator
+for the index being absolutely useless. Let&rsquo;s create it anyway,
+for the sake of completeness of this post:</p>
+
+<p><code>text index insertion times for cardinality 1
+number of documents:    128,000    =&gt;    time:   0.130 s
+number of documents:    128,000    =&gt;    time:   0.095 s
+number of documents:    256,000    =&gt;    time:   0.146 s
+number of documents:    512,000    =&gt;    time:   0.246 s
+number of documents:  1,024,000    =&gt;    time:   0.445 s
+number of documents:  2,048,000    =&gt;    time:   0.925 s
+</code></p>
+
+<p>On a side note: all indexed values were numeric. In absolute terms,
+indexing string values will be slower than indexing numbers, but insertion
+should still scale nicely with the number of documents as long as everything
+fits in RAM.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Understanding Where Operations Are Executed]]></title>
+    <link href="http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed/"/>
+    <updated>2014-08-30T22:38:42+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed</id>
+    <content type="html"><![CDATA[<p>I recently had to deal with some data processing operation that took
+about 20 minutes to complete. When looking into this, I found that the
+easiest and most beneficial change to the whole setup was to make the
+operation a <em>server-side</em> operation instead of executing it <em>client-side</em>.</p>
+
+<p>This change reduced the operation&rsquo;s total execution time to a few seconds.</p>
+
+<!-- more -->
+
+
+<p>I can&rsquo;t show the original processing task here, so I&rsquo;ll start with a
+contrived example. Imagine the following <em>for</em> loop inserting 100K documents
+into a collection named <code>test</code>:
+<code>js inserting 100k documents
+for (i = 0; i &lt; 100000; ++i) {
+  db.test.save({ value: i });
+}
+</code>
+Now we only need a client application to execute the operation. As I don&rsquo;t
+have a presentable client application right now, I will use the ArangoShell as
+my client application.</p>
+
+<h2>What&rsquo;s in a for loop?</h2>
+
+<p>Running the above <em>for</em> loop inside the ArangoShell will lead to the loop being
+executed inside the <em>arangosh</em> process.</p>
+
+<p>In order to save a document in the collection, arangosh (our client) must make a
+call to the ArangoDB server. This means issuing an HTTP POST request
+to the server&rsquo;s REST API at <code>/_api/document/?collection=test</code>.
+The server process will receive this request, insert the document, and
+respond with an HTTP status code 201 or 202 to our client.
+The client will then continue the loop until all documents have been inserted.</p>
+
+<p>Now it&rsquo;s easy to see that the simple 3-line loop will issue 100,000 HTTP requests
+in total. This means lots of data being pushed through the network stack(s).
+It is pretty easy to imagine that this will come at a cost.</p>
+
+<p>If we instead execute the above loop directly inside the ArangoDB server, we
+can get rid of all the network overhead. The server has no need to send HTTP
+calls to itself. It can simply execute the 100K inserts and is then done.
+We therefore assume the loop to run somewhat faster when executed server-side.</p>
+
+<p>A quick test on a crap laptop produced the following execution times for running
+the loops:</p>
+
+<ul>
+<li>server-side execution (arangod): 1.34 seconds</li>
+<li>client-side execution (arangosh): 17.32 seconds</li>
+</ul>
+
+
+<p><strong>Ouch</strong>. It looks like the client-server request-response overhead matters.</p>
+
+<p>The following sections deal with how to get rid of some or even all the
+client-server ping pong.</p>
+
+<h2>Graph traversals</h2>
+
+<p>The above <em>for</em> loop example was contrived, but imagine running
+a client-side graph traversal instead. In fact, the original problem mentioned
+in the introduction has been a graph traversal.</p>
+
+<p>The problem of a graph traversal is that is often iterative and highly
+dynamic. Decisions are made during the traversal as nodes are encountered,
+leading to dynamic inclusion or exclusion etc. This means that it makes sense to
+process nodes and edges only when needed, at the point when they are visited.</p>
+
+<p>Even if the client can employ some sort of caching for already visited
+nodes, the client still needs to ask the server about each visited
+node&rsquo;s connections at least once. Otherwise it could not follow them.</p>
+
+<p>This normally means lots of requests and responses. Compare this to the
+<em>single</em> request-response alternative in which a client kicks off a server-side
+traversal, and finally receives the overal result once it is assembled.</p>
+
+<p><strong>Conclusion</strong>: traversals on anything but very small graphs should be run server-side.
+A server-side action (see below) is a good way to do this. Please note that
+running a server-side traversal does not mean giving up flexibility and
+control flow functionality. Server-side traversals remain highly configurable
+through custom JavaScript functions that allow implementation of user-defined
+business logic.</p>
+
+<h2>AQL queries</h2>
+
+<p>We won&rsquo;t have your application send a series of 100,000 individual
+insert statements to the relational database of our choice. We already
+know from the past that this is going to be rather slow, so we have
+learned to avoid this. In the relational context, we rather use SQL queries
+that create or modify many rows in one go, e.g. an <code>INSERT INTO ... SELECT ...</code>,
+bulk inserts etc.</p>
+
+<p>ArangoDB is no different. In general, you should try to avoid issuing lots
+of individual queries to the database from a client application. Instead and if
+the queries look alike, try converting multiple individual operations into a
+single AQL query. This will already save a lot of network overhead.</p>
+
+<p>AQL provides multi-document operations to insert, update, and remove data. An
+overview is given <a href="http://docs.arangodb.org/Aql/DataModification.html">here</a>.</p>
+
+<p>The above 100K inserts from the contrived example can easily be transformed
+into this single AQL query:
+<code>
+FOR i IN 1..100000 INSERT { value: i } INTO test
+</code></p>
+
+<h2>Bulk imports</h2>
+
+<p>For importing larger amounts of documents from files, there is the specialized
+<a href="http://docs.arangodb.org/Arangoimp/README.html">arangoimp</a> import tool. It can
+load data from JSON and CSV files into ArangoDB. The tool is shipped with
+ArangoDB.</p>
+
+<p>ArangoDB also provides a REST API for <a href="http://docs.arangodb.org/HttpBulkImports/README.html">bulk imports</a>
+of documents.</p>
+
+<h2>Joins</h2>
+
+<p>A special note about <em>joins</em>: the fact that several NoSQL databases do not
+provide join functionality has driven some people to emulate join functionality
+on the client-side, in their applications.</p>
+
+<p>This can be a recipe for disaster: client-side join implementation might lead
+to horrendous amounts of queries that might need to be sent to the database for
+fetching all the records. More than that, if data are queried individually,
+the overall result may lack consistency. By the way, the same is true for
+fetching referenced or linked documents.</p>
+
+<p>ArangoDB provides join functionality via AQL queries. Additionally, AQL queries
+can be used to fetch other documents with the original documents. Note that
+ArangoDB has no way of defining references or links between documents, but
+still AQL allows combining arbitrary documents in one query.</p>
+
+<p>In almost all cases it make more sense to use an AQL query that performs
+joins or reference-fetching server-side and close to the data than having to
+deal with that on the application-side of things.</p>
+
+<p>AQL joins are described <a href="http://docs.arangodb.org/AqlExamples/Join.html">here</a>.</p>
+
+<h2>Server-side actions</h2>
+
+<p>With <em>stored procedures</em>, relational databases provide another way for an
+application to trigger the execution of a large amount of queries. Stored
+procedures are executed server-side, too, so they allow avoiding a lot of
+request-response ping pong between the application and the database, at least
+for defined tasks. Additionally, stored procedures provide control flow
+functionality, which can also be handy when operations depend on each other.</p>
+
+<p>Coming back to ArangoDB: complex data-processing tasks that need to execute
+multiple operations or need control flow functionality might benefit if
+converted from multiple application-side operations into a single server-side
+action.</p>
+
+<p>Server-side actions run inside the ArangoDB server, closer to the data, and
+can be much faster than a series of client-side operations.
+A server-side action is called with just one HTTP request from the application,
+so it may lead to saving lots of request-response cycles and reduction in
+network overhead. Apart from that, server-side actions in ArangoDB can employ
+transactions and provide the necessary control over isolation and atomicity
+when executing a series of operations.</p>
+
+<p>Business logic and control flow functionality can be integrated
+easily because server-side actions in ArangoDB are JavaScript functions,
+with all of the language&rsquo;s programming features being available.</p>
+
+<p>But there&rsquo;s even more to it: a single server-side operation can be written
+to put together its result in a format most convenient for the client
+application. This can also lead to better encapsulation, because all an
+application needs to know about a server-side action is its API or contract.
+Any internals of the action can be hidden from the client application. Overall,
+this supports a service-oriented approach.</p>
+
+<p>To learn more about how to write server-side actions, please have a look
+at ArangoDB&rsquo;s <a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a>. It is all
+about making server-side actions available via REST APIs.</p>
 ]]></content>
   </entry>
   
