@@ -1,0 +1,416 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>Updating Documents With Arangoimp - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="Inspired by the feature request in Github issue #1298,
+we added update and replace support for ArangoDB&rsquo;s import facilities. This extends &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/04/14/updating-documents-with-arangoimp">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>Notes on ArangoDB development</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Updating Documents With Arangoimp</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-14T14:55:45+02:00" pubdate data-updated="true">Apr 14<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>Inspired by the feature request in <a href="https://github.com/arangodb/arangodb/issues/1298">Github issue #1298</a>,
+we added update and replace support for ArangoDB&rsquo;s import facilities.</p>
+
+<p>This extends ArangoDB&rsquo;s HTTP REST API for importing documents plus the arangoimp binary so they
+can not only insert new documents but also update existing ones.</p>
+
+<p>Inserts and updates can also be mixed in a single import run.
+This blog post provides a few usage examples.</p>
+
+<!-- more -->
+
+
+<h2>Traditional import</h2>
+
+<p>Previously, the HTTP REST API for importing documents and the arangoimp binary only supported
+document inserts, so they could not be used to update existing documents. Bulk-updating existing
+documents with data from a file or mixing inserts with updates required to write custom scripts
+or run multiple commands or queries.</p>
+
+<p>I won&rsquo;t show this in detail but want to concentrate solely on what the import did. I will only
+show arangoimp and not the HTTP import API.</p>
+
+<p>Let&rsquo;s assume there is already a collection named <em>users</em> containing the following documents:</p>
+
+<figure class='code'><figcaption><span>data in collection before import</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user1&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;John Doe&quot;</span> <span class="p">}</span>
+</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user2&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;Jane Smith&quot;</span> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now, importing the following data via arangoimp would produce errors for line 1 and 2 (i.e.
+for keys <code>user1</code> and <code>user2</code>) because these documents already exist in the target collection:</p>
+
+<figure class='code'><figcaption><span>data to be imported</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user1&quot;</span><span class="p">,</span> <span class="nt">&quot;country&quot;</span> <span class="p">:</span> <span class="s2">&quot;AU&quot;</span> <span class="p">}</span>
+</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user2&quot;</span><span class="p">,</span> <span class="nt">&quot;country&quot;</span> <span class="p">:</span> <span class="s2">&quot;UK&quot;</span> <span class="p">}</span>
+</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user3&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;Joe Public&quot;</span><span class="p">,</span> <span class="nt">&quot;country&quot;</span> <span class="p">:</span> <span class="s2">&quot;ZA&quot;</span> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Here&rsquo;s what happened when importing the above data into the collection with the two existing
+documents:</p>
+
+<pre><code>&gt; arangoimp --file data.json --collection users
+
+2015-04-14T18:23:32Z [27441] WARNING at position 1: creating document failed with error 'unique constraint violated', offending document: {"_key":"user1","country":"AU"}
+2015-04-14T18:23:32Z [27441] WARNING at position 2: creating document failed with error 'unique constraint violated', offending document: {"_key":"user2","country":"UK"}
+
+created:          1
+warnings/errors:  2
+</code></pre>
+
+<p>After the traditional import, the collection contained the following documents:</p>
+
+<figure class='code'><figcaption><span>collection contents after traditional import</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user1&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;John Doe&quot;</span> <span class="p">}</span>
+</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user2&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;Jane Smith&quot;</span> <span class="p">}</span>
+</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user3&quot;</span><span class="p">,</span> <span class="nt">&quot;country&quot;</span> <span class="p">:</span> <span class="s2">&quot;ZA&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;Joe Public&quot;</span> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As can be seen, the first two documents (<code>user1</code> and <code>user2</code>) remain unmodified, and the third
+document (<code>user3</code>) was inserted because it did not yet exist in the target collection.</p>
+
+<h2>Using &mdash;on-duplicate</h2>
+
+<p>So what&rsquo;s the change?</p>
+
+<p>As announced, a single import run can now both insert new documents and update existing ones.
+What exactly will happen is configurable by setting arangoimp&rsquo;s new command-line option
+<code>--on-duplicate</code>.</p>
+
+<p>By default, even in <code>devel</code> there will be errors reported for the two already existing documents.</p>
+
+<p>Good news is that this behavior can be changed by setting <code>--on-duplicate</code> to a value of <code>update</code>,
+<code>replace</code> or <code>ignore</code>:</p>
+
+<ul>
+<li><p><code>error</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
+import will not modify it and instead return an error. This is the default behavior and
+compatible with all previous versions of ArangoDB.</p>
+
+<p>We have seen the result above in the <em>traditional import</em>.</p></li>
+<li><p><code>update</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
+import will (partially) update the existing document with the specified attributes.
+Only the attributes present in the import data will be updated, and all other attributes of
+the document present in the collection will be preserved.</p>
+
+<pre><code>&gt; arangoimp --file data.json --collection users --on-duplicate update
+
+created:          1
+warnings/errors:  0
+updated/replaced: 2
+ignored:          0
+</code></pre>
+
+<p>The first two documents (<code>user1</code> and <code>user2</code>) were updated (attribute <code>country</code>
+was added) and the third document (<code>user3</code>) was inserted because it did not exist in the
+target collection:</p>
+
+<pre><code>{ "_key" : "user1", "country" : "AU", "name" : "John Doe" }
+{ "_key" : "user2", "country" : "UK", "name" : "Jane Smith" } 
+{ "_key" : "user3", "country" : "ZA", "name" : "Joe Public" } 
+</code></pre></li>
+<li><p><code>replace</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
+import will fully replace the existing document with the specified attributes.
+Only the attributes present in the import data will be preserved, and all other attributes of
+the document present in the collection will be removed.</p>
+
+<pre><code>&gt; arangoimp --file data.json --collection users --on-duplicate replace
+
+created:          1
+warnings/errors:  0
+updated/replaced: 2
+ignored:          0
+</code></pre>
+
+<p>The first two documents (<code>user1</code> and <code>user2</code>) were replaced (attribute <code>country</code> was present
+in the import data, previously existing attribute <code>name</code> was removed). The third document
+(<code>user3</code>) was inserted because it did not exist in the target collection before:</p>
+
+<pre><code>{ "_key" : "user1", "country" : "AU" } 
+{ "_key" : "user2", "country" : "UK" } 
+{ "_key" : "user3", "country" : "ZA", "name" : "Joe Public" } 
+</code></pre></li>
+<li><p><code>ignore</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
+import will ignore and not modify it. The difference to <code>error</code> is that ignored documents will
+not be counted as errors. No errors/warnings will be reported for duplicate <code>_key</code> values, but
+the number of duplicate key occurrences will be reported in the <code>ignored</code> attribute</p>
+
+<pre><code>&gt; arangoimp --file data.json --collection users --on-duplicate ignore
+
+created:          1
+warnings/errors:  0
+updated/replaced: 0
+ignored:          2
+</code></pre>
+
+<p>Collection contents are the same as in the <code>error</code> case.</p></li>
+</ul>
+
+
+<p>The above examples were for the arangoimp import binary, but the HTTP import API was adjusted
+as well. The duplicate key behavior can be controlled there by using the new <code>onDuplicate</code> URL
+parameter. Possible values are also <code>error</code>, <code>update</code>, <code>replace</code> and <code>ignore</code> as shown for arangoimp.</p>
+
+<h2>Caveats</h2>
+
+<p>All matching is done using document keys (i.e. <code>_key</code> attributes) and no other attributes. That
+means existing documents can only be updated if their <code>_key</code> attributes are present in the import
+data. When no <code>_key</code> attribute is present for a document in the import data, the import will try
+to insert a new document.</p>
+
+<p>The extended functionality is available in the <code>devel</code> branch, which will eventually turn into
+a stable 2.6 release.</p>
+
+<p><strong>Enjoy!</strong></p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-14T14:55:45+02:00" pubdate data-updated="true">Apr 14<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/04/14/updating-documents-with-arangoimp/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/04/14/updating-documents-with-arangoimp/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/04/04/more-efficient-data-exports/" title="Previous Post: More efficient data exports">&laquo; More efficient data exports</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/04/14/updating-documents-with-arangoimp/">Updating Documents With Arangoimp</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/04/more-efficient-data-exports/">More Efficient Data Exports</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/01/improvements-for-the-cursor-api/">Improvements for the Cursor API</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/27/improvements-for-data-modification-queries/">Improvements for Data-modification Queries</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/03/27/preview-of-the-upsert-command/">Preview of the UPSERT Command</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (14)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (28)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (4)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (2)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (7)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (15)</li><ul class="month_list"><li class="month"><a href='/blog/2015/04/'>APR (3)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

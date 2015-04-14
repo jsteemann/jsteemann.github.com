@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-05T01:12:07+02:00</updated>
+  <updated>2015-04-14T21:00:43+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,176 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Updating Documents With Arangoimp]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/14/updating-documents-with-arangoimp/"/>
+    <updated>2015-04-14T14:55:45+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/14/updating-documents-with-arangoimp</id>
+    <content type="html"><![CDATA[<p>Inspired by the feature request in <a href="https://github.com/arangodb/arangodb/issues/1298">Github issue #1298</a>,
+we added update and replace support for ArangoDB&rsquo;s import facilities.</p>
+
+<p>This extends ArangoDB&rsquo;s HTTP REST API for importing documents plus the arangoimp binary so they
+can not only insert new documents but also update existing ones.</p>
+
+<p>Inserts and updates can also be mixed in a single import run.
+This blog post provides a few usage examples.</p>
+
+<!-- more -->
+
+
+<h2>Traditional import</h2>
+
+<p>Previously, the HTTP REST API for importing documents and the arangoimp binary only supported
+document inserts, so they could not be used to update existing documents. Bulk-updating existing
+documents with data from a file or mixing inserts with updates required to write custom scripts
+or run multiple commands or queries.</p>
+
+<p>I won&rsquo;t show this in detail but want to concentrate solely on what the import did. I will only
+show arangoimp and not the HTTP import API.</p>
+
+<p>Let&rsquo;s assume there is already a collection named <em>users</em> containing the following documents:</p>
+
+<figure class='code'><figcaption><span>data in collection before import</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user1&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;John Doe&quot;</span> <span class="p">}</span>
+</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user2&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;Jane Smith&quot;</span> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now, importing the following data via arangoimp would produce errors for line 1 and 2 (i.e.
+for keys <code>user1</code> and <code>user2</code>) because these documents already exist in the target collection:</p>
+
+<figure class='code'><figcaption><span>data to be imported</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user1&quot;</span><span class="p">,</span> <span class="nt">&quot;country&quot;</span> <span class="p">:</span> <span class="s2">&quot;AU&quot;</span> <span class="p">}</span>
+</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user2&quot;</span><span class="p">,</span> <span class="nt">&quot;country&quot;</span> <span class="p">:</span> <span class="s2">&quot;UK&quot;</span> <span class="p">}</span>
+</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user3&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;Joe Public&quot;</span><span class="p">,</span> <span class="nt">&quot;country&quot;</span> <span class="p">:</span> <span class="s2">&quot;ZA&quot;</span> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Here&rsquo;s what happened when importing the above data into the collection with the two existing
+documents:</p>
+
+<pre><code>&gt; arangoimp --file data.json --collection users
+
+2015-04-14T18:23:32Z [27441] WARNING at position 1: creating document failed with error 'unique constraint violated', offending document: {"_key":"user1","country":"AU"}
+2015-04-14T18:23:32Z [27441] WARNING at position 2: creating document failed with error 'unique constraint violated', offending document: {"_key":"user2","country":"UK"}
+
+created:          1
+warnings/errors:  2
+</code></pre>
+
+<p>After the traditional import, the collection contained the following documents:</p>
+
+<figure class='code'><figcaption><span>collection contents after traditional import</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user1&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;John Doe&quot;</span> <span class="p">}</span>
+</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user2&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;Jane Smith&quot;</span> <span class="p">}</span>
+</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user3&quot;</span><span class="p">,</span> <span class="nt">&quot;country&quot;</span> <span class="p">:</span> <span class="s2">&quot;ZA&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;Joe Public&quot;</span> <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As can be seen, the first two documents (<code>user1</code> and <code>user2</code>) remain unmodified, and the third
+document (<code>user3</code>) was inserted because it did not yet exist in the target collection.</p>
+
+<h2>Using &mdash;on-duplicate</h2>
+
+<p>So what&rsquo;s the change?</p>
+
+<p>As announced, a single import run can now both insert new documents and update existing ones.
+What exactly will happen is configurable by setting arangoimp&rsquo;s new command-line option
+<code>--on-duplicate</code>.</p>
+
+<p>By default, even in <code>devel</code> there will be errors reported for the two already existing documents.</p>
+
+<p>Good news is that this behavior can be changed by setting <code>--on-duplicate</code> to a value of <code>update</code>,
+<code>replace</code> or <code>ignore</code>:</p>
+
+<ul>
+<li><p><code>error</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
+import will not modify it and instead return an error. This is the default behavior and
+compatible with all previous versions of ArangoDB.</p>
+
+<p>We have seen the result above in the <em>traditional import</em>.</p></li>
+<li><p><code>update</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
+import will (partially) update the existing document with the specified attributes.
+Only the attributes present in the import data will be updated, and all other attributes of
+the document present in the collection will be preserved.</p>
+
+<pre><code>&gt; arangoimp --file data.json --collection users --on-duplicate update
+
+created:          1
+warnings/errors:  0
+updated/replaced: 2
+ignored:          0
+</code></pre>
+
+<p>The first two documents (<code>user1</code> and <code>user2</code>) were updated (attribute <code>country</code>
+was added) and the third document (<code>user3</code>) was inserted because it did not exist in the
+target collection:</p>
+
+<pre><code>{ "_key" : "user1", "country" : "AU", "name" : "John Doe" }
+{ "_key" : "user2", "country" : "UK", "name" : "Jane Smith" } 
+{ "_key" : "user3", "country" : "ZA", "name" : "Joe Public" } 
+</code></pre></li>
+<li><p><code>replace</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
+import will fully replace the existing document with the specified attributes.
+Only the attributes present in the import data will be preserved, and all other attributes of
+the document present in the collection will be removed.</p>
+
+<pre><code>&gt; arangoimp --file data.json --collection users --on-duplicate replace
+
+created:          1
+warnings/errors:  0
+updated/replaced: 2
+ignored:          0
+</code></pre>
+
+<p>The first two documents (<code>user1</code> and <code>user2</code>) were replaced (attribute <code>country</code> was present
+in the import data, previously existing attribute <code>name</code> was removed). The third document
+(<code>user3</code>) was inserted because it did not exist in the target collection before:</p>
+
+<pre><code>{ "_key" : "user1", "country" : "AU" } 
+{ "_key" : "user2", "country" : "UK" } 
+{ "_key" : "user3", "country" : "ZA", "name" : "Joe Public" } 
+</code></pre></li>
+<li><p><code>ignore</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
+import will ignore and not modify it. The difference to <code>error</code> is that ignored documents will
+not be counted as errors. No errors/warnings will be reported for duplicate <code>_key</code> values, but
+the number of duplicate key occurrences will be reported in the <code>ignored</code> attribute</p>
+
+<pre><code>&gt; arangoimp --file data.json --collection users --on-duplicate ignore
+
+created:          1
+warnings/errors:  0
+updated/replaced: 0
+ignored:          2
+</code></pre>
+
+<p>Collection contents are the same as in the <code>error</code> case.</p></li>
+</ul>
+
+
+<p>The above examples were for the arangoimp import binary, but the HTTP import API was adjusted
+as well. The duplicate key behavior can be controlled there by using the new <code>onDuplicate</code> URL
+parameter. Possible values are also <code>error</code>, <code>update</code>, <code>replace</code> and <code>ignore</code> as shown for arangoimp.</p>
+
+<h2>Caveats</h2>
+
+<p>All matching is done using document keys (i.e. <code>_key</code> attributes) and no other attributes. That
+means existing documents can only be updated if their <code>_key</code> attributes are present in the import
+data. When no <code>_key</code> attribute is present for a document in the import data, the import will try
+to insert a new document.</p>
+
+<p>The extended functionality is available in the <code>devel</code> branch, which will eventually turn into
+a stable 2.6 release.</p>
+
+<p><strong>Enjoy!</strong></p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[More Efficient Data Exports]]></title>
@@ -4990,168 +5160,6 @@ for the sake of completeness of this post:</p>
 indexing string values will be slower than indexing numbers, but insertion
 should still scale nicely with the number of documents as long as everything
 fits in RAM.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Setting Up Test Data]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/11/04/setting-up-test-data/"/>
-    <updated>2014-11-04T22:14:21+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/11/04/setting-up-test-data</id>
-    <content type="html"><![CDATA[<p>Today I was asked to look at code that was supposed to read data
-from a MySQL data source, process it and then import it into ArangoDB.</p>
-
-<p>To run and debug the code I had to have some MySQL data source. So I
-thought I&rsquo;d quickly set up a simple example table with a few rows.
-It turned out that this took more time than what I had expected.</p>
-
-<p>Maybe I&rsquo;m spoilt by JavaScript-enabled, schema-free databases where
-creating such test setups is so much easier.</p>
-
-<!-- more -->
-
-
-<p>I worked with MySQL databases in production for 10+ years and spent
-much time working with the mysql client. I always liked MySQL, but in
-the past few years, I was driven away from it and lost contact.
-Instead, I got sucked into the NoSQL landscape and enjoy it pretty much.</p>
-
-<p>Getting back to the original problem: I needed some MySQL table with a
-few thousand rows for a test. It turned out I didn&rsquo;t even have MySQL
-installed on my computer, so I needed to install it first.</p>
-
-<p>After setting up the MySQL server, I created a table <code>examples</code> for
-storing my test data:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='sql'><span class='line'><span class="k">CREATE</span> <span class="k">DATABASE</span> <span class="n">test</span><span class="p">;</span>
-</span><span class='line'><span class="n">USE</span> <span class="n">test</span><span class="p">;</span>
-</span><span class='line'><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">examples</span> <span class="p">(</span><span class="n">attribute1</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">),</span> <span class="n">attribute2</span> <span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">20</span><span class="p">));</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Not really the black belt of schema design, but good enough for a quick
-test.</p>
-
-<p>Now the table needed some rows. 100,000 rows should be enough. I wrote
-some bash script to create them as there is no sane way to do this with
-the MySQL client alone:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="k">for </span>i in <span class="sb">`</span>seq 1 100000<span class="sb">`</span>
-</span><span class='line'>  <span class="k">do </span>
-</span><span class='line'><span class="k">    </span><span class="nb">echo</span> <span class="s2">&quot;INSERT INTO examples VALUES (\&quot;test$i\&quot;, \&quot;test$i\&quot;);&quot;</span> &gt;&gt; import.sql
-</span><span class='line'>  <span class="k">done</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Time to import the data!</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>mysql -u user <span class="nb">test</span> &lt; import.sql
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>At first I was a bit surprised this command did not return instantly. I let it
-run for about a minute, and then began checking the import progress with a second mysql
-client. It turned out only very few records had been imported, and the import
-script continued to create only around 30-35 records per second.</p>
-
-<p>Seems I had forgotten that I am working with a No-NoSQL database, with full
-ACID semantics for everything. My import file contained 100,000 <code>INSERT</code>
-statements, so I was asking to perform 100,000 transactions and fsync operations.
-That import would have taken forever with my slow HDD!</p>
-
-<p>I quickly changed the InnoDB setting to make it commit only about once per second:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>mysql&gt; SET GLOBAL <span class="nv">innodb_flush_log_at_trx_commit</span> <span class="o">=</span> 2;
-</span><span class='line'>Query OK, 0 rows affected <span class="o">(</span>0.00 sec<span class="o">)</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Now the import finished in 7 seconds.</p>
-
-<p>I finally got the data in MySQL, but overall it took me about 10 minutes to get
-it done. Probably a bit less if I still were an active user of MySQL and had
-remembered the default behavior right from the start.</p>
-
-<p>Still, my feeling is that it takes too much time to get something so simple
-done.</p>
-
-<p>I don&rsquo;t blame the database for trying to commit all 100,000 single-row
-<code>INSERT</code> operations and fsync them to disk. It simply cannot know if the data
-are important or just throw-away test records.</p>
-
-<p>But there are other reasons: I had to write a bash script to produce the
-test data, as there is no sane way to do this with the MySQL client alone.
-Writing bash scripts is fine, and in general I like it, but I don&rsquo;t want to
-do it for a dead-simple test setup.</p>
-
-<p>And by the way, what if it turns out that I need to generate slightly more
-complex test data? In the MySQL case I probably would have resorted to sed
-or awk or would have thrown away my bash script and had rewritten it in some
-other language. So I would have wasted even more time.</p>
-
-<p>I personally prefer the ability to use a scripting language for such tasks.
-JavaScript is ubiquituous these days, and I want to use it in a database&rsquo;s
-command-line client.</p>
-
-<p>For example, here&rsquo;s how the test setup would look like in the ArangoShell:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;examples&quot;</span><span class="p">);</span>
-</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="mi">100000</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">db</span><span class="p">.</span><span class="nx">examples</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">attribute1</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">attribute2</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span> <span class="p">});</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>I find this much easier to use: it allows to do everything in one place,
-removing the need to write another script that prepares a data file or an
-SQL file first.</p>
-
-<p>As a bonus, using a programming language is much more flexible and powerful.
-If I needed to generate slightly more complex test data, I can just do it,
-adjust the JavaScript code and re-run it.</p>
-
-<p>Even more annoying to me is that I needed to provide a schema for the
-table first. I could have got away with declaring all text fields as
-<code>VARCHAR(255)</code> or <code>TEXT</code> so I can at least ignore string
-length restrictions. But I still need to type in the table schema
-once, even if it feels completely useless for this particular use case.</p>
-
-<p>It would get even more annoying if during my test I noticed I needed more
-or other columns. Then I would need to adjust the table schema using <code>ALTER TABLE</code>
-or adjust the <code>CREATE TABLE</code> statement and run it again, keeping me
-away from the original task.</p>
-
-<p>Maybe using schema-free databases for too long has spoilt me, but I much
-more prefer starting quickly and without a schema. I know the data that
-I am going to load will have a structure and will be somewhat self-describing,
-so the database can still figure out what the individual parts of a record are.</p>
-
-<p><em>On a side-note: should you be a fan of using query languages, the same
-test setup can also be achieved by running the following AQL query from
-the ArangoShell</em>:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="s2">&quot;FOR i IN 1..100000 LET value = CONCAT(&#39;test&#39;, i) &quot;</span> <span class="o">+</span>
-</span><span class='line'>          <span class="s2">&quot;INSERT { attribute1: value, attribute2: value } INTO examples&quot;</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
 ]]></content>
   </entry>
   

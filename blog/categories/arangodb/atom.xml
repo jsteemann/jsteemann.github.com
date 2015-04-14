@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-05T01:12:07+02:00</updated>
+  <updated>2015-04-14T21:00:43+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,168 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Updating Documents With Arangoimp]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/14/updating-documents-with-arangoimp/"/>
+    <updated>2015-04-14T14:55:45+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/14/updating-documents-with-arangoimp</id>
+    <content type="html"><![CDATA[<p>Inspired by the feature request in <a href="https://github.com/arangodb/arangodb/issues/1298">Github issue #1298</a>,
+we added update and replace support for ArangoDB&rsquo;s import facilities.</p>
+
+<p>This extends ArangoDB&rsquo;s HTTP REST API for importing documents plus the arangoimp binary so they
+can not only insert new documents but also update existing ones.</p>
+
+<p>Inserts and updates can also be mixed in a single import run.
+This blog post provides a few usage examples.</p>
+
+<!-- more -->
+
+
+<h2>Traditional import</h2>
+
+<p>Previously, the HTTP REST API for importing documents and the arangoimp binary only supported
+document inserts, so they could not be used to update existing documents. Bulk-updating existing
+documents with data from a file or mixing inserts with updates required to write custom scripts
+or run multiple commands or queries.</p>
+
+<p>I won&rsquo;t show this in detail but want to concentrate solely on what the import did. I will only
+show arangoimp and not the HTTP import API.</p>
+
+<p>Let&rsquo;s assume there is already a collection named <em>users</em> containing the following documents:</p>
+
+<p><code>json data in collection before import
+{ "_key" : "user1", "name" : "John Doe" }
+{ "_key" : "user2", "name" : "Jane Smith" }
+</code></p>
+
+<p>Now, importing the following data via arangoimp would produce errors for line 1 and 2 (i.e.
+for keys <code>user1</code> and <code>user2</code>) because these documents already exist in the target collection:</p>
+
+<p><code>json data to be imported
+{ "_key" : "user1", "country" : "AU" }
+{ "_key" : "user2", "country" : "UK" }
+{ "_key" : "user3", "name" : "Joe Public", "country" : "ZA" }
+</code></p>
+
+<p>Here&rsquo;s what happened when importing the above data into the collection with the two existing
+documents:</p>
+
+<pre><code>&gt; arangoimp --file data.json --collection users
+
+2015-04-14T18:23:32Z [27441] WARNING at position 1: creating document failed with error 'unique constraint violated', offending document: {"_key":"user1","country":"AU"}
+2015-04-14T18:23:32Z [27441] WARNING at position 2: creating document failed with error 'unique constraint violated', offending document: {"_key":"user2","country":"UK"}
+
+created:          1
+warnings/errors:  2
+</code></pre>
+
+<p>After the traditional import, the collection contained the following documents:</p>
+
+<p><code>json collection contents after traditional import
+{ "_key" : "user1", "name" : "John Doe" }
+{ "_key" : "user2", "name" : "Jane Smith" }
+{ "_key" : "user3", "country" : "ZA", "name" : "Joe Public" }
+</code></p>
+
+<p>As can be seen, the first two documents (<code>user1</code> and <code>user2</code>) remain unmodified, and the third
+document (<code>user3</code>) was inserted because it did not yet exist in the target collection.</p>
+
+<h2>Using &mdash;on-duplicate</h2>
+
+<p>So what&rsquo;s the change?</p>
+
+<p>As announced, a single import run can now both insert new documents and update existing ones.
+What exactly will happen is configurable by setting arangoimp&rsquo;s new command-line option
+<code>--on-duplicate</code>.</p>
+
+<p>By default, even in <code>devel</code> there will be errors reported for the two already existing documents.</p>
+
+<p>Good news is that this behavior can be changed by setting <code>--on-duplicate</code> to a value of <code>update</code>,
+<code>replace</code> or <code>ignore</code>:</p>
+
+<ul>
+<li><p><code>error</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
+import will not modify it and instead return an error. This is the default behavior and
+compatible with all previous versions of ArangoDB.</p>
+
+<p>We have seen the result above in the <em>traditional import</em>.</p></li>
+<li><p><code>update</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
+import will (partially) update the existing document with the specified attributes.
+Only the attributes present in the import data will be updated, and all other attributes of
+the document present in the collection will be preserved.</p>
+
+<pre><code>&gt; arangoimp --file data.json --collection users --on-duplicate update
+
+created:          1
+warnings/errors:  0
+updated/replaced: 2
+ignored:          0
+</code></pre>
+
+<p>The first two documents (<code>user1</code> and <code>user2</code>) were updated (attribute <code>country</code>
+was added) and the third document (<code>user3</code>) was inserted because it did not exist in the
+target collection:</p>
+
+<pre><code>{ "_key" : "user1", "country" : "AU", "name" : "John Doe" }
+{ "_key" : "user2", "country" : "UK", "name" : "Jane Smith" } 
+{ "_key" : "user3", "country" : "ZA", "name" : "Joe Public" } 
+</code></pre></li>
+<li><p><code>replace</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
+import will fully replace the existing document with the specified attributes.
+Only the attributes present in the import data will be preserved, and all other attributes of
+the document present in the collection will be removed.</p>
+
+<pre><code>&gt; arangoimp --file data.json --collection users --on-duplicate replace
+
+created:          1
+warnings/errors:  0
+updated/replaced: 2
+ignored:          0
+</code></pre>
+
+<p>The first two documents (<code>user1</code> and <code>user2</code>) were replaced (attribute <code>country</code> was present
+in the import data, previously existing attribute <code>name</code> was removed). The third document
+(<code>user3</code>) was inserted because it did not exist in the target collection before:</p>
+
+<pre><code>{ "_key" : "user1", "country" : "AU" } 
+{ "_key" : "user2", "country" : "UK" } 
+{ "_key" : "user3", "country" : "ZA", "name" : "Joe Public" } 
+</code></pre></li>
+<li><p><code>ignore</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
+import will ignore and not modify it. The difference to <code>error</code> is that ignored documents will
+not be counted as errors. No errors/warnings will be reported for duplicate <code>_key</code> values, but
+the number of duplicate key occurrences will be reported in the <code>ignored</code> attribute</p>
+
+<pre><code>&gt; arangoimp --file data.json --collection users --on-duplicate ignore
+
+created:          1
+warnings/errors:  0
+updated/replaced: 0
+ignored:          2
+</code></pre>
+
+<p>Collection contents are the same as in the <code>error</code> case.</p></li>
+</ul>
+
+
+<p>The above examples were for the arangoimp import binary, but the HTTP import API was adjusted
+as well. The duplicate key behavior can be controlled there by using the new <code>onDuplicate</code> URL
+parameter. Possible values are also <code>error</code>, <code>update</code>, <code>replace</code> and <code>ignore</code> as shown for arangoimp.</p>
+
+<h2>Caveats</h2>
+
+<p>All matching is done using document keys (i.e. <code>_key</code> attributes) and no other attributes. That
+means existing documents can only be updated if their <code>_key</code> attributes are present in the import
+data. When no <code>_key</code> attribute is present for a document in the import data, the import will try
+to insert a new document.</p>
+
+<p>The extended functionality is available in the <code>devel</code> branch, which will eventually turn into
+a stable 2.6 release.</p>
+
+<p><strong>Enjoy!</strong></p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[More Efficient Data Exports]]></title>
@@ -708,121 +870,6 @@ to use the <code>UPSERT</code> command for inserts&hellip;</p>
 <p><code>UPSERT</code> is currently available in the <code>devel</code> branch of ArangoDB. This branch
 will eventually become release 2.6. Until then, everyone is welcome to try it out and
 provide feedback.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Analyzing Git Commits With ArangoDB]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb/"/>
-    <updated>2015-03-11T12:37:58+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb</id>
-    <content type="html"><![CDATA[<p>I often find myself searching for certain commits using <code>git log</code> and friends. While I really love
-the power and flexibility that come with the git and other Unix command-line tools, sometimes it can be more
-convenient to use a database to filter and aggregate commit data.</p>
-
-<p>I gave it a quick try yesterday and imported the commit history of ArangoDB&rsquo;s Git repository into ArangoDB
-and ran some queries on the data. While the query results for our repository may not be interesting for everyone,
-I think it is still worth sharing what I did. Even though I didn&rsquo;t try it, I think the overall procedure is
-applicable with any other Git repository.</p>
-
-<!-- more -->
-
-
-<h2>Converting the Git history to JSON</h2>
-
-<p>The way to extract history and commit data from a local repository is to use <code>git log</code>. Though its output
-is greatly customizable, it does not provide an out-of-the-box solution for producing JSON. So I wrote a simple
-wrapper script (in PHP) around it. The script can be found <a href="https://gist.github.com/jsteemann/65ef221646449713b2c5">here</a>.</p>
-
-<p>Here&rsquo;s how to run it:
-<code>bash converting the git history to JSON
-cd path/to/local/git-repository
-wget https://gist.githubusercontent.com/jsteemann/65ef221646449713b2c5/raw/fef22c729e01dd0777b378ac1e17e951ea47c7dd/git-log-to-json.php
-php git-log-to-json.php &gt; arango-commits-master-201503.json
-</code></p>
-
-<p>The script may run a few minutes on bigger repositories such as ours. In the end, it should produce a JSON
-file named <code>arango-commits-master-201503.json</code>.</p>
-
-<p>I have also uploaded the JSON file <a href="/downloads/code/arango-commits-master-201503.json">here</a>. Note that the
-file only contains commits from the <code>master</code> branch and not all commits done in ArangoDB in total.</p>
-
-<h2>Importing the commits into ArangoDB</h2>
-
-<p>The simplest way to get the commits into ArangoDB is to use <code>arangoimp</code>:</p>
-
-<p><code>bash importing the commits into ArangoDB
-arangoimp                                   \
-  --collection commits                      \
-  --create-collection true                  \
-  --file arango-commits-master-201503.json  \
-  --overwrite true                          \
-  --batch-size 32000000
-</code></p>
-
-<p>This should have imported all the commits into a collection <code>commits</code> in the default database.</p>
-
-<h2>Querying the commit logs</h2>
-
-<p>Following are a few example queries that I ran on the data from the ArangoShell.
-As mentioned before, it should be possible to run the queries for other repositories' data.</p>
-
-<p><code>js getting all contributors
-query = 'FOR commit IN commits COLLECT author = commit.author.name RETURN author';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving the total number of commits
-query = 'FOR commit IN commits COLLECT WITH COUNT INTO count RETURN count';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving the number of commits by contributor
-query = 'FOR commit IN commits COLLECT author = commit.author.name WITH COUNT INTO count RETURN { author: author, count: count }';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving the tagged commits
-query = 'FOR commit IN commits FILTER commit.tag != null SORT commit.date RETURN KEEP(commit, [ "date", "message", "tag" ])';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving number of commits per year
-query = 'FOR commit IN commits COLLECT year = DATE_YEAR(commit.date) WITH COUNT INTO count RETURN { year: year, count: count }';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving number of commits per month / year
-query = 'FOR commit IN commits COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date)  WITH COUNT INTO count RETURN { month: CONCAT(year, "/", month), count: count }';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving number of commits per weekday
-query = 'FOR commit IN commits COLLECT day = DATE_DAYOFWEEK(commit.date) WITH COUNT INTO count RETURN { day: TRANSLATE(day, { "0": "Sunday", "1": "Monday", "2": "Tuesday", "3": "Wednesday", "4": "Thursday", "5": "Friday", "6": "Saturday" }), count: count }';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving commits with string "issue #" in commit message
-query = 'FOR commit IN commits FILTER LIKE(commit.message, "%issue #%") SORT commit.date DESC LIMIT 10 RETURN UNSET(commit, "files")';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving number of commits related to Foxx
-query = 'FOR commit IN commits FILTER LIKE(LOWER(commit.message), "%foxx%") COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date) WITH COUNT INTO count RETURN { month: CONCAT(year, "/", month), count: count }';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving commits that touched the most files
-query = 'FOR commit IN commits LET count = LENGTH(commit.files || []) SORT count DESC LIMIT 10 RETURN MERGE(UNSET(commit, "files"), { files: count })';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving files modified most often
-query = 'FOR commit IN commits FOR filename IN commit.files || [] COLLECT file = filename WITH COUNT INTO count SORT count DESC LIMIT 10 RETURN { file: file, count: count }';
-db._query(query).toArray();
-</code></p>
-
-<p>Enjoy!</p>
 ]]></content>
   </entry>
   
