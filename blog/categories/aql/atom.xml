@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-14T21:00:43+02:00</updated>
+  <updated>2015-04-21T12:35:40+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,453 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Creating Highscore Lists]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/20/creating-highscore-lists/"/>
+    <updated>2015-04-20T20:18:59+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/20/creating-highscore-lists</id>
+    <content type="html"><![CDATA[<p>I just came across a question about how to create highscore lists or
+leaderboards in ArangoDB, and how they would work when compared to
+<a href="http://redis.io/topics/data-types-intro#sorted-sets">Redis sorted sets</a>.</p>
+
+<p>This blog post tries to give an answer on the topic and also detailed
+instructions and queries for setting up highscore lists with ArangoDB.</p>
+
+<!-- more -->
+
+
+<h2>A highscore list in Redis</h2>
+
+<p>Highscore lists are normally used to quickly determine who&rsquo;s currently at
+the top, so we obviously need some sorted data structure.</p>
+
+<p>Redis has a specialized datatype named <em>sorted set</em> which can be used for
+exactly this purpose. A sorted set in Redis is a value consisting of multiple
+key/value pairs, and that is automatically sorted by values. The sorted
+set is stored under a key so it can be accessed as a whole.</p>
+
+<p>Here&rsquo;s how one would create a sorted set named <code>highscores</code> and populate
+it with 5 key/value pairs in Redis (using <em>redis-cli</em>):</p>
+
+<p>```plain creating a sorted set in Redis</p>
+
+<blockquote><p>ZADD highscores frank 50 jan 20 willi 35 thomas 75 ingo 60
+```</p></blockquote>
+
+<p>Adding a new entry to a sorted set is done using <code>ZADD</code> too.
+Inserting into a Redis sorted set has logarithmic complexity.</p>
+
+<p>Updating a score in the sorted set is done using <code>ZINCRBY</code>. This command works
+regardless of whether the to-be-updated key already exists in the sorted set.
+If it exists, its score will be increased by the specified value, and if it does
+not exist, it will be created with the specified value:</p>
+
+<p>```plain updating a value in a sorted set</p>
+
+<blockquote><p>ZINCRBY highscores 80 max
+(integer) 1
+```</p></blockquote>
+
+<p>In this case the return value <code>1</code> indicates that a new key was added to the set
+and that it didn&rsquo;t update an existing one.</p>
+
+<p>Querying the entries with the lowest scores from a Redis sorted set is trivial.</p>
+
+<p>The <code>ZRANGE</code> command will query the entries in the sorted set from lowest to
+highest score. As the entries are already stored in sorted order, this is very
+efficient.</p>
+
+<p>The following command queries the bottom 3 keys from the sorted set:</p>
+
+<p><code>plain querying the sorted set, from lowest to highest
+ZRANGE highscores 0 2
+1) "jan"
+2) "willi"
+3) "frank"
+</code></p>
+
+<p>For querying in reverse order, there is <code>ZREVRANGE</code>. Both commands can be
+accompanied by the <code>WITHSCORES</code> flag to also return the associated values (i.e.
+the scores). Here are the top 3 key/value pairs in the sorted set:</p>
+
+<p>```plain querying the sorted set, from highest to lowest and with scores</p>
+
+<blockquote><p>ZREVRANGE highscores 0 2 WITHSCORES
+1) &ldquo;max&rdquo;
+2) &ldquo;80&rdquo;
+3) &ldquo;thomas&rdquo;
+4) &ldquo;70&rdquo;
+5) &ldquo;ingo&rdquo;
+6) &ldquo;60&rdquo;
+```</p></blockquote>
+
+<p>For removing an entry from a sorted set there is <code>ZREM</code>:</p>
+
+<p>```plain removing a key from a sorted set</p>
+
+<blockquote><p>ZREM highscores jan
+(integer) 1
+```</p></blockquote>
+
+<p>There are many more specialized Redis commands for working with sorted sets. The
+<a href="http://redis.io/commands">Redis commands</a> prefixed with a <code>Z</code> are sorted set
+commands.</p>
+
+<h2>A highscore list in ArangoDB</h2>
+
+<p>Now let&rsquo;s try to mimic that with ArangoDB.</p>
+
+<p>In ArangoDB, there is no such thing as a sorted set and no direct equivalent.
+Instead, data in ArangoDB are stored in collections. Collections are a
+general-purpose storage mechanism and they are not limited to storing just
+scores.</p>
+
+<p>We also need a mechanism for keeping highscores sorted. By default, no
+specific sort order is maintained for data in a collection. To have the
+collection entries sorted by highscore values, we have to explicitly create
+a (sorted) skiplist index on some attribute. We&rsquo;ll use an attribute named
+<code>score</code> for this.</p>
+
+<p>The following shell commands create the collection and the index on <code>score</code>:</p>
+
+<p><code>js creating the highscores collection in ArangoDB
+db._create("highscores");
+db.highscores.ensureIndex({ type: "skiplist", fields: [ "score" ] });
+</code></p>
+
+<p>Once the collection is set up, we can switch to AQL for the following operations
+(though we could achieve the same with Shell commands).</p>
+
+<p>To insert the same initial data as in the Redis case, we can run the following
+five AQL queries:</p>
+
+<p><code>plain inserting initial scores
+INSERT { _key: "frank", score: 50 } IN highscores
+INSERT { _key: "jan", score: 20 } IN highscores
+INSERT { _key: "willi", score: 35 } IN highscores
+INSERT { _key: "thomas", score: 75 } IN highscores
+INSERT { _key: "ingo", score: 60 } IN highscores
+</code></p>
+
+<p>Note that I have been using the <code>_key</code> attribute for saving the user id. Using the
+<code>_key</code> attribute is normally beneficial because it is the collection&rsquo;s primary key.
+It is always present and automatically unique, so exactly what we need for maintaining
+a highscore list. Note that there are some restrictions for what can be stored inside
+the <code>_key</code> attribute, but as long as values are only ASCII letters or digits, there
+is nothing to worry about.</p>
+
+<p>Inserting into the collection will also automatically populate the indexes.
+Inserting into a skiplist should have about logarithmic complexity on average
+(though this is not guaranteed &ndash; this is because the skiplist is a probabilistic
+data structure and internally it will be flipping coins. In theory there is a chance
+that it becomes badly balanced. But in practice it should be quite close to an
+average logarithmic complexity).</p>
+
+<p>As we have some initial documents, we can now query the lowest and highest scores.
+This will also be efficient as the queries will use the sorted index on <code>score</code>:</p>
+
+<p><code>plain querying the users with lowest scores
+FOR h IN highscores
+  SORT h.score ASC
+  LIMIT 3
+  RETURN { user: h._key, score: h.score }
+</code></p>
+
+<p><code>plain querying the users with highest scores
+FOR h IN highscores
+  SORT h.score DESC
+  LIMIT 3
+  RETURN { user: h._key, score: h.score }
+</code></p>
+
+<p>To store a highscore for a user without knowing in advance whether a value has already
+been stored before for this user, one can use <code>UPSERT</code>. The <code>UPSERT</code> will either insert
+a new highscore entry, or update an existing one if already present:</p>
+
+<p><code>plain using UPSERT
+UPSERT { _key: "max" }
+  INSERT { _key: "max", score: 80 }
+  UPDATE { score: OLD.score + 80 } IN highscores
+  RETURN { user: NEW._key, score: NEW.score }
+</code></p>
+
+<p>If there is already an entry with a key <code>max</code>, its scores will be increased by 80.
+If such entry does not exist, it will be created. In both cases, the new score will
+be returned.</p>
+
+<p>Note: the <code>UPSERT</code> command has been added in ArangoDB version 2.6.</p>
+
+<p>Finally, removing an entry from a highscore list is a straight-forward remove operation:</p>
+
+<p><code>plain removing an element
+REMOVE { _key: "jan" } IN highscores
+</code></p>
+
+<h2>Extensions</h2>
+
+<p>We&rsquo;ll now build on this simple example and create slightly more advanced highscore list
+use cases. The following topics will be covered:</p>
+
+<ul>
+<li>multi-game highscore lists</li>
+<li>joining data</li>
+<li>maintaining a &ldquo;last updated&rdquo; date</li>
+</ul>
+
+
+<h3>Multi-game highscore lists</h3>
+
+<p>We&rsquo;ll start with generalizing the single-game highscore list into a multi-game
+highscore list.</p>
+
+<p>In Redis, one would create multiple sorted sets for handling the highscore lists of
+multiple games. Multiple Redis sorted sets are stored under different keys, so they
+are isolated from each other.</p>
+
+<p>Though Redis provides a few commands to aggregate data from multiple sorted sets
+(<code>ZUNIONSTORE</code> and <code>ZINTERSTORE</code>) into a new sorted set, other cross-set operations are
+not supported. This is not a problem if the client application does not have to
+perform cross-set queries or cleanup tasks.</p>
+
+<p>In ArangoDB, multi-game highscore lists can be implemented in two variants.<br/>
+In order to decide which variant is better suited, we need to be clear about whether
+all highscores should be stored in the same collection or if we prefer using multiple
+collections (e.g. one per game).</p>
+
+<p>Storing highscores for different games in separate collections has the advantage that
+they&rsquo;re really isolated. It is easy to get rid of a specific highscore list by simply
+dropping its collection. It is also easy to get right query-wise.</p>
+
+<p>All that needs to be changed to turn the above examples into a multi-game highscore
+list solution is to change the hard-coded collection name <code>highscores</code> and make it a
+bind parameter, so the right collection name can be injected by the client application
+easily.</p>
+
+<p>On the downside, the multi-collection solution will make cross-game operations difficult.
+Additionally, having one collection per game may get out of hand when there are many,
+many highscore lists to maintain. In case there are many but small highscore lists to
+maintain, it might be better to put them into a single collection and add a <code>game</code>
+attribute to tell the individual lists apart in it.</p>
+
+<p>Let&rsquo;s focus on this and put all highscores of all games into a single collection.</p>
+
+<p>The first adjustment that needs to be made is that we cannot use <code>_key</code> for user ids
+anymore. This is because user ids may repeat now (a user may be contained in more than
+one list). So we will change the design and make the combination of <code>game</code> and <code>user</code>
+a new unique key:</p>
+
+<p><code>js creating a multi-game highscore collection
+db._drop("highscores");
+db._create("highscores");
+db.highscores.ensureIndex({ type: "hash", unique: true, fields: [ "user", "game" ] });
+db.highscores.ensureIndex({ type: "skiplist", fields: [ "game", "score" ] });
+</code></p>
+
+<p>We can use the unique hash index on <code>user</code> and <code>game</code> to ensure there is at most one entry
+for per user per game. It also allows use to find out quickly whether we already have
+an entry for that particular combination of game and user. Because we are not using
+<code>_key</code> we could now also switch to numeric ids if we preferred that.</p>
+
+<p>The other index on <code>game</code> and <code>score</code> is sorted. It can be used to quickly retrieve the
+leaderboard for a given game. As it is primarily sorted by <code>game</code>, it can also be used
+to enumerate all entries for a given game.</p>
+
+<p>The following Shell command populates the multi-game highscores collection with 55,000
+highscores:</p>
+
+<p>```js populating the multi-game collection
+for (var game = 0; game &lt; 10; ++game) {
+  for (var user = 0; user &lt; (game + 1) * 1000; ++user) {</p>
+
+<pre><code>db.highscores.save({ 
+  game: game, 
+  user: String(user),
+  score: (game + user) % 997  /* arbitrary score */
+}); 
+</code></pre>
+
+<p>  }
+}
+```</p>
+
+<p>The game ids used above are between 0 and 9, though any other game ids would work, too.
+User ids are stringified numbers.</p>
+
+<p>We can now find out the leaderboard for game 2 with the following adjusted AQL query.
+The query will use the (sorted) skiplist index:</p>
+
+<p><code>plain querying the leaderboard of a specific game
+FOR h IN highscores
+  FILTER h.game == 2
+  SORT h.score DESC
+  LIMIT 3
+  RETURN { user: h.user, score: h.score }
+</code></p>
+
+<p>Removing all scores for a specific game is also efficient due to the the same index:</p>
+
+<p><code>plain removing all scores for game 5
+FOR h IN highscores
+  FILTER h.game == 5
+  REMOVE h IN highscores
+</code></p>
+
+<p>On a side note: when storing all highscores in the same collection, we could also
+run cross-game queries if we wanted to. All that needs to be done for this is adjusting
+the <code>FILTER</code> conditions in the queries.</p>
+
+<p>Inserting or updating a user score can be achieved using an <code>UPSERT</code>.
+Here&rsquo;s a query to increase the score of user <code>"1571"</code> in game <code>2</code> by a value of 5:</p>
+
+<p><code>plain updating a score for a specific user/game combination
+UPSERT { game: 2, user: "1571" }
+  INSERT { game: 2, user: "1571", score: 5 }
+  UPDATE { score: OLD.score + 5 } IN highscores
+  RETURN { user: NEW._key, score: NEW.score }
+</code></p>
+
+<p>The same index on <code>[ "user", "game" ]</code> is used in the following query that will
+delete the highscore of a given user in a specific game:</p>
+
+<p><code>plain removing a score for a specific user/game combination
+FOR h IN highscores
+  FILTER h.game == 6
+  FILTER h.user == '3894'
+  REMOVE h IN highscores
+</code></p>
+
+<h3>Joining data</h3>
+
+<p>Querying the leaderboard for a specific game was easy. However, so far we have only
+queried user ids and associated scores in games. In reality, we probably want to display
+some more user information in a leaderboard, for example their screen names.</p>
+
+<p>In Redis, no extra information can be stored in sorted sets. So extra user information
+must be stored under separate keys. There is no concept of joins in Redis. The scores
+contained in the sorted set need to be queried by the client application, and extra
+user information have to be queried by the client application separately.</p>
+
+<p>In ArangoDB, we could store the screen names in the highscores collection along with
+the highscores so we can easily query them with the leaderboard query. This is also how it
+would be done in MongoDB due to the absence of joins there.</p>
+
+<p>While this would work, it will create lots of redundant data if the screen names are
+also used and stored elsewhere.</p>
+
+<p>So let&rsquo;s pick the option that stores highscores and screen names in separate places,
+and brings them together only when needed in a leaderboard query.</p>
+
+<p>Let&rsquo;s store screen names in a collection named <code>users</code>. The following Shell commands
+will create the collection and set up 100K users with dummy screen names:</p>
+
+<p>```js creating test users
+db._create(&ldquo;users&rdquo;);
+for (var i = 0; i &lt; 100000; ++i) {
+  db.users.insert({</p>
+
+<pre><code>_key: String(i), 
+name: "test user #" + i 
+</code></pre>
+
+<p>  });
+}
+```</p>
+
+<p>We can now query the highscores plus the screen name in one go:</p>
+
+<p>```plain joining highscores with user data
+FOR h IN highscores
+  FILTER h.game == 2
+  SORT h.score DESC
+  LIMIT 3
+  FOR u IN users</p>
+
+<pre><code>FILTER h.user == u._key 
+RETURN { user: h.user, name: u.name, score: h.score } 
+</code></pre>
+
+<p>```</p>
+
+<h3>Maintaining a &ldquo;last updated&rdquo; date</h3>
+
+<p>Finally, let&rsquo;s try to keep track of when a highscore was last updated. There are
+a few use cases for this, for example displaying the date and time of when a highscore
+was achieved or for revmoing older highscores.</p>
+
+<p>In Redis, the sorted set values are just the numeric scores, so we cannot store
+anything else (such as a date) inside the sorted sets. We would really need to store
+the update date for each highscore entry outside the sorted set, either under a
+separate key, or using a Redis hash. However, this is complex to manage and keep
+consistent so we won&rsquo;t do it.</p>
+
+<p>For implementing the automatic expiration, it would be good if we could use the
+built-in automatic key expiration of Redis. Each key can optionally be given a time-to-live
+or an expiration date, and it will automatically expire and vanish then without further
+ado. This may be exactly what we need to remove older highscore entries, but we cannot
+use it. The reason is that expiration only works for keys at the top level, but not
+for individual keys inside a sorted set. So we cannot really implement this sanely.</p>
+
+<p>Let&rsquo;s switch to ArangoDB now. Here we work with arbitrarily structured documents.
+That means we can store any other attributes along with a highscore. We can store the
+timestamp of when a highscore was last set or updated in an attribute named <code>date</code>:</p>
+
+<p><code>plain storing the date of last update
+LET now = DATE_NOW()
+UPSERT { game: 2, user: "1571" }
+  INSERT { game: 2, user: "1571", score: 10, date: now }
+  UPDATE { score: OLD.score + 10, date: now } IN highscores
+  RETURN { user: NEW._key, score: NEW.score }
+</code></p>
+
+<p>The <code>date</code> attribute can now be used for display purposes already.</p>
+
+<p>We can also use the <code>date</code> attribute for identifying the oldest entries in the
+highscore list in case we want the list to be periodically cleaned up.</p>
+
+<p>Obviously we will be indexing <code>date</code> for this, but we need to decide whether we want to use
+the same expiration periods for all games, or if we want to use game-specific expirations.</p>
+
+<p>If the expiration date is the same for all games, then we can index just <code>date</code>:</p>
+
+<p><code>js creating the index on date
+db.highscores.ensureIndex({ type: "skiplist", fields: [ "date" ] });
+</code></p>
+
+<p>If we now want to remove entries older than roughly 2 days, regardless of the
+associated game, the removal query looks like this:</p>
+
+<p><code>plain deleting oldest entries
+LET compare = DATE_NOW() - 2 * 86400 * 1000
+FOR h IN highscores
+  FILTER h.date &lt; compare
+  LIMIT 1000
+  REMOVE h IN highscores
+</code></p>
+
+<p>If we instead want to find (and remove) the oldest entries for individual games,
+we need to create the index on <code>game</code> and <code>date</code>:</p>
+
+<p><code>js creating the index on game and date
+db.highscores.ensureIndex({ type: "skiplist", fields: [ "game", "date" ] });
+</code></p>
+
+<p>This index allows to efficiently get rid of the oldest entries per game:</p>
+
+<p><code>plain remvoin oldest entries for a game
+LET compare = DATE_NOW() - 2 * 86400 * 1000
+FOR h IN highscores
+  FILTER h.game == 2
+  FILTER h.date &lt; compare
+  LIMIT 1000
+  REMOVE h IN highscores
+</code></p>
+
+<p>On a side note: the <code>REMOVE</code> was limited to the <em>oldest</em> 1000 entries. This
+was done to make the query return fast. The removal query can be repeated while
+there are still entries to remove.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[More Efficient Data Exports]]></title>
@@ -708,121 +1155,6 @@ to use the <code>UPSERT</code> command for inserts&hellip;</p>
 <p><code>UPSERT</code> is currently available in the <code>devel</code> branch of ArangoDB. This branch
 will eventually become release 2.6. Until then, everyone is welcome to try it out and
 provide feedback.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Analyzing Git Commits With ArangoDB]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb/"/>
-    <updated>2015-03-11T12:37:58+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb</id>
-    <content type="html"><![CDATA[<p>I often find myself searching for certain commits using <code>git log</code> and friends. While I really love
-the power and flexibility that come with the git and other Unix command-line tools, sometimes it can be more
-convenient to use a database to filter and aggregate commit data.</p>
-
-<p>I gave it a quick try yesterday and imported the commit history of ArangoDB&rsquo;s Git repository into ArangoDB
-and ran some queries on the data. While the query results for our repository may not be interesting for everyone,
-I think it is still worth sharing what I did. Even though I didn&rsquo;t try it, I think the overall procedure is
-applicable with any other Git repository.</p>
-
-<!-- more -->
-
-
-<h2>Converting the Git history to JSON</h2>
-
-<p>The way to extract history and commit data from a local repository is to use <code>git log</code>. Though its output
-is greatly customizable, it does not provide an out-of-the-box solution for producing JSON. So I wrote a simple
-wrapper script (in PHP) around it. The script can be found <a href="https://gist.github.com/jsteemann/65ef221646449713b2c5">here</a>.</p>
-
-<p>Here&rsquo;s how to run it:
-<code>bash converting the git history to JSON
-cd path/to/local/git-repository
-wget https://gist.githubusercontent.com/jsteemann/65ef221646449713b2c5/raw/fef22c729e01dd0777b378ac1e17e951ea47c7dd/git-log-to-json.php
-php git-log-to-json.php &gt; arango-commits-master-201503.json
-</code></p>
-
-<p>The script may run a few minutes on bigger repositories such as ours. In the end, it should produce a JSON
-file named <code>arango-commits-master-201503.json</code>.</p>
-
-<p>I have also uploaded the JSON file <a href="/downloads/code/arango-commits-master-201503.json">here</a>. Note that the
-file only contains commits from the <code>master</code> branch and not all commits done in ArangoDB in total.</p>
-
-<h2>Importing the commits into ArangoDB</h2>
-
-<p>The simplest way to get the commits into ArangoDB is to use <code>arangoimp</code>:</p>
-
-<p><code>bash importing the commits into ArangoDB
-arangoimp                                   \
-  --collection commits                      \
-  --create-collection true                  \
-  --file arango-commits-master-201503.json  \
-  --overwrite true                          \
-  --batch-size 32000000
-</code></p>
-
-<p>This should have imported all the commits into a collection <code>commits</code> in the default database.</p>
-
-<h2>Querying the commit logs</h2>
-
-<p>Following are a few example queries that I ran on the data from the ArangoShell.
-As mentioned before, it should be possible to run the queries for other repositories' data.</p>
-
-<p><code>js getting all contributors
-query = 'FOR commit IN commits COLLECT author = commit.author.name RETURN author';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving the total number of commits
-query = 'FOR commit IN commits COLLECT WITH COUNT INTO count RETURN count';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving the number of commits by contributor
-query = 'FOR commit IN commits COLLECT author = commit.author.name WITH COUNT INTO count RETURN { author: author, count: count }';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving the tagged commits
-query = 'FOR commit IN commits FILTER commit.tag != null SORT commit.date RETURN KEEP(commit, [ "date", "message", "tag" ])';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving number of commits per year
-query = 'FOR commit IN commits COLLECT year = DATE_YEAR(commit.date) WITH COUNT INTO count RETURN { year: year, count: count }';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving number of commits per month / year
-query = 'FOR commit IN commits COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date)  WITH COUNT INTO count RETURN { month: CONCAT(year, "/", month), count: count }';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving number of commits per weekday
-query = 'FOR commit IN commits COLLECT day = DATE_DAYOFWEEK(commit.date) WITH COUNT INTO count RETURN { day: TRANSLATE(day, { "0": "Sunday", "1": "Monday", "2": "Tuesday", "3": "Wednesday", "4": "Thursday", "5": "Friday", "6": "Saturday" }), count: count }';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving commits with string "issue #" in commit message
-query = 'FOR commit IN commits FILTER LIKE(commit.message, "%issue #%") SORT commit.date DESC LIMIT 10 RETURN UNSET(commit, "files")';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving number of commits related to Foxx
-query = 'FOR commit IN commits FILTER LIKE(LOWER(commit.message), "%foxx%") COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date) WITH COUNT INTO count RETURN { month: CONCAT(year, "/", month), count: count }';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving commits that touched the most files
-query = 'FOR commit IN commits LET count = LENGTH(commit.files || []) SORT count DESC LIMIT 10 RETURN MERGE(UNSET(commit, "files"), { files: count })';
-db._query(query).toArray();
-</code></p>
-
-<p><code>js retrieving files modified most often
-query = 'FOR commit IN commits FOR filename IN commit.files || [] COLLECT file = filename WITH COUNT INTO count SORT count DESC LIMIT 10 RETURN { file: file, count: count }';
-db._query(query).toArray();
-</code></p>
-
-<p>Enjoy!</p>
 ]]></content>
   </entry>
   
