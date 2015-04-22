@@ -1,0 +1,582 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>COLLECTing With a Hash Table - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="ArangoDB 2.6 will feature an alternative hash implementation of the AQL COLLECT
+operation. The new implementation can speed up some AQL queries that &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>Notes on ArangoDB development</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">COLLECTing With a Hash Table</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-22T13:53:10+02:00" pubdate data-updated="true">Apr 22<span>nd</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>ArangoDB 2.6 will feature an alternative <strong>hash</strong> implementation of the AQL <code>COLLECT</code>
+operation. The new implementation can speed up some AQL queries that can not exploit indexes
+on the <code>COLLECT</code> group criteria.</p>
+
+<p>This blog post provides a preview of the feature and shows some nice performance improvements.
+It also explains the <code>COLLECT</code>-related optimizer parts and how the optimizer will decide whether
+to use the new or the traditional implementation.</p>
+
+<!-- more -->
+
+
+<h2>Introduction to COLLECT</h2>
+
+<p>A quick recap: in AQL, the <code>COLLECT</code> operation can be used for grouping and optionally counting values.</p>
+
+<p>Here&rsquo;s an example, using flight data:</p>
+
+<figure class='code'><figcaption><span>AQL COLLECT example</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR flight IN flights
+</span><span class='line'>  COLLECT from = flight._from WITH COUNT INTO count
+</span><span class='line'>  RETURN { from: from, count: count }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This query will iterate over all documents in collection <code>flights</code>, and count the
+number of flights per different <code>_from</code> value (origin airport). The query result will
+contain only unique <code>from</code> values plus a counter for each:</p>
+
+<figure class='code'><figcaption><span>query result, grouped by from</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;from&quot;</span> <span class="p">:</span> <span class="s2">&quot;airports/ABE&quot;</span><span class="p">,</span> <span class="nt">&quot;count&quot;</span> <span class="p">:</span> <span class="mi">6205</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;from&quot;</span> <span class="p">:</span> <span class="s2">&quot;airports/ABQ&quot;</span><span class="p">,</span> <span class="nt">&quot;count&quot;</span> <span class="p">:</span> <span class="mi">39346</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;from&quot;</span> <span class="p">:</span> <span class="s2">&quot;airports/ACV&quot;</span><span class="p">,</span> <span class="nt">&quot;count&quot;</span> <span class="p">:</span> <span class="mi">362</span> <span class="p">},</span>
+</span><span class='line'>  <span class="err">...</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;from&quot;</span> <span class="p">:</span> <span class="s2">&quot;airports/YAP&quot;</span><span class="p">,</span> <span class="nt">&quot;count&quot;</span> <span class="p">:</span> <span class="mi">285</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;from&quot;</span> <span class="p">:</span> <span class="s2">&quot;airports/YKM&quot;</span><span class="p">,</span> <span class="nt">&quot;count&quot;</span> <span class="p">:</span> <span class="mi">879</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;from&quot;</span> <span class="p">:</span> <span class="s2">&quot;airports/YUM&quot;</span><span class="p">,</span> <span class="nt">&quot;count&quot;</span> <span class="p">:</span> <span class="mi">2275</span> <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As the <code>COLLECT</code> will group its result according to the specified group criteria (<code>flights._from</code>
+in the above query), it needs a way of figuring out to which group any input value does belong.</p>
+
+<p>Before ArangoDB 2.6, there was a single method for determining the group. Starting with ArangoDB
+2.6, the query optimizer can choose between two different <code>COLLECT</code> methods, the <strong>sorted</strong> method
+and the <strong>hash</strong> method.</p>
+
+<h2>Sorted COLLECT method</h2>
+
+<p>The traditional method for determining the group values is the <strong>sorted</strong> method. It has been
+available in ArangoDB since the very start.</p>
+
+<p>The sorted method of <code>COLLECT</code> requires its input to be sorted by the group criteria specified
+in the <code>COLLECT</code> statement. Because there is no guarantee that the input data are already sorted
+in the same way, the query optimizer will automatically insert a <code>SORT</code> statement into the query
+in front of the <code>COLLECT</code>. In case there is a sorted index present on the group criteria attributes,
+the optimizer may be able to optimize away the <code>SORT</code> again. If there is no sorted index present
+on the group criteria attributes, the <code>SORT</code> will remain in the execution plan.</p>
+
+<p>Here is the execution plan for the above query using the <strong>sorted</strong> method of <code>COLLECT</code>. We can see
+the extra <code>SortNode</code> with id #7 being added by the optimizer in front of the <code>COLLECT</code>:</p>
+
+<p><img src="/downloads/screenshots/collect-sorted.png"></p>
+
+<p>The <strong>sorted</strong> method of <code>COLLECT</code> is efficient because it can write out a group result whenever
+an input value will start a new group. Therefore it does not need to keep the whole <code>COLLECT</code>
+result in memory. The downside of using the sorted method is that it requires its input to be
+sorted, and that this requires adding an extra <code>SORT</code> for not properly sorted input.</p>
+
+<h2>Hash COLLECT method</h2>
+
+<p>Since ArangoDB 2.6, the query optimizer can also employ the <strong>hash</strong> method for <code>COLLECT</code>. The
+hash method works by assigning the input values of the <code>COLLECT</code> to slots in a hash table. It
+does not require its input to be sorted. Because the entries in the hash table do not have a
+particular order, the query optimizer will add a post-<code>COLLECT</code> <code>SORT</code> statement. With this extra
+sort of the <code>COLLECT</code> result, the optimizer ensures that the output of the sorted <code>COLLECT</code> will
+be the same as the output of the hash <code>COLLECT</code>.</p>
+
+<p>Here is the execution plan for the above query when using the <strong>hash</strong> method of <code>COLLECT</code>.
+Here we can see the extra <code>SortNode</code> with id #7 being added post-<code>COLLECT</code>:</p>
+
+<p><img src="/downloads/screenshots/collect-hash.png"></p>
+
+<p>The <strong>hash</strong> method is beneficial because it does not require sorted input and thus no extra
+<code>SORT</code> step in front. However, as the input is not sorted, it is never clear when a group is
+actually finished. The hash method therefore needs to build the whole <code>COLLECT</code> result in memory
+until the input is exhausted. Then it can safely write out all group results. Additionally,
+the result of the hash <code>COLLECT</code> is unsorted. Therefore the optimizer will add a post-<code>COLLECT</code>
+sort to ensure the result will be identical to a <strong>sorted</strong> <code>COLLECT</code>.</p>
+
+<h2>Which method will be used when?</h2>
+
+<p>The query optimizer will always take the initial query plan and specialize its <code>COLLECT</code> nodes to
+using the <strong>sorted</strong> method. It will also add the pre-<code>COLLECT</code> <code>SORT</code> in the original plan.</p>
+
+<p>In addition, for every <code>COLLECT</code> statement not using an <code>INTO</code> clause, the optimizer will create
+a plan variant that uses the <strong>hash</strong> method. In that plan variant, the post-<code>COLLECT</code> <code>SORT</code>
+will be added. Note that a <code>WITH COUNT INTO</code> is still ok here, but that using a regular <code>INTO</code>
+clause will disable the usage of the <strong>hash</strong> method:</p>
+
+<figure class='code'><figcaption><span>a query that cannot use the hash method</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR flight IN flights
+</span><span class='line'>  COLLECT from = flight._from INTO allFlights
+</span><span class='line'>  RETURN { from: from, flights: allFlights }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If more than one <code>COLLECT</code> method can be used for a query, the created plans will be shipped through
+the regular optimization pipeline. In the end, the optimizer will pick the plan with the lowest
+estimated total cost as it will do for all other queries.</p>
+
+<p>The <strong>hash</strong> variant does not require an up-front sort of the <code>COLLECT</code> input, and will thus be
+preferred over the <strong>sorted</strong> method if the optimizer estimates many input elements for the <code>COLLECT</code>
+and cannot use an index to process them in already sorted order. In this case, the optimizer
+will estimate that post-sorting the result of the <strong>hash</strong> <code>COLLECT</code> will be more efficient than
+pre-sorting the input for the <strong>sorted</strong> <code>COLLECT</code>.</p>
+
+<p>The main assumption behind this estimation is that the result of any <code>COLLECT</code> statement will
+contain at most as many elements as there are input elements to it. Therefore, the output of
+a <code>COLLECT</code> is likely to be smaller (in terms of rows) than its input, making post-sorting more
+efficient than pre-sorting.</p>
+
+<p>If there is a sorted index on the <code>COLLECT</code> group criteria that the optimizer can exploit, the
+optimizer will pick the <strong>sorted</strong> method because thanks to the index it can optimize away the
+pre-<code>COLLECT</code> sort, leaving no sorts left in the final execution plan.</p>
+
+<p>To override the optimizer decision, <code>COLLECT</code> statements now have an <code>OPTIONS</code> modifier. This
+modifier can be used to force the optimizer to use the <strong>sorted</strong> variant:</p>
+
+<figure class='code'><figcaption><span>forcing the use of the sorted variant</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR flight IN flights
+</span><span class='line'>  COLLECT from = flight._from WITH COUNT INTO count OPTIONS { method: "sorted" }
+</span><span class='line'>  RETURN { from: from, count: count }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note that specifying <strong>hash</strong> in <code>method</code> will not force the optimizer to use the <strong>hash</strong> method.
+The reason is that the <strong>hash</strong> variant cannot be used for all queries (only <code>COLLECT</code> statements
+without an <code>INTO</code> clause are eligible). If <code>OPTIONS</code> are omitted or any other method than <code>sorted</code>
+is specified, the optimizer will ignore it and use its regular cost estimations.</p>
+
+<h2>Understanding execution plans</h2>
+
+<p>Which method is actually used in a query can found out by explaining it and looking at its
+execution plan.</p>
+
+<p>A <code>COLLECT</code> is internally handled by an object called <code>AggregateNode</code>, so we have to look for that.
+In the above screenshots, the <code>AggregateNode</code>s are tagged with either <strong>hash</strong> or <strong>sorted</strong>. This can
+also be checked programatically by looking at the <code>aggregationOptions.method</code> attributes in the
+JSON result of an explain().</p>
+
+<p>Here is some example code to extract this information, limited to the <code>AggregateNode</code>s of the
+query already:</p>
+
+<figure class='code'><figcaption><span>extracting just the AggregateNodes from an explain</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span> <span class="err">`</span>
+</span><span class='line'>  <span class="nx">FOR</span> <span class="nx">flight</span> <span class="nx">IN</span> <span class="nx">flights</span>
+</span><span class='line'>  <span class="nx">COLLECT</span> <span class="nx">from</span> <span class="o">=</span> <span class="nx">flight</span><span class="p">.</span><span class="nx">_from</span> <span class="nx">WITH</span> <span class="nx">COUNT</span> <span class="nx">INTO</span> <span class="nx">count</span>
+</span><span class='line'>  <span class="nx">RETURN</span> <span class="p">{</span> <span class="nx">from</span><span class="o">:</span> <span class="nx">from</span><span class="p">,</span> <span class="nx">count</span><span class="o">:</span> <span class="nx">count</span> <span class="p">}</span>
+</span><span class='line'><span class="err">`</span><span class="p">;</span>
+</span><span class='line'><span class="kd">var</span> <span class="nx">stmt</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">_createStatement</span><span class="p">(</span><span class="nx">query</span><span class="p">);</span>
+</span><span class='line'><span class="kd">var</span> <span class="nx">plan</span> <span class="o">=</span> <span class="nx">stmt</span><span class="p">.</span><span class="nx">explain</span><span class="p">().</span><span class="nx">plan</span><span class="p">;</span>
+</span><span class='line'><span class="nx">plan</span><span class="p">.</span><span class="nx">nodes</span><span class="p">.</span><span class="nx">filter</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">node</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">node</span><span class="p">.</span><span class="nx">type</span> <span class="o">===</span> <span class="s1">&#39;AggregateNode&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>For the above query, this will produce something like this:</p>
+
+<figure class='code'><figcaption><span>JSON explain result for AggregateNode</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="nt">&quot;type&quot;</span> <span class="p">:</span> <span class="s2">&quot;AggregateNode&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="err">...</span>
+</span><span class='line'>    <span class="nt">&quot;aggregationOptions&quot;</span> <span class="p">:</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nt">&quot;method&quot;</span> <span class="p">:</span> <span class="s2">&quot;hash&quot;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Here we can see that the query is using the <strong>hash</strong> method.</p>
+
+<h2>Optimizing away post-COLLECT sorts</h2>
+
+<p>If a query uses the <strong>hash</strong> method for a <code>COLLECT</code> but the sort order of the <code>COLLECT</code> result
+is irrelevant to the user, the user can provide a hint to the optimizer to remove the
+post-<code>COLLECT</code> sort.</p>
+
+<p>This can be achieved by simplying appending a <code>SORT null</code> to the original <code>COLLECT</code> statement.
+Here we can see that this removes the post-<code>COLLECT</code> sort:</p>
+
+<p><img src="/downloads/screenshots/collect-nosort.png"></p>
+
+<h2>Performance improvements</h2>
+
+<p>The improvements achievable by using the <strong>hash</strong> method instead of the <strong>sorted</strong> method obviously
+depend on whether there are appropriate indexes present for the group criteria. If an index can
+be exploited, the <strong>sorted</strong> method may be just fine. However, there are cases when no indexes are
+present, for example, when running arbitrary ad-hoc queries or when indexes are too expensive
+(indexes need to be updated on insert/update/remove and also will use memory).</p>
+
+<p>Following are a few comparisons of the <strong>sorted</strong> and the <strong>hash</strong> methods in case no indexes can be
+used.</p>
+
+<p>Here&rsquo;s the setup for the test data. This generates 1M documents with both unique and repeating
+string and numeric values. For the non-unique values, we&rsquo;ll use 20 different categories:</p>
+
+<figure class='code'><figcaption><span>setting up test data</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">test</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="mi">1000000</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">test</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span>
+</span><span class='line'>    <span class="nx">uniqueNumber</span><span class="o">:</span> <span class="nx">i</span><span class="p">,</span>
+</span><span class='line'>    <span class="nx">uniqueString</span><span class="o">:</span> <span class="nb">String</span><span class="p">(</span><span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span><span class="p">),</span>
+</span><span class='line'>    <span class="nx">repeatingNumber</span><span class="o">:</span> <span class="p">(</span><span class="nx">i</span> <span class="o">%</span> <span class="mi">20</span><span class="p">),</span>
+</span><span class='line'>    <span class="nx">repeatingString</span><span class="o">:</span> <span class="nb">String</span><span class="p">(</span><span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="p">(</span><span class="nx">i</span> <span class="o">%</span> <span class="mi">20</span><span class="p">))</span>
+</span><span class='line'>  <span class="p">});</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now let&rsquo;s run the following query on the data and measure its execution time:</p>
+
+<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR v IN test
+</span><span class='line'>  COLLECT value = v.@attribute WITH COUNT INTO count
+</span><span class='line'>  RETURN { value: value, count: count }</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<p>The worst case is when the <code>COLLECT</code> will produce as many output rows as there are input
+rows. This will happen when using a unique attribute as the grouping criterion. We&rsquo;ll run
+tests on both numeric and string values.</p>
+
+<p>Here are the execution times for unique inputs. It can be seen that the <strong>hash</strong> method
+here will be beneficial if the post-<code>COLLECT</code> sort can be optimized away. As demonstrated
+above, this can be achieved by adding an extra <code>SORT null</code> after the <code>COLLECT</code> statement.
+If the post-<code>COLLECT</code> sort is not optimized away, it will make the hash method a bit more
+expensive than the <strong>sorted</strong> method:</p>
+
+<figure class='code'><figcaption><span>COLLECT performance with unique inputs</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>collect method       @attribute                duration
+</span><span class='line'>-------------------------------------------------------
+</span><span class='line'>sorted               uniqueNumber               11.92 s 
+</span><span class='line'>hash                 uniqueNumber               13.40 s
+</span><span class='line'>hash (sort null)     uniqueNumber               10.13 s
+</span><span class='line'>sorted               uniqueString               22.04 s
+</span><span class='line'>hash                 uniqueString               27.35 s
+</span><span class='line'>hash (sort null)     uniqueString               12.12 s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now let&rsquo;s check the results when we group on an attribute that is non-unique. Following
+are the results for numeric and string attributes with 20 different categories each:</p>
+
+<figure class='code'><figcaption><span>COLLECT performance with non-unique inputs</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>collect method       @attribute                duration
+</span><span class='line'>-------------------------------------------------------
+</span><span class='line'>sorted               repeatingNumber             5.56 s
+</span><span class='line'>hash                 repeatingNumber             0.94 s
+</span><span class='line'>hash (sort null)     repeatingNumber             0.94 s
+</span><span class='line'>sorted               repeatingString            10.56 s
+</span><span class='line'>hash                 repeatingString             1.09 s
+</span><span class='line'>hash (sort null)     repeatingString             1.09 s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In these cases, the result of the <code>COLLECT</code> will be much smaller than its input (we&rsquo;ll
+only get 20 result rows out instead of 1M). Therefore the post-<code>COLLECT</code> sort for the <strong>hash</strong>
+method will not make any difference, but the pre-<code>COLLECT</code> sort for the <strong>sorted</strong> method
+will still need to sort 1M input values. This is also the reason why the <strong>hash</strong> method
+is significantly faster here.</p>
+
+<p>As usual, your mileage may vary, so please run your own tests.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-22T13:53:10+02:00" pubdate data-updated="true">Apr 22<span>nd</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/concepts/'>Concepts</a>, <a class='category' href='/blog/categories/indexes/'>Indexes</a>, <a class='category' href='/blog/categories/performance/'>Performance</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/04/20/creating-highscore-lists/" title="Previous Post: Creating highscore lists">&laquo; Creating highscore lists</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing With a Hash Table</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/20/creating-highscore-lists/">Creating Highscore Lists</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/14/updating-documents-with-arangoimp/">Updating Documents With Arangoimp</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/04/more-efficient-data-exports/">More Efficient Data Exports</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/01/improvements-for-the-cursor-api/">Improvements for the Cursor API</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (16)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (28)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (4)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (8)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (17)</li><ul class="month_list"><li class="month"><a href='/blog/2015/04/'>APR (5)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

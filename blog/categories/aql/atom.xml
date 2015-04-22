@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-21T12:35:40+02:00</updated>
+  <updated>2015-04-22T16:54:32+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,289 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[COLLECTing With a Hash Table]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table/"/>
+    <updated>2015-04-22T13:53:10+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table</id>
+    <content type="html"><![CDATA[<p>ArangoDB 2.6 will feature an alternative <strong>hash</strong> implementation of the AQL <code>COLLECT</code>
+operation. The new implementation can speed up some AQL queries that can not exploit indexes
+on the <code>COLLECT</code> group criteria.</p>
+
+<p>This blog post provides a preview of the feature and shows some nice performance improvements.
+It also explains the <code>COLLECT</code>-related optimizer parts and how the optimizer will decide whether
+to use the new or the traditional implementation.</p>
+
+<!-- more -->
+
+
+<h2>Introduction to COLLECT</h2>
+
+<p>A quick recap: in AQL, the <code>COLLECT</code> operation can be used for grouping and optionally counting values.</p>
+
+<p>Here&rsquo;s an example, using flight data:</p>
+
+<p><code>plain AQL COLLECT example
+FOR flight IN flights
+  COLLECT from = flight._from WITH COUNT INTO count
+  RETURN { from: from, count: count }
+</code></p>
+
+<p>This query will iterate over all documents in collection <code>flights</code>, and count the
+number of flights per different <code>_from</code> value (origin airport). The query result will
+contain only unique <code>from</code> values plus a counter for each:</p>
+
+<p><code>json query result, grouped by from
+[
+  { "from" : "airports/ABE", "count" : 6205 },
+  { "from" : "airports/ABQ", "count" : 39346 },
+  { "from" : "airports/ACV", "count" : 362 },
+  ...
+  { "from" : "airports/YAP", "count" : 285 },
+  { "from" : "airports/YKM", "count" : 879 },
+  { "from" : "airports/YUM", "count" : 2275 }
+]
+</code></p>
+
+<p>As the <code>COLLECT</code> will group its result according to the specified group criteria (<code>flights._from</code>
+in the above query), it needs a way of figuring out to which group any input value does belong.</p>
+
+<p>Before ArangoDB 2.6, there was a single method for determining the group. Starting with ArangoDB
+2.6, the query optimizer can choose between two different <code>COLLECT</code> methods, the <strong>sorted</strong> method
+and the <strong>hash</strong> method.</p>
+
+<h2>Sorted COLLECT method</h2>
+
+<p>The traditional method for determining the group values is the <strong>sorted</strong> method. It has been
+available in ArangoDB since the very start.</p>
+
+<p>The sorted method of <code>COLLECT</code> requires its input to be sorted by the group criteria specified
+in the <code>COLLECT</code> statement. Because there is no guarantee that the input data are already sorted
+in the same way, the query optimizer will automatically insert a <code>SORT</code> statement into the query
+in front of the <code>COLLECT</code>. In case there is a sorted index present on the group criteria attributes,
+the optimizer may be able to optimize away the <code>SORT</code> again. If there is no sorted index present
+on the group criteria attributes, the <code>SORT</code> will remain in the execution plan.</p>
+
+<p>Here is the execution plan for the above query using the <strong>sorted</strong> method of <code>COLLECT</code>. We can see
+the extra <code>SortNode</code> with id #7 being added by the optimizer in front of the <code>COLLECT</code>:</p>
+
+<p><img src="/downloads/screenshots/collect-sorted.png"></p>
+
+<p>The <strong>sorted</strong> method of <code>COLLECT</code> is efficient because it can write out a group result whenever
+an input value will start a new group. Therefore it does not need to keep the whole <code>COLLECT</code>
+result in memory. The downside of using the sorted method is that it requires its input to be
+sorted, and that this requires adding an extra <code>SORT</code> for not properly sorted input.</p>
+
+<h2>Hash COLLECT method</h2>
+
+<p>Since ArangoDB 2.6, the query optimizer can also employ the <strong>hash</strong> method for <code>COLLECT</code>. The
+hash method works by assigning the input values of the <code>COLLECT</code> to slots in a hash table. It
+does not require its input to be sorted. Because the entries in the hash table do not have a
+particular order, the query optimizer will add a post-<code>COLLECT</code> <code>SORT</code> statement. With this extra
+sort of the <code>COLLECT</code> result, the optimizer ensures that the output of the sorted <code>COLLECT</code> will
+be the same as the output of the hash <code>COLLECT</code>.</p>
+
+<p>Here is the execution plan for the above query when using the <strong>hash</strong> method of <code>COLLECT</code>.
+Here we can see the extra <code>SortNode</code> with id #7 being added post-<code>COLLECT</code>:</p>
+
+<p><img src="/downloads/screenshots/collect-hash.png"></p>
+
+<p>The <strong>hash</strong> method is beneficial because it does not require sorted input and thus no extra
+<code>SORT</code> step in front. However, as the input is not sorted, it is never clear when a group is
+actually finished. The hash method therefore needs to build the whole <code>COLLECT</code> result in memory
+until the input is exhausted. Then it can safely write out all group results. Additionally,
+the result of the hash <code>COLLECT</code> is unsorted. Therefore the optimizer will add a post-<code>COLLECT</code>
+sort to ensure the result will be identical to a <strong>sorted</strong> <code>COLLECT</code>.</p>
+
+<h2>Which method will be used when?</h2>
+
+<p>The query optimizer will always take the initial query plan and specialize its <code>COLLECT</code> nodes to
+using the <strong>sorted</strong> method. It will also add the pre-<code>COLLECT</code> <code>SORT</code> in the original plan.</p>
+
+<p>In addition, for every <code>COLLECT</code> statement not using an <code>INTO</code> clause, the optimizer will create
+a plan variant that uses the <strong>hash</strong> method. In that plan variant, the post-<code>COLLECT</code> <code>SORT</code>
+will be added. Note that a <code>WITH COUNT INTO</code> is still ok here, but that using a regular <code>INTO</code>
+clause will disable the usage of the <strong>hash</strong> method:</p>
+
+<p><code>plain a query that cannot use the hash method
+FOR flight IN flights
+  COLLECT from = flight._from INTO allFlights
+  RETURN { from: from, flights: allFlights }
+</code></p>
+
+<p>If more than one <code>COLLECT</code> method can be used for a query, the created plans will be shipped through
+the regular optimization pipeline. In the end, the optimizer will pick the plan with the lowest
+estimated total cost as it will do for all other queries.</p>
+
+<p>The <strong>hash</strong> variant does not require an up-front sort of the <code>COLLECT</code> input, and will thus be
+preferred over the <strong>sorted</strong> method if the optimizer estimates many input elements for the <code>COLLECT</code>
+and cannot use an index to process them in already sorted order. In this case, the optimizer
+will estimate that post-sorting the result of the <strong>hash</strong> <code>COLLECT</code> will be more efficient than
+pre-sorting the input for the <strong>sorted</strong> <code>COLLECT</code>.</p>
+
+<p>The main assumption behind this estimation is that the result of any <code>COLLECT</code> statement will
+contain at most as many elements as there are input elements to it. Therefore, the output of
+a <code>COLLECT</code> is likely to be smaller (in terms of rows) than its input, making post-sorting more
+efficient than pre-sorting.</p>
+
+<p>If there is a sorted index on the <code>COLLECT</code> group criteria that the optimizer can exploit, the
+optimizer will pick the <strong>sorted</strong> method because thanks to the index it can optimize away the
+pre-<code>COLLECT</code> sort, leaving no sorts left in the final execution plan.</p>
+
+<p>To override the optimizer decision, <code>COLLECT</code> statements now have an <code>OPTIONS</code> modifier. This
+modifier can be used to force the optimizer to use the <strong>sorted</strong> variant:</p>
+
+<p><code>plain forcing the use of the sorted variant
+FOR flight IN flights
+  COLLECT from = flight._from WITH COUNT INTO count OPTIONS { method: "sorted" }
+  RETURN { from: from, count: count }
+</code></p>
+
+<p>Note that specifying <strong>hash</strong> in <code>method</code> will not force the optimizer to use the <strong>hash</strong> method.
+The reason is that the <strong>hash</strong> variant cannot be used for all queries (only <code>COLLECT</code> statements
+without an <code>INTO</code> clause are eligible). If <code>OPTIONS</code> are omitted or any other method than <code>sorted</code>
+is specified, the optimizer will ignore it and use its regular cost estimations.</p>
+
+<h2>Understanding execution plans</h2>
+
+<p>Which method is actually used in a query can found out by explaining it and looking at its
+execution plan.</p>
+
+<p>A <code>COLLECT</code> is internally handled by an object called <code>AggregateNode</code>, so we have to look for that.
+In the above screenshots, the <code>AggregateNode</code>s are tagged with either <strong>hash</strong> or <strong>sorted</strong>. This can
+also be checked programatically by looking at the <code>aggregationOptions.method</code> attributes in the
+JSON result of an explain().</p>
+
+<p>Here is some example code to extract this information, limited to the <code>AggregateNode</code>s of the
+query already:</p>
+
+<p><code>js extracting just the AggregateNodes from an explain
+var query = `
+  FOR flight IN flights
+  COLLECT from = flight._from WITH COUNT INTO count
+  RETURN { from: from, count: count }
+`;
+var stmt = db._createStatement(query);
+var plan = stmt.explain().plan;
+plan.nodes.filter(function(node) {
+  return node.type === 'AggregateNode';
+});
+</code></p>
+
+<p>For the above query, this will produce something like this:</p>
+
+<p>```json JSON explain result for AggregateNode
+[
+  {</p>
+
+<pre><code>"type" : "AggregateNode", 
+...
+"aggregationOptions" : { 
+  "method" : "hash" 
+}  
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<p>Here we can see that the query is using the <strong>hash</strong> method.</p>
+
+<h2>Optimizing away post-COLLECT sorts</h2>
+
+<p>If a query uses the <strong>hash</strong> method for a <code>COLLECT</code> but the sort order of the <code>COLLECT</code> result
+is irrelevant to the user, the user can provide a hint to the optimizer to remove the
+post-<code>COLLECT</code> sort.</p>
+
+<p>This can be achieved by simplying appending a <code>SORT null</code> to the original <code>COLLECT</code> statement.
+Here we can see that this removes the post-<code>COLLECT</code> sort:</p>
+
+<p><img src="/downloads/screenshots/collect-nosort.png"></p>
+
+<h2>Performance improvements</h2>
+
+<p>The improvements achievable by using the <strong>hash</strong> method instead of the <strong>sorted</strong> method obviously
+depend on whether there are appropriate indexes present for the group criteria. If an index can
+be exploited, the <strong>sorted</strong> method may be just fine. However, there are cases when no indexes are
+present, for example, when running arbitrary ad-hoc queries or when indexes are too expensive
+(indexes need to be updated on insert/update/remove and also will use memory).</p>
+
+<p>Following are a few comparisons of the <strong>sorted</strong> and the <strong>hash</strong> methods in case no indexes can be
+used.</p>
+
+<p>Here&rsquo;s the setup for the test data. This generates 1M documents with both unique and repeating
+string and numeric values. For the non-unique values, we&rsquo;ll use 20 different categories:</p>
+
+<p>```js setting up test data
+var test = db._create(&ldquo;test&rdquo;);
+for (var i = 0; i &lt; 1000000; ++i) {
+  test.insert({</p>
+
+<pre><code>uniqueNumber: i, 
+uniqueString: String("test" + i), 
+repeatingNumber: (i % 20), 
+repeatingString: String("test" + (i % 20)) 
+</code></pre>
+
+<p>  });
+}
+```</p>
+
+<p>Now let&rsquo;s run the following query on the data and measure its execution time:</p>
+
+<p><code>plain test query
+FOR v IN test
+  COLLECT value = v.@attribute WITH COUNT INTO count
+  RETURN { value: value, count: count }
+</code></p>
+
+<p>The worst case is when the <code>COLLECT</code> will produce as many output rows as there are input
+rows. This will happen when using a unique attribute as the grouping criterion. We&rsquo;ll run
+tests on both numeric and string values.</p>
+
+<p>Here are the execution times for unique inputs. It can be seen that the <strong>hash</strong> method
+here will be beneficial if the post-<code>COLLECT</code> sort can be optimized away. As demonstrated
+above, this can be achieved by adding an extra <code>SORT null</code> after the <code>COLLECT</code> statement.
+If the post-<code>COLLECT</code> sort is not optimized away, it will make the hash method a bit more
+expensive than the <strong>sorted</strong> method:</p>
+
+<p>```plain COLLECT performance with unique inputs</p>
+
+<h2>collect method       @attribute                duration</h2>
+
+<p>sorted               uniqueNumber               11.92 s
+hash                 uniqueNumber               13.40 s
+hash (sort null)     uniqueNumber               10.13 s
+sorted               uniqueString               22.04 s
+hash                 uniqueString               27.35 s
+hash (sort null)     uniqueString               12.12 s
+```</p>
+
+<p>Now let&rsquo;s check the results when we group on an attribute that is non-unique. Following
+are the results for numeric and string attributes with 20 different categories each:</p>
+
+<p>```plain COLLECT performance with non-unique inputs</p>
+
+<h2>collect method       @attribute                duration</h2>
+
+<p>sorted               repeatingNumber             5.56 s
+hash                 repeatingNumber             0.94 s
+hash (sort null)     repeatingNumber             0.94 s
+sorted               repeatingString            10.56 s
+hash                 repeatingString             1.09 s
+hash (sort null)     repeatingString             1.09 s
+```</p>
+
+<p>In these cases, the result of the <code>COLLECT</code> will be much smaller than its input (we&rsquo;ll
+only get 20 result rows out instead of 1M). Therefore the post-<code>COLLECT</code> sort for the <strong>hash</strong>
+method will not make any difference, but the pre-<code>COLLECT</code> sort for the <strong>sorted</strong> method
+will still need to sort 1M input values. This is also the reason why the <strong>hash</strong> method
+is significantly faster here.</p>
+
+<p>As usual, your mileage may vary, so please run your own tests.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Creating Highscore Lists]]></title>
@@ -882,279 +1165,6 @@ so using functions such as <code>GRAPH_TRAVERSAL</code> etc. is disallowed.</p><
 
 <p>The improvements are present in the <code>devel</code> branch and can be tested in there from now on.
 As usual, feedback is welcome!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Preview of the UPSERT Command]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/03/27/preview-of-the-upsert-command/"/>
-    <updated>2015-03-27T21:37:09+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/03/27/preview-of-the-upsert-command</id>
-    <content type="html"><![CDATA[<p>This week saw the completion of the AQL <code>UPSERT</code> command.</p>
-
-<p>This command will be very helpful in a lot of use cases, including the following:</p>
-
-<ul>
-<li>ensure that a document exists</li>
-<li>update a document if it exists, otherwise create it</li>
-<li>replace a document if it exists, otherwise create it</li>
-</ul>
-
-
-<p>The <code>UPSERT</code> command is executed on the server side and so delivers client
-applications from issuing a fetch command followed by a separate, conditional <code>UPDATE</code>
-or <code>INSERT</code> command.</p>
-
-<!-- more -->
-
-
-<p>The general format of an <code>UPSERT</code> statement is:</p>
-
-<p><code>plain UPSERT format
-UPSERT search-document
-INSERT insert-expression
-UPDATE update-expression
-IN collection-name
-</code></p>
-
-<p>Following are a few example invocations of <code>UPSERT</code>.</p>
-
-<h2>Ensure a document exists</h2>
-
-<p>A simple use case of <code>UPSERT</code> is to ensure that a specific document exists.
-For example, the following query will ensure that that there will be a document
-with attribute <code>ip</code> equal to <code>192.168.173.13</code> in collection <code>hosts</code>:</p>
-
-<p><code>plain ensuring a document exists
-UPSERT { ip: '192.168.173.13' }
-INSERT { ip: '192.168.173.13', name: 'flittard' }
-UPDATE { }
-IN hosts
-</code></p>
-
-<p>If the document does not yet exist, the <code>INSERT</code> part will be carried out. If the
-document is already there, the empty <code>UPDATE</code> part will be run, which will not
-modify the document.</p>
-
-<p>After the query has finished, there will be a document with the specified <code>ip</code> value.</p>
-
-<p>There is no need for client applications to check for document existence first,
-and then to conditionally insert or update, or to try insert first and catch errors.</p>
-
-<p>Note: this is the same as ActiveRecord&rsquo;s <code>find_or_create</code>.</p>
-
-<h2>Update a document if it exists, otherwise create it</h2>
-
-<p>Another common use case is to check whether a specific document exists, and then update it.
-If it does not yet exist, the document shall be created.</p>
-
-<p>Counters are a good example for this, so let&rsquo;s demo this pattern with a counter, too:</p>
-
-<p><code>plain UPSERT example
-UPSERT { ip: '192.168.173.13' }
-INSERT { ip: '192.168.173.13', name: 'flittard', counter: 1 }
-UPDATE { counter : OLD.counter + 1 }
-IN hosts
-</code></p>
-
-<p>The above query will again look for a document with the specified <code>ip</code> attribute. If the
-document exists, its <code>counter</code> attribute will be increased by one. This is achieved by
-referring to the pseudo-value <code>OLD</code>, which in the <code>UPDATE</code> case contains the previous revision
-of the document.</p>
-
-<p>If the search document does not yet exist, the <code>INSERT</code>part will be carried out, inserting
-the document and setting the initial value of <code>counter</code> to 1.</p>
-
-<p>Assuming the collection was empty before, running the above query once will make the collection
-contain this data:</p>
-
-<p>```json collection contents after running query once
-[
-  {</p>
-
-<pre><code>"counter": 1,
-"ip": "192.168.173.13",
-"name": "flittard"
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<p>When running the <code>UPSERT</code> statement again, the collection will contain the updated document:</p>
-
-<p>```json collection contents after running the UPSERT command again:
-[
-  {</p>
-
-<pre><code>"counter": 2,
-"ip": "192.168.173.13",
-"name": "flittard"
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<p>Now let&rsquo;s run the query with adjusted <code>ip</code> and <code>name</code> values:</p>
-
-<p><code>plain UPSERT with different ip and name
-UPSERT { ip: '192.168.173.73' }
-INSERT { ip: '192.168.173.73', name: 'brueck', counter: 1 }
-UPDATE { counter : OLD.counter + 1 }
-IN hosts
-</code></p>
-
-<p>After that, the collection will contain two documents:</p>
-
-<p>```json collection contents
-[
-  {</p>
-
-<pre><code>"counter": 2,
-"ip": "192.168.173.13",
-"name": "flittard"
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"counter": 1,
-"name": "brueck",
-"ip": "192.168.173.73"
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<h2>Replace a document if it exists, otherwise create it</h2>
-
-<p>We&rsquo;ve seen <code>UPSERT</code> with an <code>INSERT</code> and an <code>UPDATE</code> clause so far.</p>
-
-<p><code>UPDATE</code> will partially update the previous revision of the document if present.
-Only those attributes specified in the <code>update-expression</code> will be updated, and
-all non-specified attributes of the original document revision will remain
-unchanged.</p>
-
-<p>If instead a full replacement of the original document is required, the <code>REPLACE</code>
-clause should be used instead of <code>UPDATE</code>. <code>REPLACE</code> will overwrite the previous
-revision completely with what&rsquo;s in <code>update-expression</code>.</p>
-
-<p><code>plain UPSERT replacing a document entirely
-UPSERT { ip: '192.168.173.73' }
-INSERT { ip: '192.168.173.73', name: 'brueck', counter: 1 }
-REPLACE { location: 'dc1' }
-IN hosts
-</code></p>
-
-<p><em>note</em>: an older version of this blog post contained a wrong example here. Thanks
-Andy for pointing this out!</p>
-
-<h2>Returning documents</h2>
-
-<p><code>UPSERT</code> can be combined with a <code>RETURN</code> statement to return either the previous
-document revision (in case of <code>UPDATE</code> or <code>REPLACE</code>) or the new version of the
-document.</p>
-
-<p>Client applications can use this to check whether the <code>UPSERT</code> statement has
-inserted or updated the document. In case no previous revision was present, the
-pseudo-value <code>OLD</code> will be <code>null</code>.</p>
-
-<p><code>UPSERT</code> also provides a pseudo-value named <code>NEW</code> containing the insert, updated or
-replaced version of the document:</p>
-
-<p><code>plain UPSERT with a RETURN value
-UPSERT { ip: '192.168.173.187' }
-INSERT { ip: '192.168.173.187', name: 'kalk', counter: 1 }
-UPDATE { counter : OLD.counter + 1 }
-IN hosts
-RETURN { old: OLD, new: NEW }
-</code></p>
-
-<p>In the <code>INSERT</code> case, we&rsquo;ll get:</p>
-
-<p>```json query return value for INSERT case
-[
-  {</p>
-
-<pre><code>"old": null,
-"new": {
-  "counter": 1,
-  "name": "kalk",
-  "ip": "192.168.173.187"
-}
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<p>When running the query again, we&rsquo;ll get into the <code>UPDATE</code> case, and the same query
-will now return:</p>
-
-<p>```json query return value for the UPDATE case
-[
-  {</p>
-
-<pre><code>"old": {
-  "counter": 1,
-  "name": "kalk",
-  "ip": "192.168.173.187"
-},
-"new": {
-  "counter": 2,
-  "name": "kalk",
-  "ip": "192.168.173.187"
-}
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<h2>Complex updates</h2>
-
-<p>Updating and returning <code>OLD</code> and <code>NEW</code> will work with arbitrary calculations.
-For example, the following query adds a value <code>development</code> to the <code>tag</code> attribute
-only if not yet present in the search document:</p>
-
-<p><code>plain adding a value to an array if not yet present
-UPSERT { ip: '192.168.173.94' }                                                                              
-INSERT { ip: '192.168.173.94', name: 'chorweiler', tags: [ "development" ] }                                                    
-UPDATE { tags: PUSH(OLD.tags, "development", true) }                                                                          
-IN hosts                                                                                                      
-RETURN { old: OLD, new: NEW }
-</code></p>
-
-<p>Running the query multiple times will ensure that <code>tags</code> will contain the value
-<code>development</code> only once.</p>
-
-<p>Note: <code>PUSH</code> is a regular <a href="https://docs.arangodb.com/Aql/ArrayFunctions.html">AQL array function</a>.</p>
-
-<h2>Restrictions</h2>
-
-<p>The <code>search-value</code> needs to be an object literal, with attribute names being inspectable
-at query compile time. This means that neither variables nor bind parameters can be used
-for <code>search-value</code>.</p>
-
-<p>However, bind parameters and variables can be used <strong>inside</strong> <code>search-value</code>.
-Dynamic attribute names cannot be used for specifying attribute names in search-value`.</p>
-
-<p><code>UPSERT</code> does not require an index to be present on the attributes of <code>search-value</code>,
-but in reality queries will benefit from indexes to find matching documents.</p>
-
-<p>When more than one document in the collection matches <code>search-value</code>, one arbitrary match
-will be used for executing the <code>UPDATE</code> clause. It is therefore recommended to use
-<code>UPSERT</code> commands together with a unique index or to make sure from the client application
-that at most one document will match the <code>search-value</code>. Ironically, one way to achieve this is
-to use the <code>UPSERT</code> command for inserts&hellip;</p>
-
-<h2>Availability</h2>
-
-<p><code>UPSERT</code> is currently available in the <code>devel</code> branch of ArangoDB. This branch
-will eventually become release 2.6. Until then, everyone is welcome to try it out and
-provide feedback.</p>
 ]]></content>
   </entry>
   

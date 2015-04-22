@@ -10,9 +10,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="I just came across a question about how to create highscore lists or
-leaderboards in ArangoDB, and how they would work when compared to
-Redis sorted &hellip;">
+  <meta name="description" content="ArangoDB 2.6 will feature an alternative hash implementation of the AQL COLLECT
+operation. The new implementation can speed up some AQL queries that &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -81,6 +80,53 @@ Redis sorted &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing With a Hash Table</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-22T13:53:10+02:00" pubdate data-updated="true">Apr 22<span>nd</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>ArangoDB 2.6 will feature an alternative <strong>hash</strong> implementation of the AQL <code>COLLECT</code>
+operation. The new implementation can speed up some AQL queries that can not exploit indexes
+on the <code>COLLECT</code> group criteria.</p>
+
+<p>This blog post provides a preview of the feature and shows some nice performance improvements.
+It also explains the <code>COLLECT</code>-related optimizer parts and how the optimizer will decide whether
+to use the new or the traditional implementation.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/04/22/collecting-with-a-hash-table/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -546,59 +592,6 @@ This post summarizes the improvements that are already completed and will be shi
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/02/07/using-ccache-when-working-with-different-branches/">Using Ccache When Working With Different Branches</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-02-07T17:00:15+01:00" pubdate data-updated="true">Feb 7<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>Git makes working with many different branches in the same local repository easy and efficient.</p>
-
-<p>In a C/C++ project, the code must be re-compiled after switching into another branch.
-If the branches only differ minimally, running <code>make</code> will only re-compile the parts that are
-actually different, and after that re-link them. That won&rsquo;t take too long, though especially
-link times can be annoying.</p>
-
-<p>However, if there are differences in central header files that are included from every file,
-then <code>make</code> has no option but to <strong>re-compile everything</strong>. This can take significant amounts of
-time (and coffee).</p>
-
-<p>I just realized that there is a solution to speed up re-compilation in this situation:
-<a href="http://linux.die.net/man/1/ccache">ccache</a>!</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/02/07/using-ccache-when-working-with-different-branches/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -621,6 +614,10 @@ time (and coffee).</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing With a Hash Table</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/04/20/creating-highscore-lists/">Creating Highscore Lists</a>
       </li>
     
@@ -636,10 +633,6 @@ time (and coffee).</p>
         <a href="/blog/2015/04/01/improvements-for-the-cursor-api/">Improvements for the Cursor API</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/03/27/improvements-for-data-modification-queries/">Improvements for Data-modification Queries</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -648,11 +641,11 @@ time (and coffee).</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (15)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (28)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (5)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (3)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (7)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (16)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (28)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (4)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (8)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (16)</li><ul class="month_list"><li class="month"><a href='/blog/2015/04/'>APR (4)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (17)</li><ul class="month_list"><li class="month"><a href='/blog/2015/04/'>APR (5)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

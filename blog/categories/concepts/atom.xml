@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Concepts | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/concepts/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-21T12:35:40+02:00</updated>
+  <updated>2015-04-22T16:54:32+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,289 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[COLLECTing With a Hash Table]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table/"/>
+    <updated>2015-04-22T13:53:10+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table</id>
+    <content type="html"><![CDATA[<p>ArangoDB 2.6 will feature an alternative <strong>hash</strong> implementation of the AQL <code>COLLECT</code>
+operation. The new implementation can speed up some AQL queries that can not exploit indexes
+on the <code>COLLECT</code> group criteria.</p>
+
+<p>This blog post provides a preview of the feature and shows some nice performance improvements.
+It also explains the <code>COLLECT</code>-related optimizer parts and how the optimizer will decide whether
+to use the new or the traditional implementation.</p>
+
+<!-- more -->
+
+
+<h2>Introduction to COLLECT</h2>
+
+<p>A quick recap: in AQL, the <code>COLLECT</code> operation can be used for grouping and optionally counting values.</p>
+
+<p>Here&rsquo;s an example, using flight data:</p>
+
+<p><code>plain AQL COLLECT example
+FOR flight IN flights
+  COLLECT from = flight._from WITH COUNT INTO count
+  RETURN { from: from, count: count }
+</code></p>
+
+<p>This query will iterate over all documents in collection <code>flights</code>, and count the
+number of flights per different <code>_from</code> value (origin airport). The query result will
+contain only unique <code>from</code> values plus a counter for each:</p>
+
+<p><code>json query result, grouped by from
+[
+  { "from" : "airports/ABE", "count" : 6205 },
+  { "from" : "airports/ABQ", "count" : 39346 },
+  { "from" : "airports/ACV", "count" : 362 },
+  ...
+  { "from" : "airports/YAP", "count" : 285 },
+  { "from" : "airports/YKM", "count" : 879 },
+  { "from" : "airports/YUM", "count" : 2275 }
+]
+</code></p>
+
+<p>As the <code>COLLECT</code> will group its result according to the specified group criteria (<code>flights._from</code>
+in the above query), it needs a way of figuring out to which group any input value does belong.</p>
+
+<p>Before ArangoDB 2.6, there was a single method for determining the group. Starting with ArangoDB
+2.6, the query optimizer can choose between two different <code>COLLECT</code> methods, the <strong>sorted</strong> method
+and the <strong>hash</strong> method.</p>
+
+<h2>Sorted COLLECT method</h2>
+
+<p>The traditional method for determining the group values is the <strong>sorted</strong> method. It has been
+available in ArangoDB since the very start.</p>
+
+<p>The sorted method of <code>COLLECT</code> requires its input to be sorted by the group criteria specified
+in the <code>COLLECT</code> statement. Because there is no guarantee that the input data are already sorted
+in the same way, the query optimizer will automatically insert a <code>SORT</code> statement into the query
+in front of the <code>COLLECT</code>. In case there is a sorted index present on the group criteria attributes,
+the optimizer may be able to optimize away the <code>SORT</code> again. If there is no sorted index present
+on the group criteria attributes, the <code>SORT</code> will remain in the execution plan.</p>
+
+<p>Here is the execution plan for the above query using the <strong>sorted</strong> method of <code>COLLECT</code>. We can see
+the extra <code>SortNode</code> with id #7 being added by the optimizer in front of the <code>COLLECT</code>:</p>
+
+<p><img src="/downloads/screenshots/collect-sorted.png"></p>
+
+<p>The <strong>sorted</strong> method of <code>COLLECT</code> is efficient because it can write out a group result whenever
+an input value will start a new group. Therefore it does not need to keep the whole <code>COLLECT</code>
+result in memory. The downside of using the sorted method is that it requires its input to be
+sorted, and that this requires adding an extra <code>SORT</code> for not properly sorted input.</p>
+
+<h2>Hash COLLECT method</h2>
+
+<p>Since ArangoDB 2.6, the query optimizer can also employ the <strong>hash</strong> method for <code>COLLECT</code>. The
+hash method works by assigning the input values of the <code>COLLECT</code> to slots in a hash table. It
+does not require its input to be sorted. Because the entries in the hash table do not have a
+particular order, the query optimizer will add a post-<code>COLLECT</code> <code>SORT</code> statement. With this extra
+sort of the <code>COLLECT</code> result, the optimizer ensures that the output of the sorted <code>COLLECT</code> will
+be the same as the output of the hash <code>COLLECT</code>.</p>
+
+<p>Here is the execution plan for the above query when using the <strong>hash</strong> method of <code>COLLECT</code>.
+Here we can see the extra <code>SortNode</code> with id #7 being added post-<code>COLLECT</code>:</p>
+
+<p><img src="/downloads/screenshots/collect-hash.png"></p>
+
+<p>The <strong>hash</strong> method is beneficial because it does not require sorted input and thus no extra
+<code>SORT</code> step in front. However, as the input is not sorted, it is never clear when a group is
+actually finished. The hash method therefore needs to build the whole <code>COLLECT</code> result in memory
+until the input is exhausted. Then it can safely write out all group results. Additionally,
+the result of the hash <code>COLLECT</code> is unsorted. Therefore the optimizer will add a post-<code>COLLECT</code>
+sort to ensure the result will be identical to a <strong>sorted</strong> <code>COLLECT</code>.</p>
+
+<h2>Which method will be used when?</h2>
+
+<p>The query optimizer will always take the initial query plan and specialize its <code>COLLECT</code> nodes to
+using the <strong>sorted</strong> method. It will also add the pre-<code>COLLECT</code> <code>SORT</code> in the original plan.</p>
+
+<p>In addition, for every <code>COLLECT</code> statement not using an <code>INTO</code> clause, the optimizer will create
+a plan variant that uses the <strong>hash</strong> method. In that plan variant, the post-<code>COLLECT</code> <code>SORT</code>
+will be added. Note that a <code>WITH COUNT INTO</code> is still ok here, but that using a regular <code>INTO</code>
+clause will disable the usage of the <strong>hash</strong> method:</p>
+
+<p><code>plain a query that cannot use the hash method
+FOR flight IN flights
+  COLLECT from = flight._from INTO allFlights
+  RETURN { from: from, flights: allFlights }
+</code></p>
+
+<p>If more than one <code>COLLECT</code> method can be used for a query, the created plans will be shipped through
+the regular optimization pipeline. In the end, the optimizer will pick the plan with the lowest
+estimated total cost as it will do for all other queries.</p>
+
+<p>The <strong>hash</strong> variant does not require an up-front sort of the <code>COLLECT</code> input, and will thus be
+preferred over the <strong>sorted</strong> method if the optimizer estimates many input elements for the <code>COLLECT</code>
+and cannot use an index to process them in already sorted order. In this case, the optimizer
+will estimate that post-sorting the result of the <strong>hash</strong> <code>COLLECT</code> will be more efficient than
+pre-sorting the input for the <strong>sorted</strong> <code>COLLECT</code>.</p>
+
+<p>The main assumption behind this estimation is that the result of any <code>COLLECT</code> statement will
+contain at most as many elements as there are input elements to it. Therefore, the output of
+a <code>COLLECT</code> is likely to be smaller (in terms of rows) than its input, making post-sorting more
+efficient than pre-sorting.</p>
+
+<p>If there is a sorted index on the <code>COLLECT</code> group criteria that the optimizer can exploit, the
+optimizer will pick the <strong>sorted</strong> method because thanks to the index it can optimize away the
+pre-<code>COLLECT</code> sort, leaving no sorts left in the final execution plan.</p>
+
+<p>To override the optimizer decision, <code>COLLECT</code> statements now have an <code>OPTIONS</code> modifier. This
+modifier can be used to force the optimizer to use the <strong>sorted</strong> variant:</p>
+
+<p><code>plain forcing the use of the sorted variant
+FOR flight IN flights
+  COLLECT from = flight._from WITH COUNT INTO count OPTIONS { method: "sorted" }
+  RETURN { from: from, count: count }
+</code></p>
+
+<p>Note that specifying <strong>hash</strong> in <code>method</code> will not force the optimizer to use the <strong>hash</strong> method.
+The reason is that the <strong>hash</strong> variant cannot be used for all queries (only <code>COLLECT</code> statements
+without an <code>INTO</code> clause are eligible). If <code>OPTIONS</code> are omitted or any other method than <code>sorted</code>
+is specified, the optimizer will ignore it and use its regular cost estimations.</p>
+
+<h2>Understanding execution plans</h2>
+
+<p>Which method is actually used in a query can found out by explaining it and looking at its
+execution plan.</p>
+
+<p>A <code>COLLECT</code> is internally handled by an object called <code>AggregateNode</code>, so we have to look for that.
+In the above screenshots, the <code>AggregateNode</code>s are tagged with either <strong>hash</strong> or <strong>sorted</strong>. This can
+also be checked programatically by looking at the <code>aggregationOptions.method</code> attributes in the
+JSON result of an explain().</p>
+
+<p>Here is some example code to extract this information, limited to the <code>AggregateNode</code>s of the
+query already:</p>
+
+<p><code>js extracting just the AggregateNodes from an explain
+var query = `
+  FOR flight IN flights
+  COLLECT from = flight._from WITH COUNT INTO count
+  RETURN { from: from, count: count }
+`;
+var stmt = db._createStatement(query);
+var plan = stmt.explain().plan;
+plan.nodes.filter(function(node) {
+  return node.type === 'AggregateNode';
+});
+</code></p>
+
+<p>For the above query, this will produce something like this:</p>
+
+<p>```json JSON explain result for AggregateNode
+[
+  {</p>
+
+<pre><code>"type" : "AggregateNode", 
+...
+"aggregationOptions" : { 
+  "method" : "hash" 
+}  
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<p>Here we can see that the query is using the <strong>hash</strong> method.</p>
+
+<h2>Optimizing away post-COLLECT sorts</h2>
+
+<p>If a query uses the <strong>hash</strong> method for a <code>COLLECT</code> but the sort order of the <code>COLLECT</code> result
+is irrelevant to the user, the user can provide a hint to the optimizer to remove the
+post-<code>COLLECT</code> sort.</p>
+
+<p>This can be achieved by simplying appending a <code>SORT null</code> to the original <code>COLLECT</code> statement.
+Here we can see that this removes the post-<code>COLLECT</code> sort:</p>
+
+<p><img src="/downloads/screenshots/collect-nosort.png"></p>
+
+<h2>Performance improvements</h2>
+
+<p>The improvements achievable by using the <strong>hash</strong> method instead of the <strong>sorted</strong> method obviously
+depend on whether there are appropriate indexes present for the group criteria. If an index can
+be exploited, the <strong>sorted</strong> method may be just fine. However, there are cases when no indexes are
+present, for example, when running arbitrary ad-hoc queries or when indexes are too expensive
+(indexes need to be updated on insert/update/remove and also will use memory).</p>
+
+<p>Following are a few comparisons of the <strong>sorted</strong> and the <strong>hash</strong> methods in case no indexes can be
+used.</p>
+
+<p>Here&rsquo;s the setup for the test data. This generates 1M documents with both unique and repeating
+string and numeric values. For the non-unique values, we&rsquo;ll use 20 different categories:</p>
+
+<p>```js setting up test data
+var test = db._create(&ldquo;test&rdquo;);
+for (var i = 0; i &lt; 1000000; ++i) {
+  test.insert({</p>
+
+<pre><code>uniqueNumber: i, 
+uniqueString: String("test" + i), 
+repeatingNumber: (i % 20), 
+repeatingString: String("test" + (i % 20)) 
+</code></pre>
+
+<p>  });
+}
+```</p>
+
+<p>Now let&rsquo;s run the following query on the data and measure its execution time:</p>
+
+<p><code>plain test query
+FOR v IN test
+  COLLECT value = v.@attribute WITH COUNT INTO count
+  RETURN { value: value, count: count }
+</code></p>
+
+<p>The worst case is when the <code>COLLECT</code> will produce as many output rows as there are input
+rows. This will happen when using a unique attribute as the grouping criterion. We&rsquo;ll run
+tests on both numeric and string values.</p>
+
+<p>Here are the execution times for unique inputs. It can be seen that the <strong>hash</strong> method
+here will be beneficial if the post-<code>COLLECT</code> sort can be optimized away. As demonstrated
+above, this can be achieved by adding an extra <code>SORT null</code> after the <code>COLLECT</code> statement.
+If the post-<code>COLLECT</code> sort is not optimized away, it will make the hash method a bit more
+expensive than the <strong>sorted</strong> method:</p>
+
+<p>```plain COLLECT performance with unique inputs</p>
+
+<h2>collect method       @attribute                duration</h2>
+
+<p>sorted               uniqueNumber               11.92 s
+hash                 uniqueNumber               13.40 s
+hash (sort null)     uniqueNumber               10.13 s
+sorted               uniqueString               22.04 s
+hash                 uniqueString               27.35 s
+hash (sort null)     uniqueString               12.12 s
+```</p>
+
+<p>Now let&rsquo;s check the results when we group on an attribute that is non-unique. Following
+are the results for numeric and string attributes with 20 different categories each:</p>
+
+<p>```plain COLLECT performance with non-unique inputs</p>
+
+<h2>collect method       @attribute                duration</h2>
+
+<p>sorted               repeatingNumber             5.56 s
+hash                 repeatingNumber             0.94 s
+hash (sort null)     repeatingNumber             0.94 s
+sorted               repeatingString            10.56 s
+hash                 repeatingString             1.09 s
+hash (sort null)     repeatingString             1.09 s
+```</p>
+
+<p>In these cases, the result of the <code>COLLECT</code> will be much smaller than its input (we&rsquo;ll
+only get 20 result rows out instead of 1M). Therefore the post-<code>COLLECT</code> sort for the <strong>hash</strong>
+method will not make any difference, but the pre-<code>COLLECT</code> sort for the <strong>sorted</strong> method
+will still need to sort 1M input values. This is also the reason why the <strong>hash</strong> method
+is significantly faster here.</p>
+
+<p>As usual, your mileage may vary, so please run your own tests.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Creating Highscore Lists]]></title>
@@ -1336,158 +1619,6 @@ logfiles will be created when the first document is inserted. So there will be
 collections with documents but without any logfiles, at least temporarily until
 the WAL garbage collection kicks in and will transfer data from the WAL to the
 collection logfiles.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Schema Handling in ArangoDB]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/06/03/schema-handling-in-arangodb/"/>
-    <updated>2014-06-03T22:57:58+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/06/03/schema-handling-in-arangodb</id>
-    <content type="html"><![CDATA[<h1>Schemas vs. schema-free</h1>
-
-<p>In a relational database, all rows in a table have the same structure.
-The structure is saved once for the table, and the invidiual rows only
-contain the row&rsquo;s values. This is an efficient approach if all records
-have the exact same structure, i.e. the same attributes (same names and
-same data types).</p>
-
-<!-- more -->
-
-
-<p><code>plain Example records
-firstName (varchar)  |  lastName (varchar)  |  status (varchar)
----------------------+----------------------+------------------
-"fred"               |  "foxx"              |  "active"
-"john"               |  "doe"               |  "inactive"
-</code></p>
-
-<p>This is not a good fit if the data structure changes. In this case, an
-<code>ALTER TABLE</code> command would need to be issued in the relational database,
-converting all existing rows into the new structure. This is an expensive
-operation because it normally requires rewriting all existing rows.</p>
-
-<p>The situation becomes really difficult when there is no definite structure
-for a table &ndash; if rows shall have a dynamic or variable structure, then
-it can be quite hard to define a sensible relational table schema!</p>
-
-<p>This is where NoSQL databases enter the game &ndash; mostly they don&rsquo;t require
-defining a schema for a &ldquo;table&rdquo; at all. Instead, each individual record
-will not only contain its data values, but also its own schema. This means
-much higher flexibility as every record can its completely own data
-structure.</p>
-
-<p>This flexibility has a disadvantage though: storing schemas in individual
-records requires more storage space than storing the schema only once for
-the complete table. This is especially true if most (or even all) records
-in the table do have the same structure. A lot of storage space can be
-wasted while storing the same structure information again and again and again&hellip;</p>
-
-<h1>Schemas in ArangoDB</h1>
-
-<p>ArangoDB tries to be different in this respect: on the one hand it is a
-schema-free database and thus allows <em>flexible storage</em>. All documents in a
-collection (the ArangoDB lingo for <em>record</em> and <em>table</em>) can have the same
-or totally different structures. We leave this choice up to the user.</p>
-
-<p>On the other hand, ArangoDB will exploit the similarities in document
-structures to <em>save storage space</em>. It will detect identical document
-schemas, and only save each unique schema once. This process is called
-<strong>shaping</strong> in ArangoDB.</p>
-
-<h2>Shaping</h2>
-
-<p>We optimized ArangoDB for this use case because we found that in reality, the
-documents in a collection will either have absolutely the same schema, or
-there will only be a few different schemas in use.</p>
-
-<p>From the user perspective there are no schemas in ArangoDB: there is no way
-to create or alter the schema of a collection at all. Instead, ArangoDB
-will use the attribute names and data types contained in the JSON data of
-each document. All of this happens automatically.</p>
-
-<p>For each new document in a collection, ArangoDB will first figure out the
-schema. It will then check if it has already processed a document with the
-same schema. If yes, then there is no need to save the schema information
-again. Instead, the new document will only contain a pointer to an already
-existing schema. This does not require much storage space.</p>
-
-<p>If ArangoDB figures out that it has not yet processed a document with the
-same schema, it will store the document schema once, and store a pointer
-to the schema in the new document. This is a slightly more expensive
-operation, but it pays out when there are multiple documents in a
-collection with the same structure.</p>
-
-<p>When ArangoDB looks at document schemas, it takes into account the attribute
-names and the attribute value data types contained in a document. All
-attribute names and data types in a document make the so-called <em>shape</em>.</p>
-
-<p>Each shape is only stored once for each collection. Any attribute name used
-in a collection is also stored only once, and then reused from any shape that
-contains the attribute name.</p>
-
-<h2>Examples</h2>
-
-<p>The following documents do have different values but still their schemas are
-identical:</p>
-
-<p><code>json
-{ "name" : { "first" : "fred", "last" : "foxx" }, "status" : "active" }
-{ "name" : { "first" : "john", "last" : "doe" }, "status" : "inactive" }
-</code></p>
-
-<p>Both documents contain attributes named <code>name</code> and <code>status</code>. <code>name</code> is an
-array with two sub-attributes <code>first</code> and <code>last</code>, which are both strings.
-<code>status</code> also has string values in both documents.</p>
-
-<p>ArangoDB will save this schema only once in a so-called <em>shape</em>. The documents
-will store their own data values plus a pointer to this (same) shape.</p>
-
-<p>The next two documents have different, yet unknown schemas. ArangoDB will
-therefore store these two schemas in two new shapes:</p>
-
-<p><code>json
-{ "firstName" : "jack", "lastName" : "black", "status" : "inactive" }
-{ "name" : "username", "status" : "unknown" }
-</code></p>
-
-<p>We would end up with three diferent <em>shapes</em> for the four documents. This
-might not sound impressive, but if more documents are saved with one of the
-existing shapes, then storing each shape just once might really pay out.</p>
-
-<h2>A note on attribute names</h2>
-
-<p>Even though the latter two example documents had unique schemas, we saw in
-the examples that attribute names were already repeating. For example, all
-documents shown so far had an attribute named <code>status</code>, and some also
-had a <code>name</code> attribute.</p>
-
-<p>ArangoDB figures out when attribute names repeat, and it will not store the
-same attribute name more than once in a collection. Given that many
-documents in a collection use a fixed set of repeating attribute names,
-this approach can lead to considerable storage space reductions.</p>
-
-<p>As an aside, reusing attribute name information allows using descriptive
-(read: long) attribute names in ArangoDB with very low storage overhead.</p>
-
-<p>For example, in ArangoDB it will not cost much extra space to use long
-attribute names like these in lots of documents:
-<code>json
-{ "firstNameOfTheUser" : "jack", "lastNameOfTheUser" : "black" }
-</code></p>
-
-<p>Each unique attribute name is only stored once per collection. In ArangoDB
-there is thus no need to <em>artifically</em> shorten the attribute names in data
-like it sometimes is done in other schema-free databases to save storage
-space:
-<code>json
-{ "fn" : "jack", "ln" : "black" }
-</code>
-This artifical crippling of the attribute names makes the meaning of the
-attributes quite unclear and should be avoided. As mentioned, it is not
-necessary to do this in ArangoDB as it will save attribute names separate
-from attribute values, and repeating attribute names are not stored
-repeatedly.</p>
 ]]></content>
   </entry>
   

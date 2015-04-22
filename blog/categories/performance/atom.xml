@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-21T12:35:40+02:00</updated>
+  <updated>2015-04-22T16:54:32+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,289 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[COLLECTing With a Hash Table]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table/"/>
+    <updated>2015-04-22T13:53:10+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table</id>
+    <content type="html"><![CDATA[<p>ArangoDB 2.6 will feature an alternative <strong>hash</strong> implementation of the AQL <code>COLLECT</code>
+operation. The new implementation can speed up some AQL queries that can not exploit indexes
+on the <code>COLLECT</code> group criteria.</p>
+
+<p>This blog post provides a preview of the feature and shows some nice performance improvements.
+It also explains the <code>COLLECT</code>-related optimizer parts and how the optimizer will decide whether
+to use the new or the traditional implementation.</p>
+
+<!-- more -->
+
+
+<h2>Introduction to COLLECT</h2>
+
+<p>A quick recap: in AQL, the <code>COLLECT</code> operation can be used for grouping and optionally counting values.</p>
+
+<p>Here&rsquo;s an example, using flight data:</p>
+
+<p><code>plain AQL COLLECT example
+FOR flight IN flights
+  COLLECT from = flight._from WITH COUNT INTO count
+  RETURN { from: from, count: count }
+</code></p>
+
+<p>This query will iterate over all documents in collection <code>flights</code>, and count the
+number of flights per different <code>_from</code> value (origin airport). The query result will
+contain only unique <code>from</code> values plus a counter for each:</p>
+
+<p><code>json query result, grouped by from
+[
+  { "from" : "airports/ABE", "count" : 6205 },
+  { "from" : "airports/ABQ", "count" : 39346 },
+  { "from" : "airports/ACV", "count" : 362 },
+  ...
+  { "from" : "airports/YAP", "count" : 285 },
+  { "from" : "airports/YKM", "count" : 879 },
+  { "from" : "airports/YUM", "count" : 2275 }
+]
+</code></p>
+
+<p>As the <code>COLLECT</code> will group its result according to the specified group criteria (<code>flights._from</code>
+in the above query), it needs a way of figuring out to which group any input value does belong.</p>
+
+<p>Before ArangoDB 2.6, there was a single method for determining the group. Starting with ArangoDB
+2.6, the query optimizer can choose between two different <code>COLLECT</code> methods, the <strong>sorted</strong> method
+and the <strong>hash</strong> method.</p>
+
+<h2>Sorted COLLECT method</h2>
+
+<p>The traditional method for determining the group values is the <strong>sorted</strong> method. It has been
+available in ArangoDB since the very start.</p>
+
+<p>The sorted method of <code>COLLECT</code> requires its input to be sorted by the group criteria specified
+in the <code>COLLECT</code> statement. Because there is no guarantee that the input data are already sorted
+in the same way, the query optimizer will automatically insert a <code>SORT</code> statement into the query
+in front of the <code>COLLECT</code>. In case there is a sorted index present on the group criteria attributes,
+the optimizer may be able to optimize away the <code>SORT</code> again. If there is no sorted index present
+on the group criteria attributes, the <code>SORT</code> will remain in the execution plan.</p>
+
+<p>Here is the execution plan for the above query using the <strong>sorted</strong> method of <code>COLLECT</code>. We can see
+the extra <code>SortNode</code> with id #7 being added by the optimizer in front of the <code>COLLECT</code>:</p>
+
+<p><img src="/downloads/screenshots/collect-sorted.png"></p>
+
+<p>The <strong>sorted</strong> method of <code>COLLECT</code> is efficient because it can write out a group result whenever
+an input value will start a new group. Therefore it does not need to keep the whole <code>COLLECT</code>
+result in memory. The downside of using the sorted method is that it requires its input to be
+sorted, and that this requires adding an extra <code>SORT</code> for not properly sorted input.</p>
+
+<h2>Hash COLLECT method</h2>
+
+<p>Since ArangoDB 2.6, the query optimizer can also employ the <strong>hash</strong> method for <code>COLLECT</code>. The
+hash method works by assigning the input values of the <code>COLLECT</code> to slots in a hash table. It
+does not require its input to be sorted. Because the entries in the hash table do not have a
+particular order, the query optimizer will add a post-<code>COLLECT</code> <code>SORT</code> statement. With this extra
+sort of the <code>COLLECT</code> result, the optimizer ensures that the output of the sorted <code>COLLECT</code> will
+be the same as the output of the hash <code>COLLECT</code>.</p>
+
+<p>Here is the execution plan for the above query when using the <strong>hash</strong> method of <code>COLLECT</code>.
+Here we can see the extra <code>SortNode</code> with id #7 being added post-<code>COLLECT</code>:</p>
+
+<p><img src="/downloads/screenshots/collect-hash.png"></p>
+
+<p>The <strong>hash</strong> method is beneficial because it does not require sorted input and thus no extra
+<code>SORT</code> step in front. However, as the input is not sorted, it is never clear when a group is
+actually finished. The hash method therefore needs to build the whole <code>COLLECT</code> result in memory
+until the input is exhausted. Then it can safely write out all group results. Additionally,
+the result of the hash <code>COLLECT</code> is unsorted. Therefore the optimizer will add a post-<code>COLLECT</code>
+sort to ensure the result will be identical to a <strong>sorted</strong> <code>COLLECT</code>.</p>
+
+<h2>Which method will be used when?</h2>
+
+<p>The query optimizer will always take the initial query plan and specialize its <code>COLLECT</code> nodes to
+using the <strong>sorted</strong> method. It will also add the pre-<code>COLLECT</code> <code>SORT</code> in the original plan.</p>
+
+<p>In addition, for every <code>COLLECT</code> statement not using an <code>INTO</code> clause, the optimizer will create
+a plan variant that uses the <strong>hash</strong> method. In that plan variant, the post-<code>COLLECT</code> <code>SORT</code>
+will be added. Note that a <code>WITH COUNT INTO</code> is still ok here, but that using a regular <code>INTO</code>
+clause will disable the usage of the <strong>hash</strong> method:</p>
+
+<p><code>plain a query that cannot use the hash method
+FOR flight IN flights
+  COLLECT from = flight._from INTO allFlights
+  RETURN { from: from, flights: allFlights }
+</code></p>
+
+<p>If more than one <code>COLLECT</code> method can be used for a query, the created plans will be shipped through
+the regular optimization pipeline. In the end, the optimizer will pick the plan with the lowest
+estimated total cost as it will do for all other queries.</p>
+
+<p>The <strong>hash</strong> variant does not require an up-front sort of the <code>COLLECT</code> input, and will thus be
+preferred over the <strong>sorted</strong> method if the optimizer estimates many input elements for the <code>COLLECT</code>
+and cannot use an index to process them in already sorted order. In this case, the optimizer
+will estimate that post-sorting the result of the <strong>hash</strong> <code>COLLECT</code> will be more efficient than
+pre-sorting the input for the <strong>sorted</strong> <code>COLLECT</code>.</p>
+
+<p>The main assumption behind this estimation is that the result of any <code>COLLECT</code> statement will
+contain at most as many elements as there are input elements to it. Therefore, the output of
+a <code>COLLECT</code> is likely to be smaller (in terms of rows) than its input, making post-sorting more
+efficient than pre-sorting.</p>
+
+<p>If there is a sorted index on the <code>COLLECT</code> group criteria that the optimizer can exploit, the
+optimizer will pick the <strong>sorted</strong> method because thanks to the index it can optimize away the
+pre-<code>COLLECT</code> sort, leaving no sorts left in the final execution plan.</p>
+
+<p>To override the optimizer decision, <code>COLLECT</code> statements now have an <code>OPTIONS</code> modifier. This
+modifier can be used to force the optimizer to use the <strong>sorted</strong> variant:</p>
+
+<p><code>plain forcing the use of the sorted variant
+FOR flight IN flights
+  COLLECT from = flight._from WITH COUNT INTO count OPTIONS { method: "sorted" }
+  RETURN { from: from, count: count }
+</code></p>
+
+<p>Note that specifying <strong>hash</strong> in <code>method</code> will not force the optimizer to use the <strong>hash</strong> method.
+The reason is that the <strong>hash</strong> variant cannot be used for all queries (only <code>COLLECT</code> statements
+without an <code>INTO</code> clause are eligible). If <code>OPTIONS</code> are omitted or any other method than <code>sorted</code>
+is specified, the optimizer will ignore it and use its regular cost estimations.</p>
+
+<h2>Understanding execution plans</h2>
+
+<p>Which method is actually used in a query can found out by explaining it and looking at its
+execution plan.</p>
+
+<p>A <code>COLLECT</code> is internally handled by an object called <code>AggregateNode</code>, so we have to look for that.
+In the above screenshots, the <code>AggregateNode</code>s are tagged with either <strong>hash</strong> or <strong>sorted</strong>. This can
+also be checked programatically by looking at the <code>aggregationOptions.method</code> attributes in the
+JSON result of an explain().</p>
+
+<p>Here is some example code to extract this information, limited to the <code>AggregateNode</code>s of the
+query already:</p>
+
+<p><code>js extracting just the AggregateNodes from an explain
+var query = `
+  FOR flight IN flights
+  COLLECT from = flight._from WITH COUNT INTO count
+  RETURN { from: from, count: count }
+`;
+var stmt = db._createStatement(query);
+var plan = stmt.explain().plan;
+plan.nodes.filter(function(node) {
+  return node.type === 'AggregateNode';
+});
+</code></p>
+
+<p>For the above query, this will produce something like this:</p>
+
+<p>```json JSON explain result for AggregateNode
+[
+  {</p>
+
+<pre><code>"type" : "AggregateNode", 
+...
+"aggregationOptions" : { 
+  "method" : "hash" 
+}  
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<p>Here we can see that the query is using the <strong>hash</strong> method.</p>
+
+<h2>Optimizing away post-COLLECT sorts</h2>
+
+<p>If a query uses the <strong>hash</strong> method for a <code>COLLECT</code> but the sort order of the <code>COLLECT</code> result
+is irrelevant to the user, the user can provide a hint to the optimizer to remove the
+post-<code>COLLECT</code> sort.</p>
+
+<p>This can be achieved by simplying appending a <code>SORT null</code> to the original <code>COLLECT</code> statement.
+Here we can see that this removes the post-<code>COLLECT</code> sort:</p>
+
+<p><img src="/downloads/screenshots/collect-nosort.png"></p>
+
+<h2>Performance improvements</h2>
+
+<p>The improvements achievable by using the <strong>hash</strong> method instead of the <strong>sorted</strong> method obviously
+depend on whether there are appropriate indexes present for the group criteria. If an index can
+be exploited, the <strong>sorted</strong> method may be just fine. However, there are cases when no indexes are
+present, for example, when running arbitrary ad-hoc queries or when indexes are too expensive
+(indexes need to be updated on insert/update/remove and also will use memory).</p>
+
+<p>Following are a few comparisons of the <strong>sorted</strong> and the <strong>hash</strong> methods in case no indexes can be
+used.</p>
+
+<p>Here&rsquo;s the setup for the test data. This generates 1M documents with both unique and repeating
+string and numeric values. For the non-unique values, we&rsquo;ll use 20 different categories:</p>
+
+<p>```js setting up test data
+var test = db._create(&ldquo;test&rdquo;);
+for (var i = 0; i &lt; 1000000; ++i) {
+  test.insert({</p>
+
+<pre><code>uniqueNumber: i, 
+uniqueString: String("test" + i), 
+repeatingNumber: (i % 20), 
+repeatingString: String("test" + (i % 20)) 
+</code></pre>
+
+<p>  });
+}
+```</p>
+
+<p>Now let&rsquo;s run the following query on the data and measure its execution time:</p>
+
+<p><code>plain test query
+FOR v IN test
+  COLLECT value = v.@attribute WITH COUNT INTO count
+  RETURN { value: value, count: count }
+</code></p>
+
+<p>The worst case is when the <code>COLLECT</code> will produce as many output rows as there are input
+rows. This will happen when using a unique attribute as the grouping criterion. We&rsquo;ll run
+tests on both numeric and string values.</p>
+
+<p>Here are the execution times for unique inputs. It can be seen that the <strong>hash</strong> method
+here will be beneficial if the post-<code>COLLECT</code> sort can be optimized away. As demonstrated
+above, this can be achieved by adding an extra <code>SORT null</code> after the <code>COLLECT</code> statement.
+If the post-<code>COLLECT</code> sort is not optimized away, it will make the hash method a bit more
+expensive than the <strong>sorted</strong> method:</p>
+
+<p>```plain COLLECT performance with unique inputs</p>
+
+<h2>collect method       @attribute                duration</h2>
+
+<p>sorted               uniqueNumber               11.92 s
+hash                 uniqueNumber               13.40 s
+hash (sort null)     uniqueNumber               10.13 s
+sorted               uniqueString               22.04 s
+hash                 uniqueString               27.35 s
+hash (sort null)     uniqueString               12.12 s
+```</p>
+
+<p>Now let&rsquo;s check the results when we group on an attribute that is non-unique. Following
+are the results for numeric and string attributes with 20 different categories each:</p>
+
+<p>```plain COLLECT performance with non-unique inputs</p>
+
+<h2>collect method       @attribute                duration</h2>
+
+<p>sorted               repeatingNumber             5.56 s
+hash                 repeatingNumber             0.94 s
+hash (sort null)     repeatingNumber             0.94 s
+sorted               repeatingString            10.56 s
+hash                 repeatingString             1.09 s
+hash (sort null)     repeatingString             1.09 s
+```</p>
+
+<p>In these cases, the result of the <code>COLLECT</code> will be much smaller than its input (we&rsquo;ll
+only get 20 result rows out instead of 1M). Therefore the post-<code>COLLECT</code> sort for the <strong>hash</strong>
+method will not make any difference, but the pre-<code>COLLECT</code> sort for the <strong>sorted</strong> method
+will still need to sort 1M input values. This is also the reason why the <strong>hash</strong> method
+is significantly faster here.</p>
+
+<p>As usual, your mileage may vary, so please run your own tests.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[More Efficient Data Exports]]></title>
@@ -651,189 +934,6 @@ number of documents:  2,048,000    =&gt;    time:   0.925 s
 indexing string values will be slower than indexing numbers, but insertion
 should still scale nicely with the number of documents as long as everything
 fits in RAM.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Understanding Where Operations Are Executed]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed/"/>
-    <updated>2014-08-30T22:38:42+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed</id>
-    <content type="html"><![CDATA[<p>I recently had to deal with some data processing operation that took
-about 20 minutes to complete. When looking into this, I found that the
-easiest and most beneficial change to the whole setup was to make the
-operation a <em>server-side</em> operation instead of executing it <em>client-side</em>.</p>
-
-<p>This change reduced the operation&rsquo;s total execution time to a few seconds.</p>
-
-<!-- more -->
-
-
-<p>I can&rsquo;t show the original processing task here, so I&rsquo;ll start with a
-contrived example. Imagine the following <em>for</em> loop inserting 100K documents
-into a collection named <code>test</code>:
-<code>js inserting 100k documents
-for (i = 0; i &lt; 100000; ++i) {
-  db.test.save({ value: i });
-}
-</code>
-Now we only need a client application to execute the operation. As I don&rsquo;t
-have a presentable client application right now, I will use the ArangoShell as
-my client application.</p>
-
-<h2>What&rsquo;s in a for loop?</h2>
-
-<p>Running the above <em>for</em> loop inside the ArangoShell will lead to the loop being
-executed inside the <em>arangosh</em> process.</p>
-
-<p>In order to save a document in the collection, arangosh (our client) must make a
-call to the ArangoDB server. This means issuing an HTTP POST request
-to the server&rsquo;s REST API at <code>/_api/document/?collection=test</code>.
-The server process will receive this request, insert the document, and
-respond with an HTTP status code 201 or 202 to our client.
-The client will then continue the loop until all documents have been inserted.</p>
-
-<p>Now it&rsquo;s easy to see that the simple 3-line loop will issue 100,000 HTTP requests
-in total. This means lots of data being pushed through the network stack(s).
-It is pretty easy to imagine that this will come at a cost.</p>
-
-<p>If we instead execute the above loop directly inside the ArangoDB server, we
-can get rid of all the network overhead. The server has no need to send HTTP
-calls to itself. It can simply execute the 100K inserts and is then done.
-We therefore assume the loop to run somewhat faster when executed server-side.</p>
-
-<p>A quick test on a crap laptop produced the following execution times for running
-the loops:</p>
-
-<ul>
-<li>server-side execution (arangod): 1.34 seconds</li>
-<li>client-side execution (arangosh): 17.32 seconds</li>
-</ul>
-
-
-<p><strong>Ouch</strong>. It looks like the client-server request-response overhead matters.</p>
-
-<p>The following sections deal with how to get rid of some or even all the
-client-server ping pong.</p>
-
-<h2>Graph traversals</h2>
-
-<p>The above <em>for</em> loop example was contrived, but imagine running
-a client-side graph traversal instead. In fact, the original problem mentioned
-in the introduction has been a graph traversal.</p>
-
-<p>The problem of a graph traversal is that is often iterative and highly
-dynamic. Decisions are made during the traversal as nodes are encountered,
-leading to dynamic inclusion or exclusion etc. This means that it makes sense to
-process nodes and edges only when needed, at the point when they are visited.</p>
-
-<p>Even if the client can employ some sort of caching for already visited
-nodes, the client still needs to ask the server about each visited
-node&rsquo;s connections at least once. Otherwise it could not follow them.</p>
-
-<p>This normally means lots of requests and responses. Compare this to the
-<em>single</em> request-response alternative in which a client kicks off a server-side
-traversal, and finally receives the overal result once it is assembled.</p>
-
-<p><strong>Conclusion</strong>: traversals on anything but very small graphs should be run server-side.
-A server-side action (see below) is a good way to do this. Please note that
-running a server-side traversal does not mean giving up flexibility and
-control flow functionality. Server-side traversals remain highly configurable
-through custom JavaScript functions that allow implementation of user-defined
-business logic.</p>
-
-<h2>AQL queries</h2>
-
-<p>We won&rsquo;t have your application send a series of 100,000 individual
-insert statements to the relational database of our choice. We already
-know from the past that this is going to be rather slow, so we have
-learned to avoid this. In the relational context, we rather use SQL queries
-that create or modify many rows in one go, e.g. an <code>INSERT INTO ... SELECT ...</code>,
-bulk inserts etc.</p>
-
-<p>ArangoDB is no different. In general, you should try to avoid issuing lots
-of individual queries to the database from a client application. Instead and if
-the queries look alike, try converting multiple individual operations into a
-single AQL query. This will already save a lot of network overhead.</p>
-
-<p>AQL provides multi-document operations to insert, update, and remove data. An
-overview is given <a href="http://docs.arangodb.org/Aql/DataModification.html">here</a>.</p>
-
-<p>The above 100K inserts from the contrived example can easily be transformed
-into this single AQL query:
-<code>
-FOR i IN 1..100000 INSERT { value: i } INTO test
-</code></p>
-
-<h2>Bulk imports</h2>
-
-<p>For importing larger amounts of documents from files, there is the specialized
-<a href="http://docs.arangodb.org/Arangoimp/README.html">arangoimp</a> import tool. It can
-load data from JSON and CSV files into ArangoDB. The tool is shipped with
-ArangoDB.</p>
-
-<p>ArangoDB also provides a REST API for <a href="http://docs.arangodb.org/HttpBulkImports/README.html">bulk imports</a>
-of documents.</p>
-
-<h2>Joins</h2>
-
-<p>A special note about <em>joins</em>: the fact that several NoSQL databases do not
-provide join functionality has driven some people to emulate join functionality
-on the client-side, in their applications.</p>
-
-<p>This can be a recipe for disaster: client-side join implementation might lead
-to horrendous amounts of queries that might need to be sent to the database for
-fetching all the records. More than that, if data are queried individually,
-the overall result may lack consistency. By the way, the same is true for
-fetching referenced or linked documents.</p>
-
-<p>ArangoDB provides join functionality via AQL queries. Additionally, AQL queries
-can be used to fetch other documents with the original documents. Note that
-ArangoDB has no way of defining references or links between documents, but
-still AQL allows combining arbitrary documents in one query.</p>
-
-<p>In almost all cases it make more sense to use an AQL query that performs
-joins or reference-fetching server-side and close to the data than having to
-deal with that on the application-side of things.</p>
-
-<p>AQL joins are described <a href="http://docs.arangodb.org/AqlExamples/Join.html">here</a>.</p>
-
-<h2>Server-side actions</h2>
-
-<p>With <em>stored procedures</em>, relational databases provide another way for an
-application to trigger the execution of a large amount of queries. Stored
-procedures are executed server-side, too, so they allow avoiding a lot of
-request-response ping pong between the application and the database, at least
-for defined tasks. Additionally, stored procedures provide control flow
-functionality, which can also be handy when operations depend on each other.</p>
-
-<p>Coming back to ArangoDB: complex data-processing tasks that need to execute
-multiple operations or need control flow functionality might benefit if
-converted from multiple application-side operations into a single server-side
-action.</p>
-
-<p>Server-side actions run inside the ArangoDB server, closer to the data, and
-can be much faster than a series of client-side operations.
-A server-side action is called with just one HTTP request from the application,
-so it may lead to saving lots of request-response cycles and reduction in
-network overhead. Apart from that, server-side actions in ArangoDB can employ
-transactions and provide the necessary control over isolation and atomicity
-when executing a series of operations.</p>
-
-<p>Business logic and control flow functionality can be integrated
-easily because server-side actions in ArangoDB are JavaScript functions,
-with all of the language&rsquo;s programming features being available.</p>
-
-<p>But there&rsquo;s even more to it: a single server-side operation can be written
-to put together its result in a format most convenient for the client
-application. This can also lead to better encapsulation, because all an
-application needs to know about a server-side action is its API or contract.
-Any internals of the action can be hidden from the client application. Overall,
-this supports a service-oriented approach.</p>
-
-<p>To learn more about how to write server-side actions, please have a look
-at ArangoDB&rsquo;s <a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a>. It is all
-about making server-side actions available via REST APIs.</p>
 ]]></content>
   </entry>
   
