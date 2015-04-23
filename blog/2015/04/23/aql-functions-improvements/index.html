@@ -1,0 +1,418 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>AQL Functions Improvements - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="Waiting for a git pull to complete over an 8 KiB/s internet connection is boring.
+So I thought I&rsquo;d rather use the idle time and quickly write &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>Notes on ArangoDB development</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">AQL Functions Improvements</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-23T10:24:53+02:00" pubdate data-updated="true">Apr 23<span>rd</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>Waiting for a <code>git pull</code> to complete over an 8 KiB/s internet connection is boring.
+So I thought I&rsquo;d rather use the idle time and quickly write about some performance
+improvements for certain AQL functions that were recently completed and that will
+become available with ArangoDB 2.6.</p>
+
+<p>The improvements affect the following AQL functions:</p>
+
+<ul>
+<li><code>UNSET()</code>: remove specified attributes from an object/document</li>
+<li><code>KEEP()</code>: keep only specified attributes of an object/document</li>
+<li><code>MERGE()</code>: merge the attributes of multiple objects/documents</li>
+</ul>
+
+
+<p>This blog post shows a few example queries that will benefit from <strong>50 to more than 60 %
+reductions</strong> in query execution times due to the changes done to these functions.</p>
+
+<!-- more -->
+
+
+<h2>When to expect benefits</h2>
+
+<p>Reductions in execution time can be expected for AQL queries invoking one of the above
+AQL functions many times, and if the AQL function is used in a so-called <em>simple</em>
+calculation. Whether or not a calculation is considered <em>simple</em> is shown in the detailed
+JSON output of an <code>explain()</code>.</p>
+
+<p>Queries will not benefit if they invoke the AQL functions only a few times or when the
+function call is contained in an expression that is executed using the non-<em>simple</em> code path.</p>
+
+<h2>Example queries</h2>
+
+<p>Following are a few example queries for the three AQL functions, showing the reductions in
+execution times. They all use the <em>simple</em> code path so the benefits can be reaped.</p>
+
+<p>For comparing the execution times between 2.5 and 2.6, I have prepared a simple test setup.
+Here is a test function that will create a collection named <code>test</code> and populate it
+with a configurable amount documents. It will then run an AQL query that will update
+each document in the collection, using one of the named AQL functions. The function
+will return the execution time for the AQL query, excluding the collection setup time:</p>
+
+<figure class='code'><figcaption><span>test function</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">run</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">n</span><span class="p">,</span> <span class="nx">query</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">time</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">time</span><span class="p">;</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">db</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb&quot;</span><span class="p">).</span><span class="nx">db</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// drop and re-create test collection </span>
+</span><span class='line'>  <span class="nx">db</span><span class="p">.</span><span class="nx">_drop</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">c</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// insert n documents</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">n</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">c</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">value1</span><span class="o">:</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">value2</span><span class="o">:</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">value3</span><span class="o">:</span> <span class="s1">&#39;foobar&#39;</span> <span class="o">+</span> <span class="nx">i</span> <span class="p">});</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// flush write-ahead log and wait a few seconds before running query</span>
+</span><span class='line'>  <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">wal</span><span class="p">.</span><span class="nx">flush</span><span class="p">();</span>
+</span><span class='line'>  <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">wait</span><span class="p">(</span><span class="mi">5</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// run query </span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">s</span> <span class="o">=</span> <span class="nx">time</span><span class="p">();</span>
+</span><span class='line'>  <span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">);</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">time</span><span class="p">()</span> <span class="o">-</span> <span class="nx">s</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>UNSET()</h3>
+
+<p>Let&rsquo;s start with the <code>UNSET()</code> AQL function. Its purpose is to remove or multiple
+attributes from an object/document. Here is an example AQL query that removes
+attribute <code>value2</code> from each document in the <code>test</code> collection:</p>
+
+<figure class='code'><figcaption><span>invocation of UNSET()</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">run</span><span class="p">(</span><span class="nx">n</span><span class="p">,</span> <span class="s2">&quot;FOR t IN test LET modified = UNSET(t, &#39;value2&#39;) REPLACE t WITH modified IN test&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<figure class='code'><figcaption><span>execution times of UNSET() query in 2.5 and 2.6</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>value of n       time 2.5       time 2.6       speedup
+</span><span class='line'>------------------------------------------------------
+</span><span class='line'>   100,000         3.28 s         1.13 s          65 %
+</span><span class='line'>   500,000        16.93 s         5.38 s          68 %
+</span><span class='line'> 1,000,000        32.60 s        11.40 s          65 %</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>KEEP()</h3>
+
+<p>The purpose of <code>KEEP()</code> is to remove all attributes from an object/document but the
+specified ones. Here&rsquo;s an example query that uses <code>KEEP()</code> to remove all attributes
+from the documents in the <code>test</code> collectionn but attribute <code>value2</code>:</p>
+
+<figure class='code'><figcaption><span>invocation of KEEP()</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">run</span><span class="p">(</span><span class="nx">n</span><span class="p">,</span> <span class="s2">&quot;FOR t IN test LET modified = KEEP(t, &#39;value2&#39;) REPLACE t WITH modified IN test&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<figure class='code'><figcaption><span>execution times of KEEP() query in 2.5 and 2.6</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>value of n       time 2.5       time 2.6       speedup
+</span><span class='line'>------------------------------------------------------
+</span><span class='line'>   100,000         1.98 s         0.87 s          56 %
+</span><span class='line'>   500,000         9.34 s         4.09 s          56 %
+</span><span class='line'> 1,000,000        18.86 s         8.23 s          56 %</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>MERGE()</h3>
+
+<p>Finally, the <code>MERGE()</code> function can be used to merge multiple objects/documents in a
+single one. The following query will add an attribute <code>value4</code> to all documents in
+collection <code>test</code>:</p>
+
+<figure class='code'><figcaption><span>invocation of MERGE()</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">run</span><span class="p">(</span><span class="nx">n</span><span class="p">,</span> <span class="s2">&quot;FOR t IN test LET modified = MERGE(t, { value4 : 1 }) REPLACE t WITH modified IN test&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<figure class='code'><figcaption><span>execution times of MERGE() query in 2.5 and 2.6</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>value of n       time 2.5       time 2.6       speedup
+</span><span class='line'>------------------------------------------------------
+</span><span class='line'>   100,000         3.93 s         1.22 s          68 %
+</span><span class='line'>   500,000        19.17 s         5.91 s          69 %
+</span><span class='line'> 1,000,000        38.27 s        12.33 s          67 %</span></code></pre></td></tr></table></div></figure>
+
+
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-23T10:24:53+02:00" pubdate data-updated="true">Apr 23<span>rd</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/performance/'>performance</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/04/22/collecting-with-a-hash-table/" title="Previous Post: COLLECTing with a hash table">&laquo; COLLECTing with a hash table</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/04/23/aql-functions-improvements/">AQL Functions Improvements</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing With a Hash Table</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/20/creating-highscore-lists/">Creating Highscore Lists</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/14/updating-documents-with-arangoimp/">Updating Documents With Arangoimp</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/04/more-efficient-data-exports/">More Efficient Data Exports</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (17)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (28)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (4)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (8)</a></li><li><a href='/blog/categories/performance/'>performance (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2015/04/'>APR (6)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

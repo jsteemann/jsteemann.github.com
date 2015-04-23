@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-22T16:54:32+02:00</updated>
+  <updated>2015-04-23T11:20:53+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,145 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[AQL Functions Improvements]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements/"/>
+    <updated>2015-04-23T10:24:53+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements</id>
+    <content type="html"><![CDATA[<p>Waiting for a <code>git pull</code> to complete over an 8 KiB/s internet connection is boring.
+So I thought I&rsquo;d rather use the idle time and quickly write about some performance
+improvements for certain AQL functions that were recently completed and that will
+become available with ArangoDB 2.6.</p>
+
+<p>The improvements affect the following AQL functions:</p>
+
+<ul>
+<li><code>UNSET()</code>: remove specified attributes from an object/document</li>
+<li><code>KEEP()</code>: keep only specified attributes of an object/document</li>
+<li><code>MERGE()</code>: merge the attributes of multiple objects/documents</li>
+</ul>
+
+
+<p>This blog post shows a few example queries that will benefit from <strong>50 to more than 60 %
+reductions</strong> in query execution times due to the changes done to these functions.</p>
+
+<!-- more -->
+
+
+<h2>When to expect benefits</h2>
+
+<p>Reductions in execution time can be expected for AQL queries invoking one of the above
+AQL functions many times, and if the AQL function is used in a so-called <em>simple</em>
+calculation. Whether or not a calculation is considered <em>simple</em> is shown in the detailed
+JSON output of an <code>explain()</code>.</p>
+
+<p>Queries will not benefit if they invoke the AQL functions only a few times or when the
+function call is contained in an expression that is executed using the non-<em>simple</em> code path.</p>
+
+<h2>Example queries</h2>
+
+<p>Following are a few example queries for the three AQL functions, showing the reductions in
+execution times. They all use the <em>simple</em> code path so the benefits can be reaped.</p>
+
+<p>For comparing the execution times between 2.5 and 2.6, I have prepared a simple test setup.
+Here is a test function that will create a collection named <code>test</code> and populate it
+with a configurable amount documents. It will then run an AQL query that will update
+each document in the collection, using one of the named AQL functions. The function
+will return the execution time for the AQL query, excluding the collection setup time:</p>
+
+<p>```js test function
+var run = function (n, query) {
+  var time = require(&ldquo;internal&rdquo;).time;
+  var db = require(&ldquo;org/arangodb&rdquo;).db;</p>
+
+<p>  // drop and re-create test collection
+  db.<em>drop(&ldquo;test&rdquo;);
+  var c = db.</em>create(&ldquo;test&rdquo;);</p>
+
+<p>  // insert n documents
+  for (var i = 0; i &lt; n; ++i) {</p>
+
+<pre><code>c.insert({ value1: i, value2: i, value3: 'foobar' + i }); 
+</code></pre>
+
+<p>  }</p>
+
+<p>  // flush write-ahead log and wait a few seconds before running query
+  require(&ldquo;internal&rdquo;).wal.flush();
+  require(&ldquo;internal&rdquo;).wait(5);</p>
+
+<p>  // run query
+  var s = time();
+  db._query(query);
+  return time() &ndash; s;
+};
+```</p>
+
+<h3>UNSET()</h3>
+
+<p>Let&rsquo;s start with the <code>UNSET()</code> AQL function. Its purpose is to remove or multiple
+attributes from an object/document. Here is an example AQL query that removes
+attribute <code>value2</code> from each document in the <code>test</code> collection:</p>
+
+<p><code>js invocation of UNSET()
+run(n, "FOR t IN test LET modified = UNSET(t, 'value2') REPLACE t WITH modified IN test");
+</code></p>
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<p>```plain execution times of UNSET() query in 2.5 and 2.6</p>
+
+<h2>value of n       time 2.5       time 2.6       speedup</h2>
+
+<p>   100,000         3.28 s         1.13 s          65 %
+   500,000        16.93 s         5.38 s          68 %
+ 1,000,000        32.60 s        11.40 s          65 %
+```</p>
+
+<h3>KEEP()</h3>
+
+<p>The purpose of <code>KEEP()</code> is to remove all attributes from an object/document but the
+specified ones. Here&rsquo;s an example query that uses <code>KEEP()</code> to remove all attributes
+from the documents in the <code>test</code> collectionn but attribute <code>value2</code>:</p>
+
+<p><code>js invocation of KEEP()
+run(n, "FOR t IN test LET modified = KEEP(t, 'value2') REPLACE t WITH modified IN test");
+</code></p>
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<p>```plain execution times of KEEP() query in 2.5 and 2.6</p>
+
+<h2>value of n       time 2.5       time 2.6       speedup</h2>
+
+<p>   100,000         1.98 s         0.87 s          56 %
+   500,000         9.34 s         4.09 s          56 %
+ 1,000,000        18.86 s         8.23 s          56 %
+```</p>
+
+<h3>MERGE()</h3>
+
+<p>Finally, the <code>MERGE()</code> function can be used to merge multiple objects/documents in a
+single one. The following query will add an attribute <code>value4</code> to all documents in
+collection <code>test</code>:</p>
+
+<p><code>js invocation of MERGE()
+run(n, "FOR t IN test LET modified = MERGE(t, { value4 : 1 }) REPLACE t WITH modified IN test");
+</code></p>
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<p>```plain execution times of MERGE() query in 2.5 and 2.6</p>
+
+<h2>value of n       time 2.5       time 2.6       speedup</h2>
+
+<p>   100,000         3.93 s         1.22 s          68 %
+   500,000        19.17 s         5.91 s          69 %
+ 1,000,000        38.27 s        12.33 s          67 %
+```</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[COLLECTing With a Hash Table]]></title>
@@ -1068,103 +1207,6 @@ applications. Client programs do not need to be adjusted to reap the benefits. T
 that has changed were the <em>internals</em> of the cursor API. Its public REST interface remains unchanged.</p>
 
 <p>The changes are included in the <code>devel</code> branch and can be tested there.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Improvements for Data-modification Queries]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries/"/>
-    <updated>2015-03-27T23:29:19+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries</id>
-    <content type="html"><![CDATA[<p>Data-modification queries were enhanced in ArangoDB 2.4 to be able to also return
-the inserted, update or removed documents.</p>
-
-<p>For example, the following statement inserted a few documents and also returned
-them with all their attributes:</p>
-
-<p><code>plain AQL insert query returning documents
-FOR i IN 1..10
-  INSERT { value: i } IN test
-  LET inserted = NEW
-  RETURN inserted
-</code></p>
-
-<p>The syntax for returning documents from data-modification queries only supported
-the exact above format. Using a <code>LET</code> clause was required, and the <code>RETURN</code> clause
-was limited to returning the variable introduced by the <code>LET</code>.</p>
-
-<p>These syntax restrictions have been lifted in the <code>devel</code> branch, which will become
-release 2.6 eventually. The changes make returning values from data-modification
-statements easier and also more flexible.</p>
-
-<!-- more -->
-
-
-<h2>Simpler syntax</h2>
-
-<p>For example, specifying a <code>LET</code> clause is not required anymore (though still fully
-supported). Instead, the <code>RETURN</code> clause can directly refer to the <code>NEW</code> pseudo-value,
-making the query shorter and easier to write:</p>
-
-<p><code>plain AQL insert query returning documents
-FOR i IN 1..10
-  INSERT { value: i } IN test
-  RETURN NEW
-</code></p>
-
-<h2>Projections</h2>
-
-<p>It is now also possible to return a projection instead of returning the entire documents.
-This can be used to reduce the amount of data returned by queries.</p>
-
-<p>For example, the following query will return just the keys of the inserted documents:</p>
-
-<p><code>plain AQL insert query returning a projection
-FOR i IN 1..10
-  INSERT { value: i } IN test
-  RETURN NEW._key
-</code></p>
-
-<h2>Using OLD and NEW in the same query</h2>
-
-<p>In previous versions, <code>UPDATE</code> and <code>REPLACE</code> statements could refer to <strong>either</strong>
-the <code>OLD</code> or the <code>NEW</code> pseudo-value, but not to both. 2.6 lifts that restriction, so
-now these queries can refer to both. One can utilize that to return both the previous
-and the updated revision:</p>
-
-<p><code>plain AQL update query returning old and new revisions
-FOR doc IN test
-  UPDATE doc WITH { value: 42 } IN test
-  RETURN { old: OLD, new: NEW }
-</code></p>
-
-<h2>Calculations with OLD or NEW</h2>
-
-<p>It is now also possible to run additional calculations with <code>LET</code> statements between
-the data-modification part and the final <code>RETURN</code>:</p>
-
-<p><code>plain AQL upsert query with some extra calculations
-UPSERT { name: 'test' } INSERT { name: 'test' } UPDATE { } IN test
-LET previousRevisionExisted = ! IS_NULL(OLD)
-LET type = previousRevisionExisted ? 'update' : 'insert'
-RETURN { _key: NEW._key, type: type }
-</code></p>
-
-<h2>Restrictions</h2>
-
-<p>Still the following restrictions remain:</p>
-
-<ul>
-<li><p>a data-modification operation can optionally be followed by any number of <code>LET</code> clauses,
-and a final <code>RETURN</code> clause. No other operations (e.g. <code>FOR</code>, <code>SORT</code>, <code>COLLECT</code>) can be
-used after a data-modification operation</p></li>
-<li><p>calculations following a data-modification operation must not access data in collections,
-so using functions such as <code>GRAPH_TRAVERSAL</code> etc. is disallowed.</p></li>
-</ul>
-
-
-<p>The improvements are present in the <code>devel</code> branch and can be tested in there from now on.
-As usual, feedback is welcome!</p>
 ]]></content>
   </entry>
   

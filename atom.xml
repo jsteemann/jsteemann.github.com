@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-22T16:54:32+02:00</updated>
+  <updated>2015-04-23T11:20:53+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,178 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[AQL Functions Improvements]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements/"/>
+    <updated>2015-04-23T10:24:53+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements</id>
+    <content type="html"><![CDATA[<p>Waiting for a <code>git pull</code> to complete over an 8 KiB/s internet connection is boring.
+So I thought I&rsquo;d rather use the idle time and quickly write about some performance
+improvements for certain AQL functions that were recently completed and that will
+become available with ArangoDB 2.6.</p>
+
+<p>The improvements affect the following AQL functions:</p>
+
+<ul>
+<li><code>UNSET()</code>: remove specified attributes from an object/document</li>
+<li><code>KEEP()</code>: keep only specified attributes of an object/document</li>
+<li><code>MERGE()</code>: merge the attributes of multiple objects/documents</li>
+</ul>
+
+
+<p>This blog post shows a few example queries that will benefit from <strong>50 to more than 60 %
+reductions</strong> in query execution times due to the changes done to these functions.</p>
+
+<!-- more -->
+
+
+<h2>When to expect benefits</h2>
+
+<p>Reductions in execution time can be expected for AQL queries invoking one of the above
+AQL functions many times, and if the AQL function is used in a so-called <em>simple</em>
+calculation. Whether or not a calculation is considered <em>simple</em> is shown in the detailed
+JSON output of an <code>explain()</code>.</p>
+
+<p>Queries will not benefit if they invoke the AQL functions only a few times or when the
+function call is contained in an expression that is executed using the non-<em>simple</em> code path.</p>
+
+<h2>Example queries</h2>
+
+<p>Following are a few example queries for the three AQL functions, showing the reductions in
+execution times. They all use the <em>simple</em> code path so the benefits can be reaped.</p>
+
+<p>For comparing the execution times between 2.5 and 2.6, I have prepared a simple test setup.
+Here is a test function that will create a collection named <code>test</code> and populate it
+with a configurable amount documents. It will then run an AQL query that will update
+each document in the collection, using one of the named AQL functions. The function
+will return the execution time for the AQL query, excluding the collection setup time:</p>
+
+<figure class='code'><figcaption><span>test function</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">run</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">n</span><span class="p">,</span> <span class="nx">query</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">time</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">time</span><span class="p">;</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">db</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb&quot;</span><span class="p">).</span><span class="nx">db</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// drop and re-create test collection </span>
+</span><span class='line'>  <span class="nx">db</span><span class="p">.</span><span class="nx">_drop</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">c</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// insert n documents</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">n</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">c</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">value1</span><span class="o">:</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">value2</span><span class="o">:</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">value3</span><span class="o">:</span> <span class="s1">&#39;foobar&#39;</span> <span class="o">+</span> <span class="nx">i</span> <span class="p">});</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// flush write-ahead log and wait a few seconds before running query</span>
+</span><span class='line'>  <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">wal</span><span class="p">.</span><span class="nx">flush</span><span class="p">();</span>
+</span><span class='line'>  <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">wait</span><span class="p">(</span><span class="mi">5</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// run query </span>
+</span><span class='line'>  <span class="kd">var</span> <span class="nx">s</span> <span class="o">=</span> <span class="nx">time</span><span class="p">();</span>
+</span><span class='line'>  <span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">);</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">time</span><span class="p">()</span> <span class="o">-</span> <span class="nx">s</span><span class="p">;</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>UNSET()</h3>
+
+<p>Let&rsquo;s start with the <code>UNSET()</code> AQL function. Its purpose is to remove or multiple
+attributes from an object/document. Here is an example AQL query that removes
+attribute <code>value2</code> from each document in the <code>test</code> collection:</p>
+
+<figure class='code'><figcaption><span>invocation of UNSET()</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">run</span><span class="p">(</span><span class="nx">n</span><span class="p">,</span> <span class="s2">&quot;FOR t IN test LET modified = UNSET(t, &#39;value2&#39;) REPLACE t WITH modified IN test&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<figure class='code'><figcaption><span>execution times of UNSET() query in 2.5 and 2.6</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>value of n       time 2.5       time 2.6       speedup
+</span><span class='line'>------------------------------------------------------
+</span><span class='line'>   100,000         3.28 s         1.13 s          65 %
+</span><span class='line'>   500,000        16.93 s         5.38 s          68 %
+</span><span class='line'> 1,000,000        32.60 s        11.40 s          65 %</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>KEEP()</h3>
+
+<p>The purpose of <code>KEEP()</code> is to remove all attributes from an object/document but the
+specified ones. Here&rsquo;s an example query that uses <code>KEEP()</code> to remove all attributes
+from the documents in the <code>test</code> collectionn but attribute <code>value2</code>:</p>
+
+<figure class='code'><figcaption><span>invocation of KEEP()</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">run</span><span class="p">(</span><span class="nx">n</span><span class="p">,</span> <span class="s2">&quot;FOR t IN test LET modified = KEEP(t, &#39;value2&#39;) REPLACE t WITH modified IN test&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<figure class='code'><figcaption><span>execution times of KEEP() query in 2.5 and 2.6</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>value of n       time 2.5       time 2.6       speedup
+</span><span class='line'>------------------------------------------------------
+</span><span class='line'>   100,000         1.98 s         0.87 s          56 %
+</span><span class='line'>   500,000         9.34 s         4.09 s          56 %
+</span><span class='line'> 1,000,000        18.86 s         8.23 s          56 %</span></code></pre></td></tr></table></div></figure>
+
+
+<h3>MERGE()</h3>
+
+<p>Finally, the <code>MERGE()</code> function can be used to merge multiple objects/documents in a
+single one. The following query will add an attribute <code>value4</code> to all documents in
+collection <code>test</code>:</p>
+
+<figure class='code'><figcaption><span>invocation of MERGE()</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">run</span><span class="p">(</span><span class="nx">n</span><span class="p">,</span> <span class="s2">&quot;FOR t IN test LET modified = MERGE(t, { value4 : 1 }) REPLACE t WITH modified IN test&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<figure class='code'><figcaption><span>execution times of MERGE() query in 2.5 and 2.6</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>value of n       time 2.5       time 2.6       speedup
+</span><span class='line'>------------------------------------------------------
+</span><span class='line'>   100,000         3.93 s         1.22 s          68 %
+</span><span class='line'>   500,000        19.17 s         5.91 s          69 %
+</span><span class='line'> 1,000,000        38.27 s        12.33 s          67 %</span></code></pre></td></tr></table></div></figure>
+
+
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[COLLECTing With a Hash Table]]></title>
@@ -5193,247 +5365,6 @@ in ArangoDB applications.</p>
 </span><span class='line'>
 </span><span class='line'>  RETURN result</span></code></pre></td></tr></table></div></figure>
 
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Improvements for 2.4]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/12/12/aql-improvements-for-24/"/>
-    <updated>2014-12-12T23:35:08+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/12/12/aql-improvements-for-24</id>
-    <content type="html"><![CDATA[<p>While on a retreat in Belgium, we found some spare time to
-work on improvements for AQL. These will be shipped with
-ArangoDB version 2.4, and are already available in the devel
-version for testing from now on.</p>
-
-<p>Here&rsquo;s a short overview of the improvements:</p>
-
-<!-- more -->
-
-
-<h1>COLLECT WITH COUNT</h1>
-
-<p>A common use case in query languages is to count the number of
-documents returned by a query. The AQL solution for this has been
-to use the <code>LENGTH</code> function and a subquery:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN LENGTH((
-</span><span class='line'>  FOR doc IN collection 
-</span><span class='line'>    FILTER doc.someAttribute == someValue
-</span><span class='line'>    RETURN doc
-</span><span class='line'>  )
-</span><span class='line'>)</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This works but is probably unintuitive for people which have
-used SQL for years.</p>
-
-<p>We therefore now allow using the following alternative syntax,
-using the new <code>COLLECT ... WITH COUNT INTO ...</code> clause:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  FILTER doc.someAttribute == someValue
-</span><span class='line'>  COLLECT WITH COUNT INTO length
-</span><span class='line'>  RETURN length</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This query returns just the total number of matches, but not the
-matches themselves. As this query is made for counting only, it
-can be executed more efficiently than the original query.
-In the query with the <code>COUNT INTO ...</code> clause, the documents found
-by the filter condition will only be counted and then instantly
-discarded. They will not be shipped around inside the query, from
-the subquery to the top level into the <code>LENGTH()</code> function.</p>
-
-<p>This new variant will be drastically faster than the old variant
-if there is no filter condition at all. When there is a filter
-condition, evaluating the filter condition might be the most computationally
-expensive part of the query. But even then, the new variant should
-be faster than the old one and use less memory.</p>
-
-<p>As a bonus, there is no need to use a subquery anymore, though the
-subquery variant is still fully supported and will be.</p>
-
-<p><code>COLLECT ... WITH COUNT</code> also works for counting the number of items
-per group:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  COLLECT value = doc.someAttribute WITH COUNT INTO length
-</span><span class='line'>  RETURN { value: value, length : length }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This returns the number of matches for each distinct <code>value</code>.</p>
-
-<p>A quick unscientific benchmark reveals that the specialized
-<code>WITH COUNT</code> clause seems to be faster than the old variant.
-The following results show the differences for a collection with
-500,000 small documents:</p>
-
-<p>The old variant that counts the number of documents per age runs
-in 4.75 seconds on my laptop:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  FILTER doc.age &lt; 20 
-</span><span class='line'>  COLLECT age = doc.age INTO g 
-</span><span class='line'>  RETURN { age: age, length: LENGTH(g) }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The new variant produces the same result, but runs in 0.6 seconds locally:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
-</span><span class='line'>  COLLECT age = doc.age WITH COUNT INTO length 
-</span><span class='line'>  RETURN { age: age, length: length }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>A notable speedup can also be observed if only a fraction of the
-groups is built (here: 1/8). The old variant for this runs in 0.6
-seconds:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  FILTER doc.age &lt; 20 
-</span><span class='line'>  COLLECT age = doc.age INTO g 
-</span><span class='line'>  RETURN { age: age, length: LENGTH(g) }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The new variant runs in 0.12 seconds:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
-</span><span class='line'>  FILTER doc.age &lt; 20 
-</span><span class='line'>  COLLECT age = doc.age WITH COUNT INTO length 
-</span><span class='line'>  RETURN { age: age, length: length }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The absolute times may vary greatly depending on the type of documents and
-the hardware used, but in general the new variant should provide a
-speedup.</p>
-
-<h1>COLLECT with group expression</h1>
-
-<p>Finally, <code>COLLECT ... INTO</code> has been extended to support just another variant
-that can reduce the amount of copying inside a query.</p>
-
-<p>Let&rsquo;s have a look at this example query:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
-</span><span class='line'>  COLLECT age = doc.age INTO g
-</span><span class='line'>  RETURN { age: age, maxDate: MAX(g[*].doc.dateRegistered) }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In the above query, for each distinct <code>age</code> value, all documents are collected
-into variable <code>g</code>. When the collecting phase is over, there will be an iteration
-over all the collected documents again, to extract their <code>dateRegistered</code> value.
-After that, the <code>dateRegistered</code> values will be passed into the <code>MAX()</code> function.</p>
-
-<p>This query can be made more efficient now as follows:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
-</span><span class='line'>  COLLECT age = doc.age INTO g = doc.dateRegistered
-</span><span class='line'>  RETURN { age: age, maxDate: MAX(g) }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The new thing about this variant is the expression following the <code>INTO</code>.
-Having an expression there allows controlling what values are collected for
-each group. Using a projection expression here can greatly reduce the
-amount of copying afterwards, and thus make the query more efficient than if
-it had to copy the entire documents.</p>
-
-<h1>Removing filters covered by indexes</h1>
-
-<p><code>FILTER</code> conditions which are completely covered by indexes will
-now be removed from the execution plan if it is safe to do so.
-Dropping the <code>FILTER</code> statements allows the optimizer to get rid
-of not only the <em>FilterNode</em>, but also its corresponding <em>CalculationNode</em>.
-This will save a lot of computation if the condition needs to be checked
-for many documents.</p>
-
-<p>For example, imagine the following query:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  FILTER doc.value &lt; 10 
-</span><span class='line'>  RETURN doc</span></code></pre></td></tr></table></div></figure>
-
-
-<p>If there is a (skiplist) index on <code>doc.value</code>, the optimizer may
-decide to use this index. It will replace the query&rsquo;s <em>EnumerateCollectionNode</em>
-with an <em>IndexRangeNode</em> instead first. The <em>IndexRangeNode</em> will scan the index
-on <code>doc.value</code> for the range [-inf, 10).</p>
-
-<p>Following that, the optimizer rule <code>remove-filter-covered-by-index</code>
-should fire and detect that the <code>FILTER</code> condition is already covered
-by the <em>IndexRangeNode</em> alone. It can thus remove the <em>FilterNode</em>.
-This also makes the <em>CalculationNode</em> of the <em>FilterNode</em> obsolete,
-so these two nodes will be removed and computation is saved.</p>
-
-<h1>Removing brackets for subquery function call parameters</h1>
-
-<p>Since the beginning of AQL, the parser required the user the put
-subqueries that were used as function parameters inside two pairs of
-brackets.</p>
-
-<p>For example, the following query did not parse in 2.3 and before:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN LENGTH(FOR doc IN collection RETURN doc)</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Instead, it needed to be written as:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN LENGTH((FOR doc IN collection RETURN doc))</span></code></pre></td></tr></table></div></figure>
-
-
-<p>If you didn&rsquo;t notice the difference, the latter version of the query had
-duplicate parentheses. The requirement to use duplicate parentheses has
-caused several support questions over time, and this can be taken as a
-proof that it was not intuitive.</p>
-
-<p>The requirement for duplicate parentheses was an artifact required by the
-AQL parser grammar in order to parse the query correctly.</p>
-
-<p>For 2.4, the AQL grammar has been cleaned up in this respect.
-Duplicate parentheses are still allowed and work fine in 2.4 but they are not
-required anymore. This should make the first steps with AQL a bit easier
-and more intuitive.</p>
-
-<p>We&rsquo;re 1.5 days into our retreat now. Maybe there&rsquo;ll be some more
-AQL-related improvements in the end. Let&rsquo;s see.</p>
 ]]></content>
   </entry>
   
