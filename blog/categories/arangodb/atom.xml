@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-23T11:20:53+02:00</updated>
+  <updated>2015-04-25T01:01:15+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,408 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Exporting Data for Offline Processing]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/24/exporting-data-for-offline-processing/"/>
+    <updated>2015-04-24T15:47:31+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/24/exporting-data-for-offline-processing</id>
+    <content type="html"><![CDATA[<p>A few weeks ago I wrote about ArangoDB&rsquo;s
+<a href="https://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/">specialized export API</a>.</p>
+
+<p>The export API is useful when the goal is to extract all documents from a given collection
+and to process them outside of ArangoDB.</p>
+
+<p>The export API can provide quick and memory-efficient snapshots of the data in the underlying
+collection, making it suitable for extract all documents of the collection. It will be able
+to provide data much faster than with an AQL query that will extract all documents.</p>
+
+<p>In this post I&rsquo;ll show how to use the export API to extract data and process it with PHP.</p>
+
+<!-- more -->
+
+
+<p>A prerequiste for using the export API is using an ArangoDB server with version 2.6
+or higher. As there hasn&rsquo;t been an official 2.6 release yet, this currently requires
+building the <code>devel</code> branch of ArangoDB from source. When there is a regular 2.6
+release, this should be used instead.</p>
+
+<h2>Importing example data</h2>
+
+<p>First we need some data in an ArangoDB collection that we can process externally.</p>
+
+<p>For the following examples, I&rsquo;ll use a collection named <code>users</code> which I&rsquo;ll populate
+with 100k <a href="/downloads/code/users-100000.json.tar.gz">example documents</a>. Here&rsquo;s how
+to get this data into ArangoDB:</p>
+
+<p>```bash commands for fetching and importing data</p>
+
+<h1>download data file</h1>
+
+<p>wget <a href="https://jsteemann.github.io/downloads/code/users-100000.json.tar.gz">https://jsteemann.github.io/downloads/code/users-100000.json.tar.gz</a></p>
+
+<h1>uncompress it</h1>
+
+<p>tar xvfz users-100000.json.tar.gz</p>
+
+<h1>import into ArangoDB</h1>
+
+<p>arangoimp &mdash;file users-100000.json &mdash;collection users &mdash;create-collection true
+```</p>
+
+<p>There should now be 100K documents present in a collection named <code>users</code>. You can
+quickly verify that by peeking into the collection using the web interface.</p>
+
+<h2>Setting up ArangoDB-PHP</h2>
+
+<p>An easy way of trying the export API is to use it from PHP. We therefore clone the
+devel branch of the <strong>arangodb-php</strong> Github repository into a local directory:</p>
+
+<p><code>bash cloning arangodb-php
+git clone -b devel "https://github.com/arangodb/arangodb-php.git"
+</code></p>
+
+<p>Note: when there is an official 2.6 release, the <code>2.6</code> branch of arangodb-php should
+be used instead of the <code>devel</code> branch.</p>
+
+<p>We now write a simple PHP script that establishes a connection to the ArangoDB
+server running on localhost. We&rsquo;ll extend that file gradually. Here&rsquo;s a skeleton
+file to start with. The file can be download <a href="/downloads/code/export-skeleton.php">here</a>:</p>
+
+<p>```php skeleton file for establishing a connection
+&lt;?php</p>
+
+<p>namespace triagens\ArangoDb;</p>
+
+<p>// use the driver&rsquo;s autoloader to load classes
+require &lsquo;arangodb-php/autoload.php&rsquo;;
+Autoloader::init();</p>
+
+<p>// set up connection options
+$connectionOptions = array(
+  // endpoint to connect to
+  ConnectionOptions::OPTION_ENDPOINT     => &lsquo;tcp://localhost:8529&rsquo;,
+  // can use Keep-Alive connection
+  ConnectionOptions::OPTION_CONNECTION   => &lsquo;Keep-Alive&rsquo;,         <br/>
+  // use basic authorization
+  ConnectionOptions::OPTION_AUTH_TYPE    => &lsquo;Basic&rsquo;,               <br/>
+  // user for basic authorization
+  ConnectionOptions::OPTION_AUTH_USER    => &lsquo;root&rsquo;,                    <br/>
+  // password for basic authorization
+  ConnectionOptions::OPTION_AUTH_PASSWD  => &lsquo;&rsquo;,                    <br/>
+  // timeout in seconds
+  ConnectionOptions::OPTION_TIMEOUT      => 30,
+  // database name
+  ConnectionOptions::OPTION_DATABASE     => &lsquo;_system&rsquo;
+);</p>
+
+<p>try {
+  // establish connection
+  $connection = new Connection($connectionOptions);</p>
+
+<p>  echo &lsquo;Connected!&rsquo; . PHP_EOL;</p>
+
+<p>  // TODO: now do something useful with the connection!</p>
+
+<p>} catch (ConnectException $e) {
+  print $e . PHP_EOL;
+} catch (ServerException $e) {
+  print $e . PHP_EOL;
+} catch (ClientException $e) {
+  print $e . PHP_EOL;
+}
+```</p>
+
+<p>Running that script should simply print <code>Connected!</code>. This means the PHP script
+can connect to ArangoDB and we can go on.</p>
+
+<h2>Extracting the data</h2>
+
+<p>With a working database connection we can now start with the actual processing.
+In place of the <code>TODO</code> in the skeleton file, we can actually run an export of
+the data in collection <code>users</code>. The following simple function extracts all
+documents from the collection and writes them to an output file <code>output.json</code>
+in JSON format.</p>
+
+<p>It will also print some statistics about the number of documents and the total
+data size. The full script can be download <a href="/downloads/code/export.php">here</a>:</p>
+
+<p>```php exporting data into a file
+function export($collection, Connection $connection) {
+  $fp = fopen(&lsquo;output.json&rsquo;, &lsquo;w&rsquo;);</p>
+
+<p>  if (! $fp) {</p>
+
+<pre><code>throw new Exception('could not open output file!');
+</code></pre>
+
+<p>  }</p>
+
+<p>  // settings to use for the export
+  $settings = array(</p>
+
+<pre><code>'batchSize' =&gt; 5000,  // export in chunks of 5K documents
+'_flat' =&gt; true       // use simple PHP arrays
+</code></pre>
+
+<p>  );</p>
+
+<p>  $export = new Export($connection, $collection, $settings);</p>
+
+<p>  // execute the export. this will return an export cursor
+  $cursor = $export->execute();</p>
+
+<p>  // statistics
+  $count   = 0;
+  $batches = 0;
+  $bytes   = 0;</p>
+
+<p>  // now we can fetch the documents from the collection in batches
+  while ($docs = $cursor->getNextBatch()) {</p>
+
+<pre><code>$output = '';
+foreach ($docs as $doc) {
+  $output .= json_encode($doc) . PHP_EOL;
+} 
+
+// write out chunk
+fwrite($fp, $output);
+
+// update statistics
+$count += count($docs);
+$bytes += strlen($output);
+++$batches;
+</code></pre>
+
+<p>  }</p>
+
+<p>  fclose($fp);</p>
+
+<p>  echo sprintf(&lsquo;written %d documents in %d batches with %d total bytes&rsquo;,</p>
+
+<pre><code>           $count,
+           $batches, 
+           $bytes) . PHP_EOL;
+</code></pre>
+
+<p>}</p>
+
+<p>// run the export
+export(&lsquo;users&rsquo;, $connection);
+```</p>
+
+<p>Running this version of the script should print something similar to the following
+and also produce a file named <code>output.json</code>. Each line in the file should be a JSON
+object representing a document in the collection.</p>
+
+<p><code>plain script output
+written 100000 documents in 20 batches with 40890013 total bytes
+</code></p>
+
+<h2>Applying some transformations</h2>
+
+<p>We now use PHP to transform data as we extract it. With an example script, we&rsquo;ll apply
+the following transformations on the data:</p>
+
+<ul>
+<li>rewrite the contents of the <code>gender</code> attribute:
+
+<ul>
+<li><code>female</code> should become <code>f</code></li>
+<li><code>male</code> should become <code>m</code></li>
+</ul>
+</li>
+<li>rename attribute <code>birthday</code> to <code>dob</code></li>
+<li>change date formats in <code>dob</code> and <code>memberSince</code> from YYYY-MM-DD to MM/DD/YYYY</li>
+<li>concatenate the contents of the <code>name.first</code> and <code>name.last</code> subattributes</li>
+<li>transform array in <code>contact.email</code> into a flat string</li>
+<li>remove all other attributes</li>
+</ul>
+
+
+<p>Here&rsquo;s a transformation function that does this, and a slightly simplified export
+function. This version of the script can also be downloaded <a href="/downloads/code/export-transform.php">here</a>:</p>
+
+<p>```php transformation and export functions
+function transformDate($value) {
+  return preg_replace(&lsquo;/^(\d+)&ndash;(\d+)&ndash;(\d+)$/&rsquo;, &lsquo;\2/\3/\1&rsquo;, $value);
+}</p>
+
+<p>function transform(array $document) {
+  static $genders = array(&lsquo;male&rsquo; => &rsquo;m', &lsquo;female&rsquo; => &lsquo;f&rsquo;);</p>
+
+<p>  $transformed = array(</p>
+
+<pre><code>'gender'      =&gt; $genders[$document['gender']],
+'dob'         =&gt; transformDate($document['birthday']),
+'memberSince' =&gt; transformDate($document['memberSince']),
+'fullName'    =&gt; $document['name']['first'] . ' ' . $document['name']['last'],
+'email'       =&gt; $document['contact']['email'][0]
+</code></pre>
+
+<p>  );</p>
+
+<p>  return $transformed;
+}</p>
+
+<p>function export($collection, Connection $connection) {
+  $fp = fopen(&lsquo;output-transformed.json&rsquo;, &lsquo;w&rsquo;);</p>
+
+<p>  if (! $fp) {</p>
+
+<pre><code>throw new Exception('could not open output file!');
+</code></pre>
+
+<p>  }</p>
+
+<p>  // settings to use for the export
+  $settings = array(</p>
+
+<pre><code>'batchSize' =&gt; 5000,  // export in chunks of 5K documents
+'_flat' =&gt; true       // use simple PHP arrays
+</code></pre>
+
+<p>  );</p>
+
+<p>  $export = new Export($connection, $collection, $settings);</p>
+
+<p>  // execute the export. this will return an export cursor
+  $cursor = $export->execute();</p>
+
+<p>  // now we can fetch the documents from the collection in batches
+  while ($docs = $cursor->getNextBatch()) {</p>
+
+<pre><code>$output = '';
+foreach ($docs as $doc) {
+  $output .= json_encode(transform($doc)) . PHP_EOL;
+} 
+
+// write out chunk
+fwrite($fp, $output);
+</code></pre>
+
+<p>  }</p>
+
+<p>  fclose($fp);
+}</p>
+
+<p>// run the export
+export(&lsquo;users&rsquo;, $connection);
+```</p>
+
+<p>The adjusted version of the PHP script will now produce an output file named
+<code>output-transformed.json</code>.</p>
+
+<h2>Filtering attributes</h2>
+
+<p>In the last example we discarded a few attributes of each document. Instead of
+filtering out these attributes with PHP, we can configure the export to already
+exclude these attributes server-side. This way we can save some traffic.</p>
+
+<p>Here&rsquo;s an adjusted configuration that will exclude the unneeded attributes <code>_id</code>,
+<code>_rev</code>, <code>_key</code> and <code>likes</code>:</p>
+
+<p>```php configuration for attribute exclusion
+// settings to use for the export
+$settings = array(
+  &lsquo;batchSize&rsquo; => 5000,  // export in chunks of 5K documents
+  &lsquo;_flat&rsquo; => true,      // use simple PHP arrays
+  &lsquo;restrict&rsquo; => array(</p>
+
+<pre><code>'type' =&gt; 'exclude',
+'fields' =&gt; array('_id', '_rev', '_key', 'likes')
+</code></pre>
+
+<p>  )
+);
+```</p>
+
+<p>The full script that employs the adjusted configuration can be downloaded
+<a href="/downloads/code/export-exclude.php">here</a>.</p>
+
+<p>Instead of excluding specific attributes we can also do it the other way and only
+include certain attributes in an export. The following script demonstrates this by
+extracting only the <code>_key</code> and <code>name</code> attributes of each document. It then prints the
+key/name pairs in CSV format.</p>
+
+<p>The full script can be downloaded <a href="/downloads/code/export-csv.php">here</a>.</p>
+
+<p>```php export function that prints key/name pairs in CSV format
+function export($collection, Connection $connection) {
+  // settings to use for the export
+  $settings = array(</p>
+
+<pre><code>'batchSize' =&gt; 5000,  // export in chunks of 5K documents
+'_flat' =&gt; true,      // use simple PHP arrays
+'restrict' =&gt; array(
+  'type' =&gt; 'include',
+  'fields' =&gt; array('_key', 'name')
+)
+</code></pre>
+
+<p>  );</p>
+
+<p>  $export = new Export($connection, $collection, $settings);</p>
+
+<p>  // execute the export. this will return an export cursor
+  $cursor = $export->execute();</p>
+
+<p>  // now we can fetch the documents from the collection in batches
+  while ($docs = $cursor->getNextBatch()) {</p>
+
+<pre><code>$output = '';
+
+foreach ($docs as $doc) {
+  $values = array(
+    $doc['_key'], 
+    $doc['name']['first'] . ' ' . $doc['name']['last']
+  );
+
+  $output .= '"' . implode('","', $values) . '"' . PHP_EOL;
+}
+
+// print out the data directly 
+print $output;
+</code></pre>
+
+<p>  }
+}</p>
+
+<p>// run the export
+export(&lsquo;users&rsquo;, $connection);
+```</p>
+
+<h2>Using the API without PHP</h2>
+
+<p>The export API REST interface is simple and it can be used with any client that can
+speak HTTP. This includes <em>curl</em> obviously:</p>
+
+<p>The following command fetches the initial 5K documents from the <code>users</code> collection
+using <em>curl</em>:</p>
+
+<p><code>bash using the export API with curl
+curl                                                   \
+  -X POST                                              \
+  http://localhost:8529/_api/export?collection=users   \
+  --data '{"batchSize":5000}'
+</code></p>
+
+<p>The HTTP response will contain a <code>result</code> attribute that contains the actual
+documents. It will also contain an attribute <code>hasMore</code> that will indicate whether
+there are more documents for the client to fetch. If it is set to <code>true</code>, the
+HTTP response will also contain an attribute <code>id</code>. The client can use this id
+for sending follow-up requests like this (assuming the returned id was <code>13979338067709</code>):</p>
+
+<p><code>bash sending a follow-up request with curl
+curl                                                   \
+  -X PUT                                               \
+  http://localhost:8529/_api/export/13979338067709  
+</code></p>
+
+<p>That&rsquo;s about it. Using the export API it should be fairly simple to ship bulk
+ArangoDB data to client applications or data processing tools.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Updating Documents With Arangoimp]]></title>
@@ -597,279 +999,6 @@ so using functions such as <code>GRAPH_TRAVERSAL</code> etc. is disallowed.</p><
 
 <p>The improvements are present in the <code>devel</code> branch and can be tested in there from now on.
 As usual, feedback is welcome!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Preview of the UPSERT Command]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/03/27/preview-of-the-upsert-command/"/>
-    <updated>2015-03-27T21:37:09+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/03/27/preview-of-the-upsert-command</id>
-    <content type="html"><![CDATA[<p>This week saw the completion of the AQL <code>UPSERT</code> command.</p>
-
-<p>This command will be very helpful in a lot of use cases, including the following:</p>
-
-<ul>
-<li>ensure that a document exists</li>
-<li>update a document if it exists, otherwise create it</li>
-<li>replace a document if it exists, otherwise create it</li>
-</ul>
-
-
-<p>The <code>UPSERT</code> command is executed on the server side and so delivers client
-applications from issuing a fetch command followed by a separate, conditional <code>UPDATE</code>
-or <code>INSERT</code> command.</p>
-
-<!-- more -->
-
-
-<p>The general format of an <code>UPSERT</code> statement is:</p>
-
-<p><code>plain UPSERT format
-UPSERT search-document
-INSERT insert-expression
-UPDATE update-expression
-IN collection-name
-</code></p>
-
-<p>Following are a few example invocations of <code>UPSERT</code>.</p>
-
-<h2>Ensure a document exists</h2>
-
-<p>A simple use case of <code>UPSERT</code> is to ensure that a specific document exists.
-For example, the following query will ensure that that there will be a document
-with attribute <code>ip</code> equal to <code>192.168.173.13</code> in collection <code>hosts</code>:</p>
-
-<p><code>plain ensuring a document exists
-UPSERT { ip: '192.168.173.13' }
-INSERT { ip: '192.168.173.13', name: 'flittard' }
-UPDATE { }
-IN hosts
-</code></p>
-
-<p>If the document does not yet exist, the <code>INSERT</code> part will be carried out. If the
-document is already there, the empty <code>UPDATE</code> part will be run, which will not
-modify the document.</p>
-
-<p>After the query has finished, there will be a document with the specified <code>ip</code> value.</p>
-
-<p>There is no need for client applications to check for document existence first,
-and then to conditionally insert or update, or to try insert first and catch errors.</p>
-
-<p>Note: this is the same as ActiveRecord&rsquo;s <code>find_or_create</code>.</p>
-
-<h2>Update a document if it exists, otherwise create it</h2>
-
-<p>Another common use case is to check whether a specific document exists, and then update it.
-If it does not yet exist, the document shall be created.</p>
-
-<p>Counters are a good example for this, so let&rsquo;s demo this pattern with a counter, too:</p>
-
-<p><code>plain UPSERT example
-UPSERT { ip: '192.168.173.13' }
-INSERT { ip: '192.168.173.13', name: 'flittard', counter: 1 }
-UPDATE { counter : OLD.counter + 1 }
-IN hosts
-</code></p>
-
-<p>The above query will again look for a document with the specified <code>ip</code> attribute. If the
-document exists, its <code>counter</code> attribute will be increased by one. This is achieved by
-referring to the pseudo-value <code>OLD</code>, which in the <code>UPDATE</code> case contains the previous revision
-of the document.</p>
-
-<p>If the search document does not yet exist, the <code>INSERT</code>part will be carried out, inserting
-the document and setting the initial value of <code>counter</code> to 1.</p>
-
-<p>Assuming the collection was empty before, running the above query once will make the collection
-contain this data:</p>
-
-<p>```json collection contents after running query once
-[
-  {</p>
-
-<pre><code>"counter": 1,
-"ip": "192.168.173.13",
-"name": "flittard"
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<p>When running the <code>UPSERT</code> statement again, the collection will contain the updated document:</p>
-
-<p>```json collection contents after running the UPSERT command again:
-[
-  {</p>
-
-<pre><code>"counter": 2,
-"ip": "192.168.173.13",
-"name": "flittard"
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<p>Now let&rsquo;s run the query with adjusted <code>ip</code> and <code>name</code> values:</p>
-
-<p><code>plain UPSERT with different ip and name
-UPSERT { ip: '192.168.173.73' }
-INSERT { ip: '192.168.173.73', name: 'brueck', counter: 1 }
-UPDATE { counter : OLD.counter + 1 }
-IN hosts
-</code></p>
-
-<p>After that, the collection will contain two documents:</p>
-
-<p>```json collection contents
-[
-  {</p>
-
-<pre><code>"counter": 2,
-"ip": "192.168.173.13",
-"name": "flittard"
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"counter": 1,
-"name": "brueck",
-"ip": "192.168.173.73"
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<h2>Replace a document if it exists, otherwise create it</h2>
-
-<p>We&rsquo;ve seen <code>UPSERT</code> with an <code>INSERT</code> and an <code>UPDATE</code> clause so far.</p>
-
-<p><code>UPDATE</code> will partially update the previous revision of the document if present.
-Only those attributes specified in the <code>update-expression</code> will be updated, and
-all non-specified attributes of the original document revision will remain
-unchanged.</p>
-
-<p>If instead a full replacement of the original document is required, the <code>REPLACE</code>
-clause should be used instead of <code>UPDATE</code>. <code>REPLACE</code> will overwrite the previous
-revision completely with what&rsquo;s in <code>update-expression</code>.</p>
-
-<p><code>plain UPSERT replacing a document entirely
-UPSERT { ip: '192.168.173.73' }
-INSERT { ip: '192.168.173.73', name: 'brueck', counter: 1 }
-REPLACE { location: 'dc1' }
-IN hosts
-</code></p>
-
-<p><em>note</em>: an older version of this blog post contained a wrong example here. Thanks
-Andy for pointing this out!</p>
-
-<h2>Returning documents</h2>
-
-<p><code>UPSERT</code> can be combined with a <code>RETURN</code> statement to return either the previous
-document revision (in case of <code>UPDATE</code> or <code>REPLACE</code>) or the new version of the
-document.</p>
-
-<p>Client applications can use this to check whether the <code>UPSERT</code> statement has
-inserted or updated the document. In case no previous revision was present, the
-pseudo-value <code>OLD</code> will be <code>null</code>.</p>
-
-<p><code>UPSERT</code> also provides a pseudo-value named <code>NEW</code> containing the insert, updated or
-replaced version of the document:</p>
-
-<p><code>plain UPSERT with a RETURN value
-UPSERT { ip: '192.168.173.187' }
-INSERT { ip: '192.168.173.187', name: 'kalk', counter: 1 }
-UPDATE { counter : OLD.counter + 1 }
-IN hosts
-RETURN { old: OLD, new: NEW }
-</code></p>
-
-<p>In the <code>INSERT</code> case, we&rsquo;ll get:</p>
-
-<p>```json query return value for INSERT case
-[
-  {</p>
-
-<pre><code>"old": null,
-"new": {
-  "counter": 1,
-  "name": "kalk",
-  "ip": "192.168.173.187"
-}
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<p>When running the query again, we&rsquo;ll get into the <code>UPDATE</code> case, and the same query
-will now return:</p>
-
-<p>```json query return value for the UPDATE case
-[
-  {</p>
-
-<pre><code>"old": {
-  "counter": 1,
-  "name": "kalk",
-  "ip": "192.168.173.187"
-},
-"new": {
-  "counter": 2,
-  "name": "kalk",
-  "ip": "192.168.173.187"
-}
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<h2>Complex updates</h2>
-
-<p>Updating and returning <code>OLD</code> and <code>NEW</code> will work with arbitrary calculations.
-For example, the following query adds a value <code>development</code> to the <code>tag</code> attribute
-only if not yet present in the search document:</p>
-
-<p><code>plain adding a value to an array if not yet present
-UPSERT { ip: '192.168.173.94' }                                                                              
-INSERT { ip: '192.168.173.94', name: 'chorweiler', tags: [ "development" ] }                                                    
-UPDATE { tags: PUSH(OLD.tags, "development", true) }                                                                          
-IN hosts                                                                                                      
-RETURN { old: OLD, new: NEW }
-</code></p>
-
-<p>Running the query multiple times will ensure that <code>tags</code> will contain the value
-<code>development</code> only once.</p>
-
-<p>Note: <code>PUSH</code> is a regular <a href="https://docs.arangodb.com/Aql/ArrayFunctions.html">AQL array function</a>.</p>
-
-<h2>Restrictions</h2>
-
-<p>The <code>search-value</code> needs to be an object literal, with attribute names being inspectable
-at query compile time. This means that neither variables nor bind parameters can be used
-for <code>search-value</code>.</p>
-
-<p>However, bind parameters and variables can be used <strong>inside</strong> <code>search-value</code>.
-Dynamic attribute names cannot be used for specifying attribute names in search-value`.</p>
-
-<p><code>UPSERT</code> does not require an index to be present on the attributes of <code>search-value</code>,
-but in reality queries will benefit from indexes to find matching documents.</p>
-
-<p>When more than one document in the collection matches <code>search-value</code>, one arbitrary match
-will be used for executing the <code>UPDATE</code> clause. It is therefore recommended to use
-<code>UPSERT</code> commands together with a unique index or to make sure from the client application
-that at most one document will match the <code>search-value</code>. Ironically, one way to achieve this is
-to use the <code>UPSERT</code> command for inserts&hellip;</p>
-
-<h2>Availability</h2>
-
-<p><code>UPSERT</code> is currently available in the <code>devel</code> branch of ArangoDB. This branch
-will eventually become release 2.6. Until then, everyone is welcome to try it out and
-provide feedback.</p>
 ]]></content>
   </entry>
   

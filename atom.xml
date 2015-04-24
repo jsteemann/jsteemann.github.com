@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-23T11:20:53+02:00</updated>
+  <updated>2015-04-25T01:01:15+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,570 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Exporting Data for Offline Processing]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/24/exporting-data-for-offline-processing/"/>
+    <updated>2015-04-24T15:47:31+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/24/exporting-data-for-offline-processing</id>
+    <content type="html"><![CDATA[<p>A few weeks ago I wrote about ArangoDB&rsquo;s
+<a href="https://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/">specialized export API</a>.</p>
+
+<p>The export API is useful when the goal is to extract all documents from a given collection
+and to process them outside of ArangoDB.</p>
+
+<p>The export API can provide quick and memory-efficient snapshots of the data in the underlying
+collection, making it suitable for extract all documents of the collection. It will be able
+to provide data much faster than with an AQL query that will extract all documents.</p>
+
+<p>In this post I&rsquo;ll show how to use the export API to extract data and process it with PHP.</p>
+
+<!-- more -->
+
+
+<p>A prerequiste for using the export API is using an ArangoDB server with version 2.6
+or higher. As there hasn&rsquo;t been an official 2.6 release yet, this currently requires
+building the <code>devel</code> branch of ArangoDB from source. When there is a regular 2.6
+release, this should be used instead.</p>
+
+<h2>Importing example data</h2>
+
+<p>First we need some data in an ArangoDB collection that we can process externally.</p>
+
+<p>For the following examples, I&rsquo;ll use a collection named <code>users</code> which I&rsquo;ll populate
+with 100k <a href="http://jsteemann.github.io/downloads/code/users-100000.json.tar.gz">example documents</a>. Here&rsquo;s how
+to get this data into ArangoDB:</p>
+
+<figure class='code'><figcaption><span>commands for fetching and importing data</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="c"># download data file</span>
+</span><span class='line'>wget https://jsteemann.github.io/downloads/code/users-100000.json.tar.gz
+</span><span class='line'><span class="c"># uncompress it</span>
+</span><span class='line'>tar xvfz users-100000.json.tar.gz
+</span><span class='line'><span class="c"># import into ArangoDB </span>
+</span><span class='line'>arangoimp --file users-100000.json --collection users --create-collection <span class="nb">true</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>There should now be 100K documents present in a collection named <code>users</code>. You can
+quickly verify that by peeking into the collection using the web interface.</p>
+
+<h2>Setting up ArangoDB-PHP</h2>
+
+<p>An easy way of trying the export API is to use it from PHP. We therefore clone the
+devel branch of the <strong>arangodb-php</strong> Github repository into a local directory:</p>
+
+<figure class='code'><figcaption><span>cloning arangodb-php</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>git clone -b devel <span class="s2">&quot;https://github.com/arangodb/arangodb-php.git&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note: when there is an official 2.6 release, the <code>2.6</code> branch of arangodb-php should
+be used instead of the <code>devel</code> branch.</p>
+
+<p>We now write a simple PHP script that establishes a connection to the ArangoDB
+server running on localhost. We&rsquo;ll extend that file gradually. Here&rsquo;s a skeleton
+file to start with. The file can be download <a href="http://jsteemann.github.io/downloads/code/export-skeleton.php">here</a>:</p>
+
+<figure class='code'><figcaption><span>skeleton file for establishing a connection</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="o">&lt;?</span><span class="nx">php</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">namespace</span> <span class="nx">triagens\ArangoDb</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// use the driver&#39;s autoloader to load classes</span>
+</span><span class='line'><span class="k">require</span> <span class="s1">&#39;arangodb-php/autoload.php&#39;</span><span class="p">;</span>
+</span><span class='line'><span class="nx">Autoloader</span><span class="o">::</span><span class="na">init</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// set up connection options</span>
+</span><span class='line'><span class="nv">$connectionOptions</span> <span class="o">=</span> <span class="k">array</span><span class="p">(</span>
+</span><span class='line'>  <span class="c1">// endpoint to connect to</span>
+</span><span class='line'>  <span class="nx">ConnectionOptions</span><span class="o">::</span><span class="na">OPTION_ENDPOINT</span>     <span class="o">=&gt;</span> <span class="s1">&#39;tcp://localhost:8529&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="c1">// can use Keep-Alive connection</span>
+</span><span class='line'>  <span class="nx">ConnectionOptions</span><span class="o">::</span><span class="na">OPTION_CONNECTION</span>   <span class="o">=&gt;</span> <span class="s1">&#39;Keep-Alive&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="c1">// use basic authorization</span>
+</span><span class='line'>  <span class="nx">ConnectionOptions</span><span class="o">::</span><span class="na">OPTION_AUTH_TYPE</span>    <span class="o">=&gt;</span> <span class="s1">&#39;Basic&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="c1">// user for basic authorization</span>
+</span><span class='line'>  <span class="nx">ConnectionOptions</span><span class="o">::</span><span class="na">OPTION_AUTH_USER</span>    <span class="o">=&gt;</span> <span class="s1">&#39;root&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="c1">// password for basic authorization</span>
+</span><span class='line'>  <span class="nx">ConnectionOptions</span><span class="o">::</span><span class="na">OPTION_AUTH_PASSWD</span>  <span class="o">=&gt;</span> <span class="s1">&#39;&#39;</span><span class="p">,</span>
+</span><span class='line'>  <span class="c1">// timeout in seconds</span>
+</span><span class='line'>  <span class="nx">ConnectionOptions</span><span class="o">::</span><span class="na">OPTION_TIMEOUT</span>      <span class="o">=&gt;</span> <span class="mi">30</span><span class="p">,</span>
+</span><span class='line'>  <span class="c1">// database name </span>
+</span><span class='line'>  <span class="nx">ConnectionOptions</span><span class="o">::</span><span class="na">OPTION_DATABASE</span>     <span class="o">=&gt;</span> <span class="s1">&#39;_system&#39;</span>
+</span><span class='line'><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">try</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// establish connection</span>
+</span><span class='line'>  <span class="nv">$connection</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Connection</span><span class="p">(</span><span class="nv">$connectionOptions</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">echo</span> <span class="s1">&#39;Connected!&#39;</span> <span class="o">.</span> <span class="nx">PHP_EOL</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// TODO: now do something useful with the connection!</span>
+</span><span class='line'>
+</span><span class='line'><span class="p">}</span> <span class="k">catch</span> <span class="p">(</span><span class="nx">ConnectException</span> <span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">print</span> <span class="nv">$e</span> <span class="o">.</span> <span class="nx">PHP_EOL</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span> <span class="k">catch</span> <span class="p">(</span><span class="nx">ServerException</span> <span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">print</span> <span class="nv">$e</span> <span class="o">.</span> <span class="nx">PHP_EOL</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span> <span class="k">catch</span> <span class="p">(</span><span class="nx">ClientException</span> <span class="nv">$e</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">print</span> <span class="nv">$e</span> <span class="o">.</span> <span class="nx">PHP_EOL</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Running that script should simply print <code>Connected!</code>. This means the PHP script
+can connect to ArangoDB and we can go on.</p>
+
+<h2>Extracting the data</h2>
+
+<p>With a working database connection we can now start with the actual processing.
+In place of the <code>TODO</code> in the skeleton file, we can actually run an export of
+the data in collection <code>users</code>. The following simple function extracts all
+documents from the collection and writes them to an output file <code>output.json</code>
+in JSON format.</p>
+
+<p>It will also print some statistics about the number of documents and the total
+data size. The full script can be download <a href="http://jsteemann.github.io/downloads/code/export.php">here</a>:</p>
+
+<figure class='code'><figcaption><span>exporting data into a file</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="k">function</span> <span class="nf">export</span><span class="p">(</span><span class="nv">$collection</span><span class="p">,</span> <span class="nx">Connection</span> <span class="nv">$connection</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nv">$fp</span> <span class="o">=</span> <span class="nb">fopen</span><span class="p">(</span><span class="s1">&#39;output.json&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="nv">$fp</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s1">&#39;could not open output file!&#39;</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// settings to use for the export</span>
+</span><span class='line'>  <span class="nv">$settings</span> <span class="o">=</span> <span class="k">array</span><span class="p">(</span>
+</span><span class='line'>    <span class="s1">&#39;batchSize&#39;</span> <span class="o">=&gt;</span> <span class="mi">5000</span><span class="p">,</span>  <span class="c1">// export in chunks of 5K documents</span>
+</span><span class='line'>    <span class="s1">&#39;_flat&#39;</span> <span class="o">=&gt;</span> <span class="k">true</span>       <span class="c1">// use simple PHP arrays</span>
+</span><span class='line'>  <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nv">$export</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Export</span><span class="p">(</span><span class="nv">$connection</span><span class="p">,</span> <span class="nv">$collection</span><span class="p">,</span> <span class="nv">$settings</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// execute the export. this will return an export cursor</span>
+</span><span class='line'>  <span class="nv">$cursor</span> <span class="o">=</span> <span class="nv">$export</span><span class="o">-&gt;</span><span class="na">execute</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// statistics </span>
+</span><span class='line'>  <span class="nv">$count</span>   <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>  <span class="nv">$batches</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>  <span class="nv">$bytes</span>   <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// now we can fetch the documents from the collection in batches</span>
+</span><span class='line'>  <span class="k">while</span> <span class="p">(</span><span class="nv">$docs</span> <span class="o">=</span> <span class="nv">$cursor</span><span class="o">-&gt;</span><span class="na">getNextBatch</span><span class="p">())</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nv">$output</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">foreach</span> <span class="p">(</span><span class="nv">$docs</span> <span class="k">as</span> <span class="nv">$doc</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nv">$output</span> <span class="o">.=</span> <span class="nb">json_encode</span><span class="p">(</span><span class="nv">$doc</span><span class="p">)</span> <span class="o">.</span> <span class="nx">PHP_EOL</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// write out chunk</span>
+</span><span class='line'>    <span class="nb">fwrite</span><span class="p">(</span><span class="nv">$fp</span><span class="p">,</span> <span class="nv">$output</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// update statistics</span>
+</span><span class='line'>    <span class="nv">$count</span> <span class="o">+=</span> <span class="nb">count</span><span class="p">(</span><span class="nv">$docs</span><span class="p">);</span>
+</span><span class='line'>    <span class="nv">$bytes</span> <span class="o">+=</span> <span class="nb">strlen</span><span class="p">(</span><span class="nv">$output</span><span class="p">);</span>
+</span><span class='line'>    <span class="o">++</span><span class="nv">$batches</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nb">fclose</span><span class="p">(</span><span class="nv">$fp</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">echo</span> <span class="nb">sprintf</span><span class="p">(</span><span class="s1">&#39;written %d documents in %d batches with %d total bytes&#39;</span><span class="p">,</span>
+</span><span class='line'>               <span class="nv">$count</span><span class="p">,</span>
+</span><span class='line'>               <span class="nv">$batches</span><span class="p">,</span>
+</span><span class='line'>               <span class="nv">$bytes</span><span class="p">)</span> <span class="o">.</span> <span class="nx">PHP_EOL</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// run the export</span>
+</span><span class='line'><span class="nx">export</span><span class="p">(</span><span class="s1">&#39;users&#39;</span><span class="p">,</span> <span class="nv">$connection</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Running this version of the script should print something similar to the following
+and also produce a file named <code>output.json</code>. Each line in the file should be a JSON
+object representing a document in the collection.</p>
+
+<figure class='code'><figcaption><span>script output</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>written 100000 documents in 20 batches with 40890013 total bytes</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Applying some transformations</h2>
+
+<p>We now use PHP to transform data as we extract it. With an example script, we&rsquo;ll apply
+the following transformations on the data:</p>
+
+<ul>
+<li>rewrite the contents of the <code>gender</code> attribute:
+
+<ul>
+<li><code>female</code> should become <code>f</code></li>
+<li><code>male</code> should become <code>m</code></li>
+</ul>
+</li>
+<li>rename attribute <code>birthday</code> to <code>dob</code></li>
+<li>change date formats in <code>dob</code> and <code>memberSince</code> from YYYY-MM-DD to MM/DD/YYYY</li>
+<li>concatenate the contents of the <code>name.first</code> and <code>name.last</code> subattributes</li>
+<li>transform array in <code>contact.email</code> into a flat string</li>
+<li>remove all other attributes</li>
+</ul>
+
+
+<p>Here&rsquo;s a transformation function that does this, and a slightly simplified export
+function. This version of the script can also be downloaded <a href="http://jsteemann.github.io/downloads/code/export-transform.php">here</a>:</p>
+
+<figure class='code'><figcaption><span>transformation and export functions</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="k">function</span> <span class="nf">transformDate</span><span class="p">(</span><span class="nv">$value</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nb">preg_replace</span><span class="p">(</span><span class="s1">&#39;/^(\\d+)-(\\d+)-(\\d+)$/&#39;</span><span class="p">,</span> <span class="s1">&#39;\\2/\\3/\\1&#39;</span><span class="p">,</span> <span class="nv">$value</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">function</span> <span class="nf">transform</span><span class="p">(</span><span class="k">array</span> <span class="nv">$document</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">static</span> <span class="nv">$genders</span> <span class="o">=</span> <span class="k">array</span><span class="p">(</span><span class="s1">&#39;male&#39;</span> <span class="o">=&gt;</span> <span class="s1">&#39;m&#39;</span><span class="p">,</span> <span class="s1">&#39;female&#39;</span> <span class="o">=&gt;</span> <span class="s1">&#39;f&#39;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nv">$transformed</span> <span class="o">=</span> <span class="k">array</span><span class="p">(</span>
+</span><span class='line'>    <span class="s1">&#39;gender&#39;</span>      <span class="o">=&gt;</span> <span class="nv">$genders</span><span class="p">[</span><span class="nv">$document</span><span class="p">[</span><span class="s1">&#39;gender&#39;</span><span class="p">]],</span>
+</span><span class='line'>    <span class="s1">&#39;dob&#39;</span>         <span class="o">=&gt;</span> <span class="nx">transformDate</span><span class="p">(</span><span class="nv">$document</span><span class="p">[</span><span class="s1">&#39;birthday&#39;</span><span class="p">]),</span>
+</span><span class='line'>    <span class="s1">&#39;memberSince&#39;</span> <span class="o">=&gt;</span> <span class="nx">transformDate</span><span class="p">(</span><span class="nv">$document</span><span class="p">[</span><span class="s1">&#39;memberSince&#39;</span><span class="p">]),</span>
+</span><span class='line'>    <span class="s1">&#39;fullName&#39;</span>    <span class="o">=&gt;</span> <span class="nv">$document</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">][</span><span class="s1">&#39;first&#39;</span><span class="p">]</span> <span class="o">.</span> <span class="s1">&#39; &#39;</span> <span class="o">.</span> <span class="nv">$document</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">][</span><span class="s1">&#39;last&#39;</span><span class="p">],</span>
+</span><span class='line'>    <span class="s1">&#39;email&#39;</span>       <span class="o">=&gt;</span> <span class="nv">$document</span><span class="p">[</span><span class="s1">&#39;contact&#39;</span><span class="p">][</span><span class="s1">&#39;email&#39;</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+</span><span class='line'>  <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">return</span> <span class="nv">$transformed</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">function</span> <span class="nf">export</span><span class="p">(</span><span class="nv">$collection</span><span class="p">,</span> <span class="nx">Connection</span> <span class="nv">$connection</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nv">$fp</span> <span class="o">=</span> <span class="nb">fopen</span><span class="p">(</span><span class="s1">&#39;output-transformed.json&#39;</span><span class="p">,</span> <span class="s1">&#39;w&#39;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="nv">$fp</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s1">&#39;could not open output file!&#39;</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// settings to use for the export</span>
+</span><span class='line'>  <span class="nv">$settings</span> <span class="o">=</span> <span class="k">array</span><span class="p">(</span>
+</span><span class='line'>    <span class="s1">&#39;batchSize&#39;</span> <span class="o">=&gt;</span> <span class="mi">5000</span><span class="p">,</span>  <span class="c1">// export in chunks of 5K documents</span>
+</span><span class='line'>    <span class="s1">&#39;_flat&#39;</span> <span class="o">=&gt;</span> <span class="k">true</span>       <span class="c1">// use simple PHP arrays</span>
+</span><span class='line'>  <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nv">$export</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Export</span><span class="p">(</span><span class="nv">$connection</span><span class="p">,</span> <span class="nv">$collection</span><span class="p">,</span> <span class="nv">$settings</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// execute the export. this will return an export cursor</span>
+</span><span class='line'>  <span class="nv">$cursor</span> <span class="o">=</span> <span class="nv">$export</span><span class="o">-&gt;</span><span class="na">execute</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// now we can fetch the documents from the collection in batches</span>
+</span><span class='line'>  <span class="k">while</span> <span class="p">(</span><span class="nv">$docs</span> <span class="o">=</span> <span class="nv">$cursor</span><span class="o">-&gt;</span><span class="na">getNextBatch</span><span class="p">())</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nv">$output</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">foreach</span> <span class="p">(</span><span class="nv">$docs</span> <span class="k">as</span> <span class="nv">$doc</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nv">$output</span> <span class="o">.=</span> <span class="nb">json_encode</span><span class="p">(</span><span class="nx">transform</span><span class="p">(</span><span class="nv">$doc</span><span class="p">))</span> <span class="o">.</span> <span class="nx">PHP_EOL</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// write out chunk</span>
+</span><span class='line'>    <span class="nb">fwrite</span><span class="p">(</span><span class="nv">$fp</span><span class="p">,</span> <span class="nv">$output</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nb">fclose</span><span class="p">(</span><span class="nv">$fp</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// run the export</span>
+</span><span class='line'><span class="nx">export</span><span class="p">(</span><span class="s1">&#39;users&#39;</span><span class="p">,</span> <span class="nv">$connection</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The adjusted version of the PHP script will now produce an output file named
+<code>output-transformed.json</code>.</p>
+
+<h2>Filtering attributes</h2>
+
+<p>In the last example we discarded a few attributes of each document. Instead of
+filtering out these attributes with PHP, we can configure the export to already
+exclude these attributes server-side. This way we can save some traffic.</p>
+
+<p>Here&rsquo;s an adjusted configuration that will exclude the unneeded attributes <code>_id</code>,
+<code>_rev</code>, <code>_key</code> and <code>likes</code>:</p>
+
+<figure class='code'><figcaption><span>configuration for attribute exclusion </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="c1">// settings to use for the export</span>
+</span><span class='line'><span class="nv">$settings</span> <span class="o">=</span> <span class="k">array</span><span class="p">(</span>
+</span><span class='line'>  <span class="s1">&#39;batchSize&#39;</span> <span class="o">=&gt;</span> <span class="mi">5000</span><span class="p">,</span>  <span class="c1">// export in chunks of 5K documents</span>
+</span><span class='line'>  <span class="s1">&#39;_flat&#39;</span> <span class="o">=&gt;</span> <span class="k">true</span><span class="p">,</span>      <span class="c1">// use simple PHP arrays</span>
+</span><span class='line'>  <span class="s1">&#39;restrict&#39;</span> <span class="o">=&gt;</span> <span class="k">array</span><span class="p">(</span>
+</span><span class='line'>    <span class="s1">&#39;type&#39;</span> <span class="o">=&gt;</span> <span class="s1">&#39;exclude&#39;</span><span class="p">,</span>
+</span><span class='line'>    <span class="s1">&#39;fields&#39;</span> <span class="o">=&gt;</span> <span class="k">array</span><span class="p">(</span><span class="s1">&#39;_id&#39;</span><span class="p">,</span> <span class="s1">&#39;_rev&#39;</span><span class="p">,</span> <span class="s1">&#39;_key&#39;</span><span class="p">,</span> <span class="s1">&#39;likes&#39;</span><span class="p">)</span>
+</span><span class='line'>  <span class="p">)</span>
+</span><span class='line'><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The full script that employs the adjusted configuration can be downloaded
+<a href="http://jsteemann.github.io/downloads/code/export-exclude.php">here</a>.</p>
+
+<p>Instead of excluding specific attributes we can also do it the other way and only
+include certain attributes in an export. The following script demonstrates this by
+extracting only the <code>_key</code> and <code>name</code> attributes of each document. It then prints the
+key/name pairs in CSV format.</p>
+
+<p>The full script can be downloaded <a href="http://jsteemann.github.io/downloads/code/export-csv.php">here</a>.</p>
+
+<figure class='code'><figcaption><span>export function that prints key/name pairs in CSV format</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="k">function</span> <span class="nf">export</span><span class="p">(</span><span class="nv">$collection</span><span class="p">,</span> <span class="nx">Connection</span> <span class="nv">$connection</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="c1">// settings to use for the export</span>
+</span><span class='line'>  <span class="nv">$settings</span> <span class="o">=</span> <span class="k">array</span><span class="p">(</span>
+</span><span class='line'>    <span class="s1">&#39;batchSize&#39;</span> <span class="o">=&gt;</span> <span class="mi">5000</span><span class="p">,</span>  <span class="c1">// export in chunks of 5K documents</span>
+</span><span class='line'>    <span class="s1">&#39;_flat&#39;</span> <span class="o">=&gt;</span> <span class="k">true</span><span class="p">,</span>      <span class="c1">// use simple PHP arrays</span>
+</span><span class='line'>    <span class="s1">&#39;restrict&#39;</span> <span class="o">=&gt;</span> <span class="k">array</span><span class="p">(</span>
+</span><span class='line'>      <span class="s1">&#39;type&#39;</span> <span class="o">=&gt;</span> <span class="s1">&#39;include&#39;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s1">&#39;fields&#39;</span> <span class="o">=&gt;</span> <span class="k">array</span><span class="p">(</span><span class="s1">&#39;_key&#39;</span><span class="p">,</span> <span class="s1">&#39;name&#39;</span><span class="p">)</span>
+</span><span class='line'>    <span class="p">)</span>
+</span><span class='line'>  <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="nv">$export</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Export</span><span class="p">(</span><span class="nv">$connection</span><span class="p">,</span> <span class="nv">$collection</span><span class="p">,</span> <span class="nv">$settings</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// execute the export. this will return an export cursor</span>
+</span><span class='line'>  <span class="nv">$cursor</span> <span class="o">=</span> <span class="nv">$export</span><span class="o">-&gt;</span><span class="na">execute</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="c1">// now we can fetch the documents from the collection in batches</span>
+</span><span class='line'>  <span class="k">while</span> <span class="p">(</span><span class="nv">$docs</span> <span class="o">=</span> <span class="nv">$cursor</span><span class="o">-&gt;</span><span class="na">getNextBatch</span><span class="p">())</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nv">$output</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">foreach</span> <span class="p">(</span><span class="nv">$docs</span> <span class="k">as</span> <span class="nv">$doc</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="nv">$values</span> <span class="o">=</span> <span class="k">array</span><span class="p">(</span>
+</span><span class='line'>        <span class="nv">$doc</span><span class="p">[</span><span class="s1">&#39;_key&#39;</span><span class="p">],</span>
+</span><span class='line'>        <span class="nv">$doc</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">][</span><span class="s1">&#39;first&#39;</span><span class="p">]</span> <span class="o">.</span> <span class="s1">&#39; &#39;</span> <span class="o">.</span> <span class="nv">$doc</span><span class="p">[</span><span class="s1">&#39;name&#39;</span><span class="p">][</span><span class="s1">&#39;last&#39;</span><span class="p">]</span>
+</span><span class='line'>      <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="nv">$output</span> <span class="o">.=</span> <span class="s1">&#39;&quot;&#39;</span> <span class="o">.</span> <span class="nb">implode</span><span class="p">(</span><span class="s1">&#39;&quot;,&quot;&#39;</span><span class="p">,</span> <span class="nv">$values</span><span class="p">)</span> <span class="o">.</span> <span class="s1">&#39;&quot;&#39;</span> <span class="o">.</span> <span class="nx">PHP_EOL</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// print out the data directly </span>
+</span><span class='line'>    <span class="k">print</span> <span class="nv">$output</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// run the export</span>
+</span><span class='line'><span class="nx">export</span><span class="p">(</span><span class="s1">&#39;users&#39;</span><span class="p">,</span> <span class="nv">$connection</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Using the API without PHP</h2>
+
+<p>The export API REST interface is simple and it can be used with any client that can
+speak HTTP. This includes <em>curl</em> obviously:</p>
+
+<p>The following command fetches the initial 5K documents from the <code>users</code> collection
+using <em>curl</em>:</p>
+
+<figure class='code'><figcaption><span>using the export API with curl </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>curl                                                   <span class="se">\</span>
+</span><span class='line'>  -X POST                                              <span class="se">\</span>
+</span><span class='line'>  http://localhost:8529/_api/export?collection<span class="o">=</span>users   <span class="se">\</span>
+</span><span class='line'>  --data <span class="s1">&#39;{&quot;batchSize&quot;:5000}&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The HTTP response will contain a <code>result</code> attribute that contains the actual
+documents. It will also contain an attribute <code>hasMore</code> that will indicate whether
+there are more documents for the client to fetch. If it is set to <code>true</code>, the
+HTTP response will also contain an attribute <code>id</code>. The client can use this id
+for sending follow-up requests like this (assuming the returned id was <code>13979338067709</code>):</p>
+
+<figure class='code'><figcaption><span>sending a follow-up request with curl </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>curl                                                   <span class="se">\</span>
+</span><span class='line'>  -X PUT                                               <span class="se">\</span>
+</span><span class='line'>  http://localhost:8529/_api/export/13979338067709
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>That&rsquo;s about it. Using the export API it should be fairly simple to ship bulk
+ArangoDB data to client applications or data processing tools.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Functions Improvements]]></title>
@@ -5302,69 +5866,6 @@ implemented by the V8 team in future versions of V8.</p>
 
 <p>Apart from that, a lot of nice ES6 features are there already and can be used
 in ArangoDB applications.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[99 Bottles of Beer]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/12/14/99-bottles-of-beer/"/>
-    <updated>2014-12-14T13:14:28+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/12/14/99-bottles-of-beer</id>
-    <content type="html"><![CDATA[<p><a href="http://www.99-bottles-of-beer.net/">99 bottles of beer</a> in AQL:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR quant IN 99..0 
-</span><span class='line'>  LET toPrint = (
-</span><span class='line'>    quant &gt; 1 ? 
-</span><span class='line'>      CONCAT(TO_STRING(quant), " bottles of beer on the wall, ", TO_STRING(quant), " bottles of beer.") : 
-</span><span class='line'>      (quant == 1 ? 
-</span><span class='line'>        "1 bottle of beer on the wall, 1 bottle of beer." :
-</span><span class='line'>        "No more bottles of beer on the wall, no more bottles of beer."
-</span><span class='line'>      )
-</span><span class='line'>  )
-</span><span class='line'> 
-</span><span class='line'>  LET suffix = (
-</span><span class='line'>    quant &gt; 2 ? 
-</span><span class='line'>      CONCAT(TO_STRING(quant - 1), " bottles of beer on the wall.") :
-</span><span class='line'>      (quant == 2 ? 
-</span><span class='line'>        "1 bottle of beer on the wall." :
-</span><span class='line'>        "no more bottles of beer on the wall."
-</span><span class='line'>      )
-</span><span class='line'>  )
-</span><span class='line'> 
-</span><span class='line'>  LET result = (
-</span><span class='line'>    quant &gt; 0 ? 
-</span><span class='line'>      CONCAT(toPrint, "\nTake one down, pass it around, ", suffix) : 
-</span><span class='line'>      CONCAT(toPrint, "\nGo to the store and buy some more, 99 bottles of beer on the wall.")
-</span><span class='line'>  )
-</span><span class='line'>
-</span><span class='line'>  RETURN result</span></code></pre></td></tr></table></div></figure>
-
 ]]></content>
   </entry>
   
