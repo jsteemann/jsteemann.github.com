@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-04T12:01:39+02:00</updated>
+  <updated>2015-05-04T12:02:40+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -80,6 +80,408 @@ apply the optimization for the main-level <code>ReturnNode</code> of every AQL q
 <p>On a side note: the optimization will not be shown in the list of applied optimizer rules for the
 query. This is because the optimization is performed in some different place in the query
 executor, after applying the optimizer rules.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Exporting Data for Offline Processing]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/24/exporting-data-for-offline-processing/"/>
+    <updated>2015-04-24T15:47:31+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/24/exporting-data-for-offline-processing</id>
+    <content type="html"><![CDATA[<p>A few weeks ago I wrote about ArangoDB&rsquo;s
+<a href="https://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/">specialized export API</a>.</p>
+
+<p>The export API is useful when the goal is to extract all documents from a given collection
+and to process them outside of ArangoDB.</p>
+
+<p>The export API can provide quick and memory-efficient snapshots of the data in the underlying
+collection, making it suitable for extract all documents of the collection. It will be able
+to provide data much faster than with an AQL query that will extract all documents.</p>
+
+<p>In this post I&rsquo;ll show how to use the export API to extract data and process it with PHP.</p>
+
+<!-- more -->
+
+
+<p>A prerequiste for using the export API is using an ArangoDB server with version 2.6
+or higher. As there hasn&rsquo;t been an official 2.6 release yet, this currently requires
+building the <code>devel</code> branch of ArangoDB from source. When there is a regular 2.6
+release, this should be used instead.</p>
+
+<h2>Importing example data</h2>
+
+<p>First we need some data in an ArangoDB collection that we can process externally.</p>
+
+<p>For the following examples, I&rsquo;ll use a collection named <code>users</code> which I&rsquo;ll populate
+with 100k <a href="/downloads/code/users-100000.json.tar.gz">example documents</a>. Here&rsquo;s how
+to get this data into ArangoDB:</p>
+
+<p>```bash commands for fetching and importing data</p>
+
+<h1>download data file</h1>
+
+<p>wget <a href="https://jsteemann.github.io/downloads/code/users-100000.json.tar.gz">https://jsteemann.github.io/downloads/code/users-100000.json.tar.gz</a></p>
+
+<h1>uncompress it</h1>
+
+<p>tar xvfz users-100000.json.tar.gz</p>
+
+<h1>import into ArangoDB</h1>
+
+<p>arangoimp &mdash;file users-100000.json &mdash;collection users &mdash;create-collection true
+```</p>
+
+<p>There should now be 100K documents present in a collection named <code>users</code>. You can
+quickly verify that by peeking into the collection using the web interface.</p>
+
+<h2>Setting up ArangoDB-PHP</h2>
+
+<p>An easy way of trying the export API is to use it from PHP. We therefore clone the
+devel branch of the <strong>arangodb-php</strong> Github repository into a local directory:</p>
+
+<p><code>bash cloning arangodb-php
+git clone -b devel "https://github.com/arangodb/arangodb-php.git"
+</code></p>
+
+<p>Note: when there is an official 2.6 release, the <code>2.6</code> branch of arangodb-php should
+be used instead of the <code>devel</code> branch.</p>
+
+<p>We now write a simple PHP script that establishes a connection to the ArangoDB
+server running on localhost. We&rsquo;ll extend that file gradually. Here&rsquo;s a skeleton
+file to start with. The code can be downloaded <a href="/downloads/code/export-skeleton.php">here</a>:</p>
+
+<p>```php skeleton file for establishing a connection
+&lt;?php</p>
+
+<p>namespace triagens\ArangoDb;</p>
+
+<p>// use the driver&rsquo;s autoloader to load classes
+require &lsquo;arangodb-php/autoload.php&rsquo;;
+Autoloader::init();</p>
+
+<p>// set up connection options
+$connectionOptions = array(
+  // endpoint to connect to
+  ConnectionOptions::OPTION_ENDPOINT     => &lsquo;tcp://localhost:8529&rsquo;,
+  // can use Keep-Alive connection
+  ConnectionOptions::OPTION_CONNECTION   => &lsquo;Keep-Alive&rsquo;,         <br/>
+  // use basic authorization
+  ConnectionOptions::OPTION_AUTH_TYPE    => &lsquo;Basic&rsquo;,               <br/>
+  // user for basic authorization
+  ConnectionOptions::OPTION_AUTH_USER    => &lsquo;root&rsquo;,                    <br/>
+  // password for basic authorization
+  ConnectionOptions::OPTION_AUTH_PASSWD  => &lsquo;&rsquo;,                    <br/>
+  // timeout in seconds
+  ConnectionOptions::OPTION_TIMEOUT      => 30,
+  // database name
+  ConnectionOptions::OPTION_DATABASE     => &lsquo;_system&rsquo;
+);</p>
+
+<p>try {
+  // establish connection
+  $connection = new Connection($connectionOptions);</p>
+
+<p>  echo &lsquo;Connected!&rsquo; . PHP_EOL;</p>
+
+<p>  // TODO: now do something useful with the connection!</p>
+
+<p>} catch (ConnectException $e) {
+  print $e . PHP_EOL;
+} catch (ServerException $e) {
+  print $e . PHP_EOL;
+} catch (ClientException $e) {
+  print $e . PHP_EOL;
+}
+```</p>
+
+<p>Running that script should simply print <code>Connected!</code>. This means the PHP script
+can connect to ArangoDB and we can go on.</p>
+
+<h2>Extracting the data</h2>
+
+<p>With a working database connection we can now start with the actual processing.
+In place of the <code>TODO</code> in the skeleton file, we can actually run an export of
+the data in collection <code>users</code>. The following simple function extracts all
+documents from the collection and writes them to an output file <code>output.json</code>
+in JSON format.</p>
+
+<p>It will also print some statistics about the number of documents and the total
+data size. The full script can be downloaded <a href="/downloads/code/export.php">here</a>:</p>
+
+<p>```php exporting data into a file
+function export($collection, Connection $connection) {
+  $fp = fopen(&lsquo;output.json&rsquo;, &lsquo;w&rsquo;);</p>
+
+<p>  if (! $fp) {</p>
+
+<pre><code>throw new Exception('could not open output file!');
+</code></pre>
+
+<p>  }</p>
+
+<p>  // settings to use for the export
+  $settings = array(</p>
+
+<pre><code>'batchSize' =&gt; 5000,  // export in chunks of 5K documents
+'_flat' =&gt; true       // use simple PHP arrays
+</code></pre>
+
+<p>  );</p>
+
+<p>  $export = new Export($connection, $collection, $settings);</p>
+
+<p>  // execute the export. this will return an export cursor
+  $cursor = $export->execute();</p>
+
+<p>  // statistics
+  $count   = 0;
+  $batches = 0;
+  $bytes   = 0;</p>
+
+<p>  // now we can fetch the documents from the collection in batches
+  while ($docs = $cursor->getNextBatch()) {</p>
+
+<pre><code>$output = '';
+foreach ($docs as $doc) {
+  $output .= json_encode($doc) . PHP_EOL;
+} 
+
+// write out chunk
+fwrite($fp, $output);
+
+// update statistics
+$count += count($docs);
+$bytes += strlen($output);
+++$batches;
+</code></pre>
+
+<p>  }</p>
+
+<p>  fclose($fp);</p>
+
+<p>  echo sprintf(&lsquo;written %d documents in %d batches with %d total bytes&rsquo;,</p>
+
+<pre><code>           $count,
+           $batches, 
+           $bytes) . PHP_EOL;
+</code></pre>
+
+<p>}</p>
+
+<p>// run the export
+export(&lsquo;users&rsquo;, $connection);
+```</p>
+
+<p>Running this version of the script should print something similar to the following
+and also produce a file named <code>output.json</code>. Each line in the file should be a JSON
+object representing a document in the collection.</p>
+
+<p><code>plain script output
+written 100000 documents in 20 batches with 40890013 total bytes
+</code></p>
+
+<h2>Applying some transformations</h2>
+
+<p>We now use PHP to transform data as we extract it. With an example script, we&rsquo;ll apply
+the following transformations on the data:</p>
+
+<ul>
+<li>rewrite the contents of the <code>gender</code> attribute:
+
+<ul>
+<li><code>female</code> should become <code>f</code></li>
+<li><code>male</code> should become <code>m</code></li>
+</ul>
+</li>
+<li>rename attribute <code>birthday</code> to <code>dob</code></li>
+<li>change date formats in <code>dob</code> and <code>memberSince</code> from YYYY-MM-DD to MM/DD/YYYY</li>
+<li>concatenate the contents of the <code>name.first</code> and <code>name.last</code> subattributes</li>
+<li>transform array in <code>contact.email</code> into a flat string</li>
+<li>remove all other attributes</li>
+</ul>
+
+
+<p>Here&rsquo;s a transformation function that does this, and a slightly simplified export
+function. This version of the script can also be downloaded <a href="/downloads/code/export-transform.php">here</a>:</p>
+
+<p>```php transformation and export functions
+function transformDate($value) {
+  return preg_replace(&lsquo;/^(\d+)&ndash;(\d+)&ndash;(\d+)$/&rsquo;, &lsquo;\2/\3/\1&rsquo;, $value);
+}</p>
+
+<p>function transform(array $document) {
+  static $genders = array(&lsquo;male&rsquo; => &rsquo;m', &lsquo;female&rsquo; => &lsquo;f&rsquo;);</p>
+
+<p>  $transformed = array(</p>
+
+<pre><code>'gender'      =&gt; $genders[$document['gender']],
+'dob'         =&gt; transformDate($document['birthday']),
+'memberSince' =&gt; transformDate($document['memberSince']),
+'fullName'    =&gt; $document['name']['first'] . ' ' . $document['name']['last'],
+'email'       =&gt; $document['contact']['email'][0]
+</code></pre>
+
+<p>  );</p>
+
+<p>  return $transformed;
+}</p>
+
+<p>function export($collection, Connection $connection) {
+  $fp = fopen(&lsquo;output-transformed.json&rsquo;, &lsquo;w&rsquo;);</p>
+
+<p>  if (! $fp) {</p>
+
+<pre><code>throw new Exception('could not open output file!');
+</code></pre>
+
+<p>  }</p>
+
+<p>  // settings to use for the export
+  $settings = array(</p>
+
+<pre><code>'batchSize' =&gt; 5000,  // export in chunks of 5K documents
+'_flat' =&gt; true       // use simple PHP arrays
+</code></pre>
+
+<p>  );</p>
+
+<p>  $export = new Export($connection, $collection, $settings);</p>
+
+<p>  // execute the export. this will return an export cursor
+  $cursor = $export->execute();</p>
+
+<p>  // now we can fetch the documents from the collection in batches
+  while ($docs = $cursor->getNextBatch()) {</p>
+
+<pre><code>$output = '';
+foreach ($docs as $doc) {
+  $output .= json_encode(transform($doc)) . PHP_EOL;
+} 
+
+// write out chunk
+fwrite($fp, $output);
+</code></pre>
+
+<p>  }</p>
+
+<p>  fclose($fp);
+}</p>
+
+<p>// run the export
+export(&lsquo;users&rsquo;, $connection);
+```</p>
+
+<p>The adjusted version of the PHP script will now produce an output file named
+<code>output-transformed.json</code>.</p>
+
+<h2>Filtering attributes</h2>
+
+<p>In the last example we discarded a few attributes of each document. Instead of
+filtering out these attributes with PHP, we can configure the export to already
+exclude these attributes server-side. This way we can save some traffic.</p>
+
+<p>Here&rsquo;s an adjusted configuration that will exclude the unneeded attributes <code>_id</code>,
+<code>_rev</code>, <code>_key</code> and <code>likes</code>:</p>
+
+<p>```php configuration for attribute exclusion
+// settings to use for the export
+$settings = array(
+  &lsquo;batchSize&rsquo; => 5000,  // export in chunks of 5K documents
+  &lsquo;_flat&rsquo; => true,      // use simple PHP arrays
+  &lsquo;restrict&rsquo; => array(</p>
+
+<pre><code>'type' =&gt; 'exclude',
+'fields' =&gt; array('_id', '_rev', '_key', 'likes')
+</code></pre>
+
+<p>  )
+);
+```</p>
+
+<p>The full script that employs the adjusted configuration can be downloaded
+<a href="/downloads/code/export-exclude.php">here</a>.</p>
+
+<p>Instead of excluding specific attributes we can also do it the other way and only
+include certain attributes in an export. The following script demonstrates this by
+extracting only the <code>_key</code> and <code>name</code> attributes of each document. It then prints the
+key/name pairs in CSV format.</p>
+
+<p>The full script can be downloaded <a href="/downloads/code/export-csv.php">here</a>.</p>
+
+<p>```php export function that prints key/name pairs in CSV format
+function export($collection, Connection $connection) {
+  // settings to use for the export
+  $settings = array(</p>
+
+<pre><code>'batchSize' =&gt; 5000,  // export in chunks of 5K documents
+'_flat' =&gt; true,      // use simple PHP arrays
+'restrict' =&gt; array(
+  'type' =&gt; 'include',
+  'fields' =&gt; array('_key', 'name')
+)
+</code></pre>
+
+<p>  );</p>
+
+<p>  $export = new Export($connection, $collection, $settings);</p>
+
+<p>  // execute the export. this will return an export cursor
+  $cursor = $export->execute();</p>
+
+<p>  // now we can fetch the documents from the collection in batches
+  while ($docs = $cursor->getNextBatch()) {</p>
+
+<pre><code>$output = '';
+
+foreach ($docs as $doc) {
+  $values = array(
+    $doc['_key'], 
+    $doc['name']['first'] . ' ' . $doc['name']['last']
+  );
+
+  $output .= '"' . implode('","', $values) . '"' . PHP_EOL;
+}
+
+// print out the data directly 
+print $output;
+</code></pre>
+
+<p>  }
+}</p>
+
+<p>// run the export
+export(&lsquo;users&rsquo;, $connection);
+```</p>
+
+<h2>Using the API without PHP</h2>
+
+<p>The export API REST interface is simple and it can be used with any client that can
+speak HTTP. This includes <em>curl</em> obviously:</p>
+
+<p>The following command fetches the initial 5K documents from the <code>users</code> collection
+using <em>curl</em>:</p>
+
+<p><code>bash using the export API with curl
+curl                                                   \
+  -X POST                                              \
+  http://localhost:8529/_api/export?collection=users   \
+  --data '{"batchSize":5000}'
+</code></p>
+
+<p>The HTTP response will contain a <code>result</code> attribute that contains the actual
+documents. It will also contain an attribute <code>hasMore</code> that will indicate whether
+there are more documents for the client to fetch. If it is set to <code>true</code>, the
+HTTP response will also contain an attribute <code>id</code>. The client can use this id
+for sending follow-up requests like this (assuming the returned id was <code>13979338067709</code>):</p>
+
+<p><code>bash sending a follow-up request with curl
+curl                                                   \
+  -X PUT                                               \
+  http://localhost:8529/_api/export/13979338067709  
+</code></p>
+
+<p>That&rsquo;s about it. Using the export API it should be fairly simple to ship bulk
+ArangoDB data to client applications or data processing tools.</p>
 ]]></content>
   </entry>
   
@@ -657,179 +1059,6 @@ will eventually turn into a 2.6 release.</p>
 performance improvements when compared to 2.5. This can be seen from the comparison
 table above and also from the observations made
 <a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">here</a>.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Improvements for the Cursor API]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/"/>
-    <updated>2015-04-01T13:59:22+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api</id>
-    <content type="html"><![CDATA[<p>This week we pushed some modifications for ArangoDB&rsquo;s cursor API into the <code>devel</code> branch.
-The change will result in less copying of AQL query results between the AQL and the HTTP layers.
-As a positive side effect, this will reduce the amount of garbage collection the built-in V8
-has to do.</p>
-
-<p>These modifications should improve the cursor API performance significantly for many cases,
-while at the same time keeping its REST API stable.</p>
-
-<p>This blog post shows some first unscientific performance tests comparing the old cursor API with
-its new, improved implementation.</p>
-
-<!-- more -->
-
-
-<p>A good way to test the cursor API performance is to issue lots of queries from the
-ArangoShell. The ArangoShell will send the query to the server for execution. The server
-will respond with the first 1,000 results for the query.</p>
-
-<p>Additionally the server will create a server-side cursor if the result set is bigger than
-1,000 documents. In this case, the ArangoShell will issue subsequent HTTP requests that fetch
-the outstanding documents from the server.</p>
-
-<p>The above behavior is triggered automatically when <code>db._query(query).toArray()</code> is run in
-the ArangoShell.</p>
-
-<p>Here is a test function that executes a query <em>n</em> times and measures the total execution time.
-It will issue <em>n</em> HTTP requests to the server&rsquo;s cursor API for executing the query. It will
-also issue further HTTP requests if the total result set size is bigger than 1,000 documents.
-What is getting measured is thus the total execution time from the ArangoShell&rsquo;s point of view,
-including time spent in the server-side cursor functions as well as in HTTP traffic.</p>
-
-<p>```js function for testing the cursor API
-var test = function(query, n) {
-  var time = require(&ldquo;internal&rdquo;).time;
-  var s = time();
-  for (var i = 0; i &lt; n; ++i) {</p>
-
-<pre><code>db._query(query).toArray(); 
-</code></pre>
-
-<p>  }
-  return time() &ndash; s;
-};
-```</p>
-
-<p>The test function was run with different queries to check which types of queries will benefit
-from the cursor API change.</p>
-
-<p>Note that the ArangoShell will issue all its requests to the cursor API sequentially. This is
-ok for the purpose of this test, as the purpose was to measure the relative performance change
-between the old and the new API implementation.</p>
-
-<p>The ArangoShell and ArangoDB server were running on the same physical machine during the tests,
-so this is a <strong>localhost</strong> benchmark.</p>
-
-<h2>Detailed test results</h2>
-
-<p>Here are the results from my local machine.</p>
-
-<p>The first query was about the simplest one I could come up with. The query was sent to the
-server 10,000 times. The result set size per query ws 1, resulting in 10,000 calls to the cursor
-API with not much data to be transferred per call:</p>
-
-<p><code>js test query
-test("RETURN 1", 10000);
-</code></p>
-
-<p>Execution took 7.225 s with the old API, and 5.195 s with the new API (<strong>28 % improvement</strong>).</p>
-
-<p>A query returning a slightly more complex result value:</p>
-
-<p><code>js test query
-test("RETURN { one: 'test', two: 'another-value', three: [ 1, 2, 3 ] }", 10000);
-</code></p>
-
-<p>This took 8.046 s with the old API, and 5.829 s with the new one (<strong>27 % improvement</strong>).</p>
-
-<p>Another simple query, again executed 10,000 times, but now returning 10 values per query:</p>
-
-<p><code>js test query
-test("FOR i IN 1..10 RETURN i", 10000);
-</code></p>
-
-<p>Execution of this query took 7.951 s with the old, and 5.779 s with the new API (<strong>27 % improvement</strong>).</p>
-
-<p>Now raising the number of return values per query from 10 to 1,000:</p>
-
-<p><code>js test query
-test("FOR i IN 1..1000 RETURN i", 10000);
-</code></p>
-
-<p>This took 31.650 s with the old, and 28.504 s with the new API (<strong>10 % improvement</strong>).</p>
-
-<p>So far all query results contained 1,000 or less values. In this case the server is able to
-send the whole query result in response in one go, so there were only as many calls to the
-cursor API as there were queries. Even though the ArangoShell called the cursor API, the
-cursor only existed temporarily on the server but directly vanished when the server sent its
-response.</p>
-
-<p>Now let&rsquo;s run a query that returns more than 1,000 values each. The first call to the
-cursor API will then only return the first 1,000 results and additionally establish a
-server-side cursor so the client can fetch more results. This will mean that for each client
-query, there will be multiple HTTP requests.</p>
-
-<p>The following run issues 100,000 calls to the cursor API (10,000 queries times 10 batches per
-query):</p>
-
-<p><code>js test query
-test("FOR i IN 1..10000 RETURN i", 10000);
-</code></p>
-
-<p>This took 307.108 s with the old API, in contrast to 232.322 s with the new API (<strong>24 % improvement</strong>).</p>
-
-<p>The next queries I tested were collection-based. They returned data from a collection named
-<code>docs</code>. The collection contained 10,000 documents, and each document in the collection had
-5 attributes.</p>
-
-<p>The first query returned only a single one (random) document from the collection per query.</p>
-
-<p><code>js test query
-test("FOR i IN docs LIMIT 1 RETURN i", 10000);
-</code></p>
-
-<p>This took 8.689 s with the old API and 6.245 s with the new API (<strong>28 % improvement</strong>).</p>
-
-<p>The next query returned all the documents from the collection. The query was executed
-only 1,000 times because the result sets already got quite big. The combined size of all
-result sets was 1,000,000 documents (10,000 documents, 1,000 queries).</p>
-
-<p><code>js test query
-test("FOR i IN docs RETURN i", 1000);
-</code></p>
-
-<p>This took 453.736 s with the old, and 197.543 s with the new API (<strong>56 % improvement</strong>).</p>
-
-<p>The final query returned all document keys from the collection. The combined size of all result
-sets was 10,000,000 values (10,000 documents, 10,000 queries):</p>
-
-<p><code>js test query
-test("FOR i IN docs RETURN i._key", 10000);
-</code></p>
-
-<p>With the old API, this took 529.765 s, and with the new API it took 348.243 s (<strong>34 % improvement</strong>).</p>
-
-<h2>Summary</h2>
-
-<p>The new cursor API was faster than its old counterpart for all queries tested here. Total execution
-time as measured by the ArangoShell (representative for any other client program sending queries to
-ArangoDB) was consistenly lower than it was with the old API implementation.</p>
-
-<p>The improvements measured were varying. For the queries tested, the improvements fell into a range
-of <strong>10 % to even more than 50 % speedup</strong>.</p>
-
-<p>How much gain can be achieved in reality obviously depends on the type of query executed. There will
-also be queries that do not benefit from the new API implementation. For example, queries that do not
-return any results will not benefit much. This is because most of the optimizations done affect
-the buffering and the data transport internals of the cursor API. Furthermore, queries that run for
-a very long time but return only small amounts of data may not benefit considerably for the same reason.
-However, there should not be any queries which are negatively affected by the change.</p>
-
-<p>All in all, this looks quite promising, especially as the change will come <strong>for free</strong> for client
-applications. Client programs do not need to be adjusted to reap the benefits. This is because all
-that has changed were the <em>internals</em> of the cursor API. Its public REST interface remains unchanged.</p>
-
-<p>The changes are included in the <code>devel</code> branch and can be tested there.</p>
 ]]></content>
   </entry>
   
