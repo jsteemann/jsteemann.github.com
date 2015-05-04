@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-04T12:02:40+02:00</updated>
+  <updated>2015-05-04T12:04:59+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,76 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Return Value Optimization for AQL]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql/"/>
+    <updated>2015-05-04T10:32:43+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql</id>
+    <content type="html"><![CDATA[<p>While in search for further AQL query optimizations last week, we found that intermediate AQL
+query results were copied one time too often in some cases. Precisely, the data that a query&rsquo;s
+<code>ReturnNode</code> will return to the caller was copied into the <code>ReturnNode</code>&rsquo;s own register. With
+<code>ReturnNode</code>s never modifying their input data, this demanded for something that is called
+<em>return-value optimization</em> in compilers.</p>
+
+<p>2.6 will now optimize away these copies in many cases, and this post shows which performance
+benefits can be expected due to the optimization.</p>
+
+<!-- more -->
+
+
+<p>The effect of the optimization can be demonstrated easily with a few simple AQL queries.
+Let&rsquo;s start with a query that simply returns all 100,000 documents from a collection <code>users</code>:
+<code>FOR u IN users RETURN u</code> (the source data for the collection can be found <a href="/downloads/code/users-100000.json.tar.gz">here</a>).</p>
+
+<p>This query&rsquo;s execution plan is already straight-forward and simple:</p>
+
+<p><img src="/downloads/screenshots/return.png"></p>
+
+<p>So where&rsquo;s the problem?</p>
+
+<p>The <code>ReturnNode</code> in this query (and other queries too) will copy its input data into its own output
+register, only to finally hand the results to the query&rsquo;s caller. This copying is most often unnecessary
+as the <code>ReturnNode</code> will not modify its input. So the idea was to get rid of the copying action and
+tell the query&rsquo;s calling code in which (now different) register to look for the results.</p>
+
+<p>Optimizing away the copying inside the <code>ReturnNode</code> made the query run faster already.
+The same query now returns the 100,000 documents in 0.24 to 0.26 seconds, compared to 0.27 to 0.30 s
+before applying the optimization.</p>
+
+<p>Returning just an attribute of each document shows about the same improvement rates. The execution
+times of the query <code>FOR u IN users RETURN u._key</code> drop to between 0.13 and 0.14 seconds with the
+optimization, from initially between 0.15 and 0.17 seconds.</p>
+
+<p>Another example query, <code>FOR i IN 1..1000000 RETURN i</code>, now runs in 0.58 to 0.61 seconds with
+the optimization, compared to between 0.77 and 0.81 seconds without it.</p>
+
+<p>These absolute figures may not look overly impressive, but they indicate relative improvements of
+between 10 and 25 %, which is quite nice. This is effectively saved CPU time that can now be used
+for something more productive.</p>
+
+<p>Of course the performance improvements may not be that high for every imaginable AQL query.
+Though the optimization may be active in most AQL queries, its effect will only be measurable
+for queries that return a significant number of documents/values. Otherwise the share of the
+<code>ReturnNode</code>&rsquo;s work in the query&rsquo;s overall computations may be too low to have any effect.
+Additionally, the more work a query spends in performing other operations (e.g. filtering,
+sorting, collecting), the less relevant will be the overall effect of the optimized <code>ReturnNode</code>.
+Finally, when query results need to be shipped from the server to the client over a network,
+the relative effect of the optimization may diminish further.</p>
+
+<p>So your mileage may vary. But the optimization will not do any harm, and together with some
+other query optimizations already finished for 2.6 it will contribute to many AQL queries
+running faster than before.</p>
+
+<p>AQL queries will benefit from the optimization automatically in ArangoDB 2.6, without requiring
+any adjustments to the query string, the server configuration etc. The optimizer will automatically
+apply the optimization for the main-level <code>ReturnNode</code> of every AQL query.</p>
+
+<p>On a side note: the optimization will not be shown in the list of applied optimizer rules for the
+query. This is because the optimization is performed in some different place in the query
+executor, after applying the optimizer rules.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Exporting Data for Offline Processing]]></title>
@@ -416,6 +486,428 @@ ArangoDB data to client applications or data processing tools.</p>
   </entry>
   
   <entry>
+    <title type="html"><![CDATA[AQL Functions Improvements]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements/"/>
+    <updated>2015-04-23T10:24:53+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements</id>
+    <content type="html"><![CDATA[<p>Waiting for a <code>git pull</code> to complete over an 8 KiB/s internet connection is boring.
+So I thought I&rsquo;d rather use the idle time and quickly write about some performance
+improvements for certain AQL functions that were recently completed and that will
+become available with ArangoDB 2.6.</p>
+
+<p>The improvements affect the following AQL functions:</p>
+
+<ul>
+<li><code>UNSET()</code>: remove specified attributes from an object/document</li>
+<li><code>KEEP()</code>: keep only specified attributes of an object/document</li>
+<li><code>MERGE()</code>: merge the attributes of multiple objects/documents</li>
+</ul>
+
+
+<p>This blog post shows a few example queries that will benefit from <strong>50 to more than 60 %
+reductions</strong> in query execution times due to the changes done to these functions.</p>
+
+<!-- more -->
+
+
+<h2>When to expect benefits</h2>
+
+<p>Reductions in execution time can be expected for AQL queries invoking one of the above
+AQL functions many times, and if the AQL function is used in a so-called <em>simple</em>
+calculation. Whether or not a calculation is considered <em>simple</em> is shown in the detailed
+JSON output of an <code>explain()</code>.</p>
+
+<p>Queries will not benefit if they invoke the AQL functions only a few times or when the
+function call is contained in an expression that is executed using the non-<em>simple</em> code path.</p>
+
+<h2>Example queries</h2>
+
+<p>Following are a few example queries for the three AQL functions, showing the reductions in
+execution times. They all use the <em>simple</em> code path so the benefits can be reaped.</p>
+
+<p>For comparing the execution times between 2.5 and 2.6, I have prepared a simple test setup.
+Here is a test function that will create a collection named <code>test</code> and populate it
+with a configurable amount documents. It will then run an AQL query that will update
+each document in the collection, using one of the named AQL functions. The function
+will return the execution time for the AQL query, excluding the collection setup time:</p>
+
+<p>```js test function
+var run = function (n, query) {
+  var time = require(&ldquo;internal&rdquo;).time;
+  var db = require(&ldquo;org/arangodb&rdquo;).db;</p>
+
+<p>  // drop and re-create test collection
+  db.<em>drop(&ldquo;test&rdquo;);
+  var c = db.</em>create(&ldquo;test&rdquo;);</p>
+
+<p>  // insert n documents
+  for (var i = 0; i &lt; n; ++i) {</p>
+
+<pre><code>c.insert({ value1: i, value2: i, value3: 'foobar' + i }); 
+</code></pre>
+
+<p>  }</p>
+
+<p>  // flush write-ahead log and wait a few seconds before running query
+  require(&ldquo;internal&rdquo;).wal.flush();
+  require(&ldquo;internal&rdquo;).wait(5);</p>
+
+<p>  // run query
+  var s = time();
+  db._query(query);
+  return time() &ndash; s;
+};
+```</p>
+
+<h3>UNSET()</h3>
+
+<p>Let&rsquo;s start with the <code>UNSET()</code> AQL function. Its purpose is to remove or multiple
+attributes from an object/document. Here is an example AQL query that removes
+attribute <code>value2</code> from each document in the <code>test</code> collection:</p>
+
+<p><code>js invocation of UNSET()
+run(n, "FOR t IN test LET modified = UNSET(t, 'value2') REPLACE t WITH modified IN test");
+</code></p>
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<p>```plain execution times of UNSET() query in 2.5 and 2.6</p>
+
+<h2>value of n       time 2.5       time 2.6       speedup</h2>
+
+<p>   100,000         3.28 s         1.13 s          65 %
+   500,000        16.93 s         5.38 s          68 %
+ 1,000,000        32.60 s        11.40 s          65 %
+```</p>
+
+<h3>KEEP()</h3>
+
+<p>The purpose of <code>KEEP()</code> is to remove all attributes from an object/document but the
+specified ones. Here&rsquo;s an example query that uses <code>KEEP()</code> to remove all attributes
+from the documents in the <code>test</code> collectionn but attribute <code>value2</code>:</p>
+
+<p><code>js invocation of KEEP()
+run(n, "FOR t IN test LET modified = KEEP(t, 'value2') REPLACE t WITH modified IN test");
+</code></p>
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<p>```plain execution times of KEEP() query in 2.5 and 2.6</p>
+
+<h2>value of n       time 2.5       time 2.6       speedup</h2>
+
+<p>   100,000         1.98 s         0.87 s          56 %
+   500,000         9.34 s         4.09 s          56 %
+ 1,000,000        18.86 s         8.23 s          56 %
+```</p>
+
+<h3>MERGE()</h3>
+
+<p>Finally, the <code>MERGE()</code> function can be used to merge multiple objects/documents in a
+single one. The following query will add an attribute <code>value4</code> to all documents in
+collection <code>test</code>:</p>
+
+<p><code>js invocation of MERGE()
+run(n, "FOR t IN test LET modified = MERGE(t, { value4 : 1 }) REPLACE t WITH modified IN test");
+</code></p>
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<p>```plain execution times of MERGE() query in 2.5 and 2.6</p>
+
+<h2>value of n       time 2.5       time 2.6       speedup</h2>
+
+<p>   100,000         3.93 s         1.22 s          68 %
+   500,000        19.17 s         5.91 s          69 %
+ 1,000,000        38.27 s        12.33 s          67 %
+```</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[COLLECTing With a Hash Table]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table/"/>
+    <updated>2015-04-22T13:53:10+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table</id>
+    <content type="html"><![CDATA[<p>ArangoDB 2.6 will feature an alternative <strong>hash</strong> implementation of the AQL <code>COLLECT</code>
+operation. The new implementation can speed up some AQL queries that can not exploit indexes
+on the <code>COLLECT</code> group criteria.</p>
+
+<p>This blog post provides a preview of the feature and shows some nice performance improvements.
+It also explains the <code>COLLECT</code>-related optimizer parts and how the optimizer will decide whether
+to use the new or the traditional implementation.</p>
+
+<!-- more -->
+
+
+<h2>Introduction to COLLECT</h2>
+
+<p>A quick recap: in AQL, the <code>COLLECT</code> operation can be used for grouping and optionally counting values.</p>
+
+<p>Here&rsquo;s an example, using flight data:</p>
+
+<p><code>plain AQL COLLECT example
+FOR flight IN flights
+  COLLECT from = flight._from WITH COUNT INTO count
+  RETURN { from: from, count: count }
+</code></p>
+
+<p>This query will iterate over all documents in collection <code>flights</code>, and count the
+number of flights per different <code>_from</code> value (origin airport). The query result will
+contain only unique <code>from</code> values plus a counter for each:</p>
+
+<p><code>json query result, grouped by from
+[
+  { "from" : "airports/ABE", "count" : 6205 },
+  { "from" : "airports/ABQ", "count" : 39346 },
+  { "from" : "airports/ACV", "count" : 362 },
+  ...
+  { "from" : "airports/YAP", "count" : 285 },
+  { "from" : "airports/YKM", "count" : 879 },
+  { "from" : "airports/YUM", "count" : 2275 }
+]
+</code></p>
+
+<p>As the <code>COLLECT</code> will group its result according to the specified group criteria (<code>flights._from</code>
+in the above query), it needs a way of figuring out to which group any input value does belong.</p>
+
+<p>Before ArangoDB 2.6, there was a single method for determining the group. Starting with ArangoDB
+2.6, the query optimizer can choose between two different <code>COLLECT</code> methods, the <strong>sorted</strong> method
+and the <strong>hash</strong> method.</p>
+
+<h2>Sorted COLLECT method</h2>
+
+<p>The traditional method for determining the group values is the <strong>sorted</strong> method. It has been
+available in ArangoDB since the very start.</p>
+
+<p>The sorted method of <code>COLLECT</code> requires its input to be sorted by the group criteria specified
+in the <code>COLLECT</code> statement. Because there is no guarantee that the input data are already sorted
+in the same way, the query optimizer will automatically insert a <code>SORT</code> statement into the query
+in front of the <code>COLLECT</code>. In case there is a sorted index present on the group criteria attributes,
+the optimizer may be able to optimize away the <code>SORT</code> again. If there is no sorted index present
+on the group criteria attributes, the <code>SORT</code> will remain in the execution plan.</p>
+
+<p>Here is the execution plan for the above query using the <strong>sorted</strong> method of <code>COLLECT</code>. We can see
+the extra <code>SortNode</code> with id #7 being added by the optimizer in front of the <code>COLLECT</code>:</p>
+
+<p><img src="/downloads/screenshots/collect-sorted.png"></p>
+
+<p>The <strong>sorted</strong> method of <code>COLLECT</code> is efficient because it can write out a group result whenever
+an input value will start a new group. Therefore it does not need to keep the whole <code>COLLECT</code>
+result in memory. The downside of using the sorted method is that it requires its input to be
+sorted, and that this requires adding an extra <code>SORT</code> for not properly sorted input.</p>
+
+<h2>Hash COLLECT method</h2>
+
+<p>Since ArangoDB 2.6, the query optimizer can also employ the <strong>hash</strong> method for <code>COLLECT</code>. The
+hash method works by assigning the input values of the <code>COLLECT</code> to slots in a hash table. It
+does not require its input to be sorted. Because the entries in the hash table do not have a
+particular order, the query optimizer will add a post-<code>COLLECT</code> <code>SORT</code> statement. With this extra
+sort of the <code>COLLECT</code> result, the optimizer ensures that the output of the sorted <code>COLLECT</code> will
+be the same as the output of the hash <code>COLLECT</code>.</p>
+
+<p>Here is the execution plan for the above query when using the <strong>hash</strong> method of <code>COLLECT</code>.
+Here we can see the extra <code>SortNode</code> with id #7 being added post-<code>COLLECT</code>:</p>
+
+<p><img src="/downloads/screenshots/collect-hash.png"></p>
+
+<p>The <strong>hash</strong> method is beneficial because it does not require sorted input and thus no extra
+<code>SORT</code> step in front. However, as the input is not sorted, it is never clear when a group is
+actually finished. The hash method therefore needs to build the whole <code>COLLECT</code> result in memory
+until the input is exhausted. Then it can safely write out all group results. Additionally,
+the result of the hash <code>COLLECT</code> is unsorted. Therefore the optimizer will add a post-<code>COLLECT</code>
+sort to ensure the result will be identical to a <strong>sorted</strong> <code>COLLECT</code>.</p>
+
+<h2>Which method will be used when?</h2>
+
+<p>The query optimizer will always take the initial query plan and specialize its <code>COLLECT</code> nodes to
+using the <strong>sorted</strong> method. It will also add the pre-<code>COLLECT</code> <code>SORT</code> in the original plan.</p>
+
+<p>In addition, for every <code>COLLECT</code> statement not using an <code>INTO</code> clause, the optimizer will create
+a plan variant that uses the <strong>hash</strong> method. In that plan variant, the post-<code>COLLECT</code> <code>SORT</code>
+will be added. Note that a <code>WITH COUNT INTO</code> is still ok here, but that using a regular <code>INTO</code>
+clause will disable the usage of the <strong>hash</strong> method:</p>
+
+<p><code>plain a query that cannot use the hash method
+FOR flight IN flights
+  COLLECT from = flight._from INTO allFlights
+  RETURN { from: from, flights: allFlights }
+</code></p>
+
+<p>If more than one <code>COLLECT</code> method can be used for a query, the created plans will be shipped through
+the regular optimization pipeline. In the end, the optimizer will pick the plan with the lowest
+estimated total cost as it will do for all other queries.</p>
+
+<p>The <strong>hash</strong> variant does not require an up-front sort of the <code>COLLECT</code> input, and will thus be
+preferred over the <strong>sorted</strong> method if the optimizer estimates many input elements for the <code>COLLECT</code>
+and cannot use an index to process them in already sorted order. In this case, the optimizer
+will estimate that post-sorting the result of the <strong>hash</strong> <code>COLLECT</code> will be more efficient than
+pre-sorting the input for the <strong>sorted</strong> <code>COLLECT</code>.</p>
+
+<p>The main assumption behind this estimation is that the result of any <code>COLLECT</code> statement will
+contain at most as many elements as there are input elements to it. Therefore, the output of
+a <code>COLLECT</code> is likely to be smaller (in terms of rows) than its input, making post-sorting more
+efficient than pre-sorting.</p>
+
+<p>If there is a sorted index on the <code>COLLECT</code> group criteria that the optimizer can exploit, the
+optimizer will pick the <strong>sorted</strong> method because thanks to the index it can optimize away the
+pre-<code>COLLECT</code> sort, leaving no sorts left in the final execution plan.</p>
+
+<p>To override the optimizer decision, <code>COLLECT</code> statements now have an <code>OPTIONS</code> modifier. This
+modifier can be used to force the optimizer to use the <strong>sorted</strong> variant:</p>
+
+<p><code>plain forcing the use of the sorted variant
+FOR flight IN flights
+  COLLECT from = flight._from WITH COUNT INTO count OPTIONS { method: "sorted" }
+  RETURN { from: from, count: count }
+</code></p>
+
+<p>Note that specifying <strong>hash</strong> in <code>method</code> will not force the optimizer to use the <strong>hash</strong> method.
+The reason is that the <strong>hash</strong> variant cannot be used for all queries (only <code>COLLECT</code> statements
+without an <code>INTO</code> clause are eligible). If <code>OPTIONS</code> are omitted or any other method than <code>sorted</code>
+is specified, the optimizer will ignore it and use its regular cost estimations.</p>
+
+<h2>Understanding execution plans</h2>
+
+<p>Which method is actually used in a query can found out by explaining it and looking at its
+execution plan.</p>
+
+<p>A <code>COLLECT</code> is internally handled by an object called <code>AggregateNode</code>, so we have to look for that.
+In the above screenshots, the <code>AggregateNode</code>s are tagged with either <strong>hash</strong> or <strong>sorted</strong>. This can
+also be checked programatically by looking at the <code>aggregationOptions.method</code> attributes in the
+JSON result of an explain().</p>
+
+<p>Here is some example code to extract this information, limited to the <code>AggregateNode</code>s of the
+query already:</p>
+
+<p><code>js extracting just the AggregateNodes from an explain
+var query = `
+  FOR flight IN flights
+  COLLECT from = flight._from WITH COUNT INTO count
+  RETURN { from: from, count: count }
+`;
+var stmt = db._createStatement(query);
+var plan = stmt.explain().plan;
+plan.nodes.filter(function(node) {
+  return node.type === 'AggregateNode';
+});
+</code></p>
+
+<p>For the above query, this will produce something like this:</p>
+
+<p>```json JSON explain result for AggregateNode
+[
+  {</p>
+
+<pre><code>"type" : "AggregateNode", 
+...
+"aggregationOptions" : { 
+  "method" : "hash" 
+}  
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<p>Here we can see that the query is using the <strong>hash</strong> method.</p>
+
+<h2>Optimizing away post-COLLECT sorts</h2>
+
+<p>If a query uses the <strong>hash</strong> method for a <code>COLLECT</code> but the sort order of the <code>COLLECT</code> result
+is irrelevant to the user, the user can provide a hint to the optimizer to remove the
+post-<code>COLLECT</code> sort.</p>
+
+<p>This can be achieved by simplying appending a <code>SORT null</code> to the original <code>COLLECT</code> statement.
+Here we can see that this removes the post-<code>COLLECT</code> sort:</p>
+
+<p><img src="/downloads/screenshots/collect-nosort.png"></p>
+
+<h2>Performance improvements</h2>
+
+<p>The improvements achievable by using the <strong>hash</strong> method instead of the <strong>sorted</strong> method obviously
+depend on whether there are appropriate indexes present for the group criteria. If an index can
+be exploited, the <strong>sorted</strong> method may be just fine. However, there are cases when no indexes are
+present, for example, when running arbitrary ad-hoc queries or when indexes are too expensive
+(indexes need to be updated on insert/update/remove and also will use memory).</p>
+
+<p>Following are a few comparisons of the <strong>sorted</strong> and the <strong>hash</strong> methods in case no indexes can be
+used.</p>
+
+<p>Here&rsquo;s the setup for the test data. This generates 1M documents with both unique and repeating
+string and numeric values. For the non-unique values, we&rsquo;ll use 20 different categories:</p>
+
+<p>```js setting up test data
+var test = db._create(&ldquo;test&rdquo;);
+for (var i = 0; i &lt; 1000000; ++i) {
+  test.insert({</p>
+
+<pre><code>uniqueNumber: i, 
+uniqueString: String("test" + i), 
+repeatingNumber: (i % 20), 
+repeatingString: String("test" + (i % 20)) 
+</code></pre>
+
+<p>  });
+}
+```</p>
+
+<p>Now let&rsquo;s run the following query on the data and measure its execution time:</p>
+
+<p><code>plain test query
+FOR v IN test
+  COLLECT value = v.@attribute WITH COUNT INTO count
+  RETURN { value: value, count: count }
+</code></p>
+
+<p>The worst case is when the <code>COLLECT</code> will produce as many output rows as there are input
+rows. This will happen when using a unique attribute as the grouping criterion. We&rsquo;ll run
+tests on both numeric and string values.</p>
+
+<p>Here are the execution times for unique inputs. It can be seen that the <strong>hash</strong> method
+here will be beneficial if the post-<code>COLLECT</code> sort can be optimized away. As demonstrated
+above, this can be achieved by adding an extra <code>SORT null</code> after the <code>COLLECT</code> statement.
+If the post-<code>COLLECT</code> sort is not optimized away, it will make the hash method a bit more
+expensive than the <strong>sorted</strong> method:</p>
+
+<p>```plain COLLECT performance with unique inputs</p>
+
+<h2>collect method       @attribute                duration</h2>
+
+<p>sorted               uniqueNumber               11.92 s
+hash                 uniqueNumber               13.40 s
+hash (sort null)     uniqueNumber               10.13 s
+sorted               uniqueString               22.04 s
+hash                 uniqueString               27.35 s
+hash (sort null)     uniqueString               12.12 s
+```</p>
+
+<p>Now let&rsquo;s check the results when we group on an attribute that is non-unique. Following
+are the results for numeric and string attributes with 20 different categories each:</p>
+
+<p>```plain COLLECT performance with non-unique inputs</p>
+
+<h2>collect method       @attribute                duration</h2>
+
+<p>sorted               repeatingNumber             5.56 s
+hash                 repeatingNumber             0.94 s
+hash (sort null)     repeatingNumber             0.94 s
+sorted               repeatingString            10.56 s
+hash                 repeatingString             1.09 s
+hash (sort null)     repeatingString             1.09 s
+```</p>
+
+<p>In these cases, the result of the <code>COLLECT</code> will be much smaller than its input (we&rsquo;ll
+only get 20 result rows out instead of 1M). Therefore the post-<code>COLLECT</code> sort for the <strong>hash</strong>
+method will not make any difference, but the pre-<code>COLLECT</code> sort for the <strong>sorted</strong> method
+will still need to sort 1M input values. This is also the reason why the <strong>hash</strong> method
+is significantly faster here.</p>
+
+<p>As usual, your mileage may vary, so please run your own tests.</p>
+]]></content>
+  </entry>
+  
+  <entry>
     <title type="html"><![CDATA[Updating Documents With Arangoimp]]></title>
     <link href="http://jsteemann.github.io/blog/2015/04/14/updating-documents-with-arangoimp/"/>
     <updated>2015-04-14T14:55:45+02:00</updated>
@@ -574,431 +1066,6 @@ to insert a new document.</p>
 a stable 2.6 release.</p>
 
 <p><strong>Enjoy!</strong></p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[More Efficient Data Exports]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/"/>
-    <updated>2015-04-04T21:51:33+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports</id>
-    <content type="html"><![CDATA[<p>I recently wrote about the <a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">performance improvements for the cursor API</a>
-made in ArangoDB 2.6. The performance improvements are due to a rewrite of the cursor API&rsquo;s internals.</p>
-
-<p>As a byproduct of this rewrite, an extra API was created for exporting all documents from a
-collection to a client application. With this being its only use case, it is clear that the new
-API will not solve every data export problem. However, the API&rsquo;s limitedness facilitated a very efficient
-implementation, resulting in <strong>nice speedups</strong> and <strong>lower memory usage</strong> when compared to the alternative
-way of exporting all documents into a client application.</p>
-
-<!-- more -->
-
-
-<p>There did not exist an <em>official</em> export API before. So users often ran AQL queries like the following
-to export all documents from a collection:</p>
-
-<p><code>plain AQL query to export all documents
-FOR doc IN collection
-  RETURN doc
-</code></p>
-
-<p>While such AQL queries will work for smaller result sets, they will get problematic when results get
-bigger. The reason is that the AQL very will effectively create a snapshot of all the documents present
-in the collection. Creating the snapshot is required for data consistency. Once the snapshot is created,
-clients can incrementally fetch the data from the snapshot and will still get a consistent result even
-if the underlying collections get modified.</p>
-
-<p>For smaller result sets, snapshotting is not a big issue. But when exporting all documents from a
-bigger collection, big result sets will be produced. In this case, the snapshotting can become expensive
-in terms of CPU time and also memory consumption.</p>
-
-<p>We couldn&rsquo;t get around the snapshotting completely, but we could take advantage of the fact that when exporting
-documents from a collection, all that can be snapshotted are documents. This is different to snapshotting
-arbitrary AQL queries, which can produce any kind and combination of JSON.</p>
-
-<p>Dealing only with documents allowed us to take an efficiency shortcut: instead of copying the complete
-documents it will only copy pointers to the document revisions presently in th collection. Not only is this
-much faster than doing a full copy of the document, but it also saves a lot of memory.</p>
-
-<h2>Invoking the API</h2>
-
-<p>While the invocation of the cursor API and the export API is slightly different, their result formats
-have intentionally been kept similar. This way client programs do not need to be adjusted much to consume
-the export API instead of the cursor API.</p>
-
-<p>An example command for exporting via the cursor API is:</p>
-
-<p>```bash exporting all documents via the cursor API
-curl -X POST \</p>
-
-<pre><code> "http://127.0.0.1:8529/_api/cursor" \
- --data '{"query":"FOR doc IN collection RETURN docs"}'
-</code></pre>
-
-<p>```</p>
-
-<p>A command for exporting via the new export API is:</p>
-
-<p>```bash exporting all documents via the export API
-curl -X POST \</p>
-
-<pre><code> "http://127.0.0.1:8529/_api/export?collection=docs"
-</code></pre>
-
-<p>```</p>
-
-<p>In both cases, the result will look like this:
-```json API results
-{
-  &ldquo;result&rdquo;: [</p>
-
-<pre><code>...
-</code></pre>
-
-<p>  ],
-  &ldquo;hasMore&rdquo;:true,
-  &ldquo;id&rdquo;:&ldquo;2221050516478&rdquo;
-}
-```</p>
-
-<p>The <code>result</code> attribute will contain the first few (1,000 by default) documents. The
-<code>hasMore</code> attribute will indicate whether there are more documents to fetch from the
-server. In this case the client can use the cursor id specified in the <code>id</code> attribute
-to fetch more result.</p>
-
-<p>The API can be invoked via any HTTP-capable client such as <code>curl</code> (as shown above).</p>
-
-<p>I have also added <a href="https://github.com/arangodb/arangodb-php/blob/devel/README.md#exporting_data">bindings to the ArangoDB-PHP driver</a>
-today (contained in the driver&rsquo;s <code>devel</code> branch).</p>
-
-<h2>API performance</h2>
-
-<p>Now, what can be gained by using the export API?</p>
-
-<p>The following table shows the execution times for fetching the first 1,000 documents
-from collections of different sizes, both with via the cursor API and the export API.
-Figures for the cursor API are shown for ArangoDB 2.5 and 2.6 (the version in which
-it was rewritten):</p>
-
-<p>```plain execution times for cursor API and export API</p>
-
-<h1>of documents    cursor API (2.5)    cursor API (2.6)      export API</h1>
-
-<hr />
-
-<pre><code>   100,000               1.9 s               0.3 s          0.04 s
-   500,000               9.5 s               1,4 s          0.08 s
- 1,000,000              19.0 s               2.8 s          0.14 s
- 2,000,000              39,0 s               7.5 s          0.19 s
- 5,000,000               n/a                 n/a            0.55 s
-10,000,000               n/a                 n/a            1.32 s
-</code></pre>
-
-<p>```</p>
-
-<p>Execution times are from my laptop, which only has 4 GB of RAM and a slow disk.</p>
-
-<p>As can be seen, the rewritten cursor API in 2.6 is already much faster than the one
-in 2.5. However, for exporting documents from one collection only, the new export API
-is superior.</p>
-
-<p>The export API also uses a lot less memory for snapshotting, as can be nicely seen in the
-two bottom rows of the results. For these cases, the snapshots done by the cursor API
-were bigger than the available RAM and the OS started swapping heavily. Snapshotting
-didn&rsquo;t complete within 15 minutes, so no results are shown above.</p>
-
-<p>Good news is that this didn&rsquo;t happen with the export API, due to the fact that the
-snapshots it creates are much more compact.</p>
-
-<p>Another nice side effect of the speedup is that the first results will arrive much
-earlier in the client application. This will help in reducing client connection timeouts
-in case clients are enforcing them on temporarily non-responding connections.</p>
-
-<h2>Summary</h2>
-
-<p>ArangoDB 2.6 provides a specialized export API for exporting all documents from a
-collection and shipping them to a client application. It is rather limited but
-faster than the general-purpose AQL cursor API and can store its snapshots using less
-memory.</p>
-
-<p>Therefore, exporting all documents from bigger collections calls for using the new
-export API from 2.6 on. The new export API is present in the <code>devel</code> branch, which
-will eventually turn into a 2.6 release.</p>
-
-<p>For other cases, when still using the cursor API, 2.6 will also provide significant
-performance improvements when compared to 2.5. This can be seen from the comparison
-table above and also from the observations made
-<a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">here</a>.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Improvements for the Cursor API]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/"/>
-    <updated>2015-04-01T13:59:22+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api</id>
-    <content type="html"><![CDATA[<p>This week we pushed some modifications for ArangoDB&rsquo;s cursor API into the <code>devel</code> branch.
-The change will result in less copying of AQL query results between the AQL and the HTTP layers.
-As a positive side effect, this will reduce the amount of garbage collection the built-in V8
-has to do.</p>
-
-<p>These modifications should improve the cursor API performance significantly for many cases,
-while at the same time keeping its REST API stable.</p>
-
-<p>This blog post shows some first unscientific performance tests comparing the old cursor API with
-its new, improved implementation.</p>
-
-<!-- more -->
-
-
-<p>A good way to test the cursor API performance is to issue lots of queries from the
-ArangoShell. The ArangoShell will send the query to the server for execution. The server
-will respond with the first 1,000 results for the query.</p>
-
-<p>Additionally the server will create a server-side cursor if the result set is bigger than
-1,000 documents. In this case, the ArangoShell will issue subsequent HTTP requests that fetch
-the outstanding documents from the server.</p>
-
-<p>The above behavior is triggered automatically when <code>db._query(query).toArray()</code> is run in
-the ArangoShell.</p>
-
-<p>Here is a test function that executes a query <em>n</em> times and measures the total execution time.
-It will issue <em>n</em> HTTP requests to the server&rsquo;s cursor API for executing the query. It will
-also issue further HTTP requests if the total result set size is bigger than 1,000 documents.
-What is getting measured is thus the total execution time from the ArangoShell&rsquo;s point of view,
-including time spent in the server-side cursor functions as well as in HTTP traffic.</p>
-
-<p>```js function for testing the cursor API
-var test = function(query, n) {
-  var time = require(&ldquo;internal&rdquo;).time;
-  var s = time();
-  for (var i = 0; i &lt; n; ++i) {</p>
-
-<pre><code>db._query(query).toArray(); 
-</code></pre>
-
-<p>  }
-  return time() &ndash; s;
-};
-```</p>
-
-<p>The test function was run with different queries to check which types of queries will benefit
-from the cursor API change.</p>
-
-<p>Note that the ArangoShell will issue all its requests to the cursor API sequentially. This is
-ok for the purpose of this test, as the purpose was to measure the relative performance change
-between the old and the new API implementation.</p>
-
-<p>The ArangoShell and ArangoDB server were running on the same physical machine during the tests,
-so this is a <strong>localhost</strong> benchmark.</p>
-
-<h2>Detailed test results</h2>
-
-<p>Here are the results from my local machine.</p>
-
-<p>The first query was about the simplest one I could come up with. The query was sent to the
-server 10,000 times. The result set size per query ws 1, resulting in 10,000 calls to the cursor
-API with not much data to be transferred per call:</p>
-
-<p><code>js test query
-test("RETURN 1", 10000);
-</code></p>
-
-<p>Execution took 7.225 s with the old API, and 5.195 s with the new API (<strong>28 % improvement</strong>).</p>
-
-<p>A query returning a slightly more complex result value:</p>
-
-<p><code>js test query
-test("RETURN { one: 'test', two: 'another-value', three: [ 1, 2, 3 ] }", 10000);
-</code></p>
-
-<p>This took 8.046 s with the old API, and 5.829 s with the new one (<strong>27 % improvement</strong>).</p>
-
-<p>Another simple query, again executed 10,000 times, but now returning 10 values per query:</p>
-
-<p><code>js test query
-test("FOR i IN 1..10 RETURN i", 10000);
-</code></p>
-
-<p>Execution of this query took 7.951 s with the old, and 5.779 s with the new API (<strong>27 % improvement</strong>).</p>
-
-<p>Now raising the number of return values per query from 10 to 1,000:</p>
-
-<p><code>js test query
-test("FOR i IN 1..1000 RETURN i", 10000);
-</code></p>
-
-<p>This took 31.650 s with the old, and 28.504 s with the new API (<strong>10 % improvement</strong>).</p>
-
-<p>So far all query results contained 1,000 or less values. In this case the server is able to
-send the whole query result in response in one go, so there were only as many calls to the
-cursor API as there were queries. Even though the ArangoShell called the cursor API, the
-cursor only existed temporarily on the server but directly vanished when the server sent its
-response.</p>
-
-<p>Now let&rsquo;s run a query that returns more than 1,000 values each. The first call to the
-cursor API will then only return the first 1,000 results and additionally establish a
-server-side cursor so the client can fetch more results. This will mean that for each client
-query, there will be multiple HTTP requests.</p>
-
-<p>The following run issues 100,000 calls to the cursor API (10,000 queries times 10 batches per
-query):</p>
-
-<p><code>js test query
-test("FOR i IN 1..10000 RETURN i", 10000);
-</code></p>
-
-<p>This took 307.108 s with the old API, in contrast to 232.322 s with the new API (<strong>24 % improvement</strong>).</p>
-
-<p>The next queries I tested were collection-based. They returned data from a collection named
-<code>docs</code>. The collection contained 10,000 documents, and each document in the collection had
-5 attributes.</p>
-
-<p>The first query returned only a single one (random) document from the collection per query.</p>
-
-<p><code>js test query
-test("FOR i IN docs LIMIT 1 RETURN i", 10000);
-</code></p>
-
-<p>This took 8.689 s with the old API and 6.245 s with the new API (<strong>28 % improvement</strong>).</p>
-
-<p>The next query returned all the documents from the collection. The query was executed
-only 1,000 times because the result sets already got quite big. The combined size of all
-result sets was 1,000,000 documents (10,000 documents, 1,000 queries).</p>
-
-<p><code>js test query
-test("FOR i IN docs RETURN i", 1000);
-</code></p>
-
-<p>This took 453.736 s with the old, and 197.543 s with the new API (<strong>56 % improvement</strong>).</p>
-
-<p>The final query returned all document keys from the collection. The combined size of all result
-sets was 10,000,000 values (10,000 documents, 10,000 queries):</p>
-
-<p><code>js test query
-test("FOR i IN docs RETURN i._key", 10000);
-</code></p>
-
-<p>With the old API, this took 529.765 s, and with the new API it took 348.243 s (<strong>34 % improvement</strong>).</p>
-
-<h2>Summary</h2>
-
-<p>The new cursor API was faster than its old counterpart for all queries tested here. Total execution
-time as measured by the ArangoShell (representative for any other client program sending queries to
-ArangoDB) was consistenly lower than it was with the old API implementation.</p>
-
-<p>The improvements measured were varying. For the queries tested, the improvements fell into a range
-of <strong>10 % to even more than 50 % speedup</strong>.</p>
-
-<p>How much gain can be achieved in reality obviously depends on the type of query executed. There will
-also be queries that do not benefit from the new API implementation. For example, queries that do not
-return any results will not benefit much. This is because most of the optimizations done affect
-the buffering and the data transport internals of the cursor API. Furthermore, queries that run for
-a very long time but return only small amounts of data may not benefit considerably for the same reason.
-However, there should not be any queries which are negatively affected by the change.</p>
-
-<p>All in all, this looks quite promising, especially as the change will come <strong>for free</strong> for client
-applications. Client programs do not need to be adjusted to reap the benefits. This is because all
-that has changed were the <em>internals</em> of the cursor API. Its public REST interface remains unchanged.</p>
-
-<p>The changes are included in the <code>devel</code> branch and can be tested there.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Improvements for Data-modification Queries]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries/"/>
-    <updated>2015-03-27T23:29:19+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries</id>
-    <content type="html"><![CDATA[<p>Data-modification queries were enhanced in ArangoDB 2.4 to be able to also return
-the inserted, update or removed documents.</p>
-
-<p>For example, the following statement inserted a few documents and also returned
-them with all their attributes:</p>
-
-<p><code>plain AQL insert query returning documents
-FOR i IN 1..10
-  INSERT { value: i } IN test
-  LET inserted = NEW
-  RETURN inserted
-</code></p>
-
-<p>The syntax for returning documents from data-modification queries only supported
-the exact above format. Using a <code>LET</code> clause was required, and the <code>RETURN</code> clause
-was limited to returning the variable introduced by the <code>LET</code>.</p>
-
-<p>These syntax restrictions have been lifted in the <code>devel</code> branch, which will become
-release 2.6 eventually. The changes make returning values from data-modification
-statements easier and also more flexible.</p>
-
-<!-- more -->
-
-
-<h2>Simpler syntax</h2>
-
-<p>For example, specifying a <code>LET</code> clause is not required anymore (though still fully
-supported). Instead, the <code>RETURN</code> clause can directly refer to the <code>NEW</code> pseudo-value,
-making the query shorter and easier to write:</p>
-
-<p><code>plain AQL insert query returning documents
-FOR i IN 1..10
-  INSERT { value: i } IN test
-  RETURN NEW
-</code></p>
-
-<h2>Projections</h2>
-
-<p>It is now also possible to return a projection instead of returning the entire documents.
-This can be used to reduce the amount of data returned by queries.</p>
-
-<p>For example, the following query will return just the keys of the inserted documents:</p>
-
-<p><code>plain AQL insert query returning a projection
-FOR i IN 1..10
-  INSERT { value: i } IN test
-  RETURN NEW._key
-</code></p>
-
-<h2>Using OLD and NEW in the same query</h2>
-
-<p>In previous versions, <code>UPDATE</code> and <code>REPLACE</code> statements could refer to <strong>either</strong>
-the <code>OLD</code> or the <code>NEW</code> pseudo-value, but not to both. 2.6 lifts that restriction, so
-now these queries can refer to both. One can utilize that to return both the previous
-and the updated revision:</p>
-
-<p><code>plain AQL update query returning old and new revisions
-FOR doc IN test
-  UPDATE doc WITH { value: 42 } IN test
-  RETURN { old: OLD, new: NEW }
-</code></p>
-
-<h2>Calculations with OLD or NEW</h2>
-
-<p>It is now also possible to run additional calculations with <code>LET</code> statements between
-the data-modification part and the final <code>RETURN</code>:</p>
-
-<p><code>plain AQL upsert query with some extra calculations
-UPSERT { name: 'test' } INSERT { name: 'test' } UPDATE { } IN test
-LET previousRevisionExisted = ! IS_NULL(OLD)
-LET type = previousRevisionExisted ? 'update' : 'insert'
-RETURN { _key: NEW._key, type: type }
-</code></p>
-
-<h2>Restrictions</h2>
-
-<p>Still the following restrictions remain:</p>
-
-<ul>
-<li><p>a data-modification operation can optionally be followed by any number of <code>LET</code> clauses,
-and a final <code>RETURN</code> clause. No other operations (e.g. <code>FOR</code>, <code>SORT</code>, <code>COLLECT</code>) can be
-used after a data-modification operation</p></li>
-<li><p>calculations following a data-modification operation must not access data in collections,
-so using functions such as <code>GRAPH_TRAVERSAL</code> etc. is disallowed.</p></li>
-</ul>
-
-
-<p>The improvements are present in the <code>devel</code> branch and can be tested in there from now on.
-As usual, feedback is welcome!</p>
 ]]></content>
   </entry>
   
