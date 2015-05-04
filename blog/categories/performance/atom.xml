@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-25T01:06:54+02:00</updated>
+  <updated>2015-05-04T11:59:19+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,216 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Return Value Optimization for AQL]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql/"/>
+    <updated>2015-05-04T10:32:43+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql</id>
+    <content type="html"><![CDATA[<p>While in search for further AQL query optimizations last week, we found that intermediate AQL
+query results were copied one time too often in some cases. Precisely, the data that a query&rsquo;s
+<code>ReturnNode</code> will return to the caller was copied into the <code>ReturnNode</code>&rsquo;s own register. With
+<code>ReturnNode</code>s never modifying their input data, this demanded for something that is called
+<em>return-value optimization</em> in compilers.</p>
+
+<p>2.6 will now optimize away these copies in many cases, and this post shows which performance
+benefits can be expected due to the optimization.</p>
+
+<!-- more -->
+
+
+<p>The effect of the optimization can be demonstrated easily with a few simple AQL queries.</p>
+
+<p>Let&rsquo;s start with a query that simply returns all 100,000 documents from a collection <code>users</code>:
+<code>FOR u IN users RETURN u</code> (the source data for the collection can be found <a href="/downloads/code/users-100000.json.tar.gz">here</a>).</p>
+
+<p>This query&rsquo;s execution plan is already straight-forward and simple:</p>
+
+<p><img src="/downloads/screenshots/return.png"></p>
+
+<p>So where&rsquo;s the problem?</p>
+
+<p>The <code>ReturnNode</code> in this query (and other queries too) will copy its input data into its own output
+register, only to finally hand the results to the query&rsquo;s caller. This copying is most often unnecessary
+as the <code>ReturnNode</code> will not modify its input. So the idea was to get rid of the copying action and
+tell the query&rsquo;s calling code in which (now different) register to look for the results.</p>
+
+<p>Optimizing away the copying inside the <code>ReturnNode</code> made the query run faster already.
+The same query now returns the 100,000 documents in 0.24 to 0.26 seconds, compared to 0.27 to 0.30 s
+before applying the optimization.</p>
+
+<p>Returning just an attribute of each document shows about the same improvement rates. The execution
+times of the query <code>FOR u IN users RETURN u._key</code> drop to between 0.13 and 0.14 seconds with the
+optimization, from initially between 0.15 and 0.17 seconds.</p>
+
+<p>Another example query, <code>FOR i IN 1..1000000 RETURN i</code>, now runs in 0.58 to 0.61 seconds with
+the optimization, compared to between 0.77 and 0.81 seconds without it.</p>
+
+<p>These absolute figures may not look overly impressive, but they indicate relative improvements of
+between 10 and 25 %, which is quite nice. This is effectively saved CPU time that can now be used
+for something more productive.</p>
+
+<p>Of course the performance improvements may not be that high for every imaginable AQL query.
+Though the optimization may be active in most AQL queries, its effect will only be measurable
+for queries that return a significant number of documents/values. Otherwise the share of the
+<code>ReturnNode</code>&rsquo;s work in the query&rsquo;s overall computations may be too low to have any effect.
+Additionally, the more work a query spends in performing other operations (e.g. filtering,
+sorting, collecting), the less relevant will be the overall effect of the optimized <code>ReturnNode</code>.
+Finally, when query results need to be shipped from the server to the client over a network,
+the relative effect of the optimization may diminish further.</p>
+
+<p>So your mileage may vary. But the optimization will not do any harm, and together with some
+other query optimizations already finished for 2.6 it will contribute to many AQL queries
+running faster than before.</p>
+
+<p>AQL queries will benefit from the optimization automatically in ArangoDB 2.6, without requiring
+any adjustments to the query string, the server configuration etc. The optimizer will automatically
+apply the optimization for the main-level <code>ReturnNode</code> of every AQL query.</p>
+
+<p>On a side note: the optimization will not be shown in the list of applied optimizer rules for the
+query. This is because the optimization is performed in some different place in the query
+executor, after applying the optimizer rules.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[AQL Functions Improvements]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements/"/>
+    <updated>2015-04-23T10:24:53+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements</id>
+    <content type="html"><![CDATA[<p>Waiting for a <code>git pull</code> to complete over an 8 KiB/s internet connection is boring.
+So I thought I&rsquo;d rather use the idle time and quickly write about some performance
+improvements for certain AQL functions that were recently completed and that will
+become available with ArangoDB 2.6.</p>
+
+<p>The improvements affect the following AQL functions:</p>
+
+<ul>
+<li><code>UNSET()</code>: remove specified attributes from an object/document</li>
+<li><code>KEEP()</code>: keep only specified attributes of an object/document</li>
+<li><code>MERGE()</code>: merge the attributes of multiple objects/documents</li>
+</ul>
+
+
+<p>This blog post shows a few example queries that will benefit from <strong>50 to more than 60 %
+reductions</strong> in query execution times due to the changes done to these functions.</p>
+
+<!-- more -->
+
+
+<h2>When to expect benefits</h2>
+
+<p>Reductions in execution time can be expected for AQL queries invoking one of the above
+AQL functions many times, and if the AQL function is used in a so-called <em>simple</em>
+calculation. Whether or not a calculation is considered <em>simple</em> is shown in the detailed
+JSON output of an <code>explain()</code>.</p>
+
+<p>Queries will not benefit if they invoke the AQL functions only a few times or when the
+function call is contained in an expression that is executed using the non-<em>simple</em> code path.</p>
+
+<h2>Example queries</h2>
+
+<p>Following are a few example queries for the three AQL functions, showing the reductions in
+execution times. They all use the <em>simple</em> code path so the benefits can be reaped.</p>
+
+<p>For comparing the execution times between 2.5 and 2.6, I have prepared a simple test setup.
+Here is a test function that will create a collection named <code>test</code> and populate it
+with a configurable amount documents. It will then run an AQL query that will update
+each document in the collection, using one of the named AQL functions. The function
+will return the execution time for the AQL query, excluding the collection setup time:</p>
+
+<p>```js test function
+var run = function (n, query) {
+  var time = require(&ldquo;internal&rdquo;).time;
+  var db = require(&ldquo;org/arangodb&rdquo;).db;</p>
+
+<p>  // drop and re-create test collection
+  db.<em>drop(&ldquo;test&rdquo;);
+  var c = db.</em>create(&ldquo;test&rdquo;);</p>
+
+<p>  // insert n documents
+  for (var i = 0; i &lt; n; ++i) {</p>
+
+<pre><code>c.insert({ value1: i, value2: i, value3: 'foobar' + i }); 
+</code></pre>
+
+<p>  }</p>
+
+<p>  // flush write-ahead log and wait a few seconds before running query
+  require(&ldquo;internal&rdquo;).wal.flush();
+  require(&ldquo;internal&rdquo;).wait(5);</p>
+
+<p>  // run query
+  var s = time();
+  db._query(query);
+  return time() &ndash; s;
+};
+```</p>
+
+<h3>UNSET()</h3>
+
+<p>Let&rsquo;s start with the <code>UNSET()</code> AQL function. Its purpose is to remove or multiple
+attributes from an object/document. Here is an example AQL query that removes
+attribute <code>value2</code> from each document in the <code>test</code> collection:</p>
+
+<p><code>js invocation of UNSET()
+run(n, "FOR t IN test LET modified = UNSET(t, 'value2') REPLACE t WITH modified IN test");
+</code></p>
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<p>```plain execution times of UNSET() query in 2.5 and 2.6</p>
+
+<h2>value of n       time 2.5       time 2.6       speedup</h2>
+
+<p>   100,000         3.28 s         1.13 s          65 %
+   500,000        16.93 s         5.38 s          68 %
+ 1,000,000        32.60 s        11.40 s          65 %
+```</p>
+
+<h3>KEEP()</h3>
+
+<p>The purpose of <code>KEEP()</code> is to remove all attributes from an object/document but the
+specified ones. Here&rsquo;s an example query that uses <code>KEEP()</code> to remove all attributes
+from the documents in the <code>test</code> collectionn but attribute <code>value2</code>:</p>
+
+<p><code>js invocation of KEEP()
+run(n, "FOR t IN test LET modified = KEEP(t, 'value2') REPLACE t WITH modified IN test");
+</code></p>
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<p>```plain execution times of KEEP() query in 2.5 and 2.6</p>
+
+<h2>value of n       time 2.5       time 2.6       speedup</h2>
+
+<p>   100,000         1.98 s         0.87 s          56 %
+   500,000         9.34 s         4.09 s          56 %
+ 1,000,000        18.86 s         8.23 s          56 %
+```</p>
+
+<h3>MERGE()</h3>
+
+<p>Finally, the <code>MERGE()</code> function can be used to merge multiple objects/documents in a
+single one. The following query will add an attribute <code>value4</code> to all documents in
+collection <code>test</code>:</p>
+
+<p><code>js invocation of MERGE()
+run(n, "FOR t IN test LET modified = MERGE(t, { value4 : 1 }) REPLACE t WITH modified IN test");
+</code></p>
+
+<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
+
+<p>```plain execution times of MERGE() query in 2.5 and 2.6</p>
+
+<h2>value of n       time 2.5       time 2.6       speedup</h2>
+
+<p>   100,000         3.93 s         1.22 s          68 %
+   500,000        19.17 s         5.91 s          69 %
+ 1,000,000        38.27 s        12.33 s          67 %
+```</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[COLLECTing With a Hash Table]]></title>
@@ -621,319 +831,6 @@ applications. Client programs do not need to be adjusted to reap the benefits. T
 that has changed were the <em>internals</em> of the cursor API. Its public REST interface remains unchanged.</p>
 
 <p>The changes are included in the <code>devel</code> branch and can be tested there.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Improvements in 2.5]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25/"/>
-    <updated>2015-02-26T10:35:31+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25</id>
-    <content type="html"><![CDATA[<p>Contained in 2.5 are some small but useful AQL language improvements plus several AQL optimizer improvements.</p>
-
-<p>We are working on further AQL improvements for 2.5, but work is still ongoing.
-This post summarizes the improvements that are already completed and will be shipped with the initial ArangoDB
-2.5 release.</p>
-
-<!-- more -->
-
-
-<h1>Language improvements</h1>
-
-<h2>Dynamic attribute names</h2>
-
-<p>Often the need arises to dynamically name object attributes in return values.
-In AQL this was not directly possible so far, though there were some workarounds available to achieve about
-the same result. <a href="https://docs.arangodb.com/cookbook/UsingDynamicAttributeNames.html">This recipe</a> summarizes
-the options that are available to pre-ArangoDB 2.5 users.</p>
-
-<p>With ArangoDB 2.5, dynamic attribute names can be constructed much more easily and flexibly. Object
-attribute names in ArangoDB 2.5 can be specified using static string literals, bind parameters,
-and dynamic expressions.</p>
-
-<p>Dynamic expressions are most interesting, and to disambiguate them from other regular string literal attribute
-names, dynamic attribute names need to be enclosed in square brackets (<code>[</code> and <code>]</code>). I have written about
-that before in <a href="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/">this blog</a>.</p>
-
-<p>Here is an example query that uses the new syntax:</p>
-
-<p><code>plain example query using dynamic attribute names
-FOR i IN [ 17, 23, 42, 83 ]
-  RETURN { [ CONCAT('value-of-', i, ' * ', i) ] : i * i }
-</code></p>
-
-<p>This will produce:</p>
-
-<p>```json query result
-[
-  {</p>
-
-<pre><code>"value-of-17 * 17" : 289 
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"value-of-23 * 23" : 529 
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"value-of-42 * 42" : 1764 
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"value-of-83 * 83" : 6889 
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<h2>Functions added</h2>
-
-<p>The following AQL functions have been added in 2.5:</p>
-
-<ul>
-<li><code>MD5(value)</code>: produces the MD5 hash of <code>value</code></li>
-<li><code>SHA1(value)</code>: produces the SHA1 hash of <code>value</code></li>
-<li><code>RANDOM_TOKEN(length)</code>: produces a pseudo-random string of the specified length.
- Such strings can be used for id or token generation. Tokens consist only of letters
- (lower and upper case) plus digits, so they are also URL-safe</li>
-</ul>
-
-
-<h1>Optimizer improvements</h1>
-
-<h2>Optimizer rules</h2>
-
-<p>The following AQL optimizer rules have been added in ArangoDB 2.5:</p>
-
-<ul>
-<li><p><code>propagate-constant-attributes</code></p>
-
-<p>This rule will look inside <code>FILTER</code> conditions for constant value equality comparisons,
-and insert the constant values in other places in <code>FILTER</code>s. For example, the rule will
-insert <code>42</code> instead of <code>i.value</code> in the second <code>FILTER</code> of the following query:</p>
-
-<pre><code>FOR i IN c1 
-  FOR j IN c2 
-    FILTER i.value == 42 
-    FILTER j.value == i.value 
-    RETURN 1
-</code></pre></li>
-<li><p><code>move-calculations-down</code></p>
-
-<p>This rule moves calculations down in the execution plan as far as possible. The intention
-is to move calculations beyond filters, in order to avoid calculations and computations
-for documents that will be filtered away anyway.</p>
-
-<p>If a query contains a lot of computations and a lot of documents will be skipped because
-of filters, this rule might provide a big benefit.</p>
-
-<p>A more detailed example is provided in
-<a href="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/">this post</a>.</p></li>
-</ul>
-
-
-<p>The already existing optimizer rule <code>use-index-for-sort</code> was also improved in the following way:</p>
-
-<ul>
-<li><p>the rule can now remove <code>SORT</code>s also in case a non-sorted index (i.e. a hash index) is used
-for an equality lookup and all sort attributes are covered by the index.</p></li>
-<li><p>the rule can also remove <code>SORT</code>s in case the sort critieria excludes the left-most index attributes,
-but the left-most index attributes are used in a <code>FILTER</code> for equality-only lookups.</p>
-
-<p>Here is an example that will use an existing skiplist index on [ <code>value1</code>, <code>value2</code> ] for sorting,
-removing the extra <code>SORT</code>:</p>
-
-<pre><code>FOR doc IN collection 
-  FILTER doc.value1 == 1 
-  SORT doc.value2 
-  RETURN doc
-</code></pre></li>
-</ul>
-
-
-<h2>Index usage</h2>
-
-<p>The AQL optimizer now supports <a href="https://www.arangodb.com/2015/02/24/sparse-indexes-in-arangodb">sparse indexes</a>,
-a feature added in 2.5.</p>
-
-<p>It will use them automatically in queries when appropriate and when safe. Sparse indexes do exclude certain
-documents purposely, so the optimizer always has to figure out whether it can use a sparse index to satisfy
-a given <code>FILTER</code> condition.</p>
-
-<p>The optimizer will also take into account index selectivity estimates when there are multiple index candidates.</p>
-
-<h2>Estimates</h2>
-
-<p>The optimizer estimates for the number of documents to be returned by a query or a subquery are more accurate
-now for several types of queries. For example, if the optimizer can use a primary key, an edge index, or a hash
-index in a given query part, it will use the index selectivity estimates for calculating the number of return
-documents.</p>
-
-<p>These estimates will be a lot more accurate than the previoulsy hard-coded filtering factors, and can lead to
-better optimizer decisions and reporting (because estimates are returned in <code>explain</code> results, too).</p>
-
-<h2>Memory savings</h2>
-
-<p>Finally, the optimizer will now detect if the data-modification part in a data-modification query
-can be executed in lockstep with the data-retrieval part of the same query. Previously, a data-modification
-query always executed its data-retrieval part first, and then executed its data-modification part.
-This could have resulted in big intermediate result sets which to retrieval part constructed in order
-to pass them to the modification part of the query.</p>
-
-<p>Here&rsquo;s an example query:</p>
-
-<p><code>plain data-modification query
-FOR doc IN test
-  INSERT doc INTO backup
-</code></p>
-
-<p>In the above query, the <code>FOR</code> loop is the retrieval part, and the <code>INSERT</code> is the modification part.
-The optimizer in 2.5 will check if the two parts of the query are independent, and if it turns out they are,
-will execute them in lockstep instead of sequentially.</p>
-
-<p>The execution in lockstep is not necessarily faster than sequential execution, but it can save lots of
-memory if the data-retrieval part constructed big intermediate result sets.</p>
-
-<h1>Miscellaneous changes</h1>
-
-<p>The AQL query execution statistics now also provide an attribute <code>filtered</code>. Its value indicates how many
-documents were filtered by <code>FilterNode</code>s in the AQL query. This can be used as an indicator for whether
-indexes should be added, and for how effective indexes are used for filtering.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Improved Non-unique Hash Indexes in 2.3]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/11/07/improved-non-unique-hash-indexes/"/>
-    <updated>2014-11-07T20:51:12+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/11/07/improved-non-unique-hash-indexes</id>
-    <content type="html"><![CDATA[<p>With ArangoDB 2.3 now getting into the <a href="https://www.arangodb.com/install-beta-version">beta stage</a>,
-it&rsquo;s time to spread the word about new features and improvements.</p>
-
-<p>Today&rsquo;s post will be about the changes made to non-unique hash
-indexes.</p>
-
-<!-- more -->
-
-
-<p>Hash indexes allow looking up documents quickly if the indexed
-attributes are all provided in a search query. They are not
-suitable for range queries, but are the perfect choice if equality
-comparisons are all that&rsquo;s needed.</p>
-
-<p>Hash indexes have been available in ArangoDB ever since. There
-have always been two variants of them:</p>
-
-<ul>
-<li>unique hash indexes</li>
-<li>non-unique hash indexes</li>
-</ul>
-
-
-<p>There wasn&rsquo;t much to be done for unique hash indexes, and so there
-haven&rsquo;t been any changes to them in 2.3. However, the non-unique
-hash indexes were improved significantly in the new version.</p>
-
-<p>The non-unique indexes already performed quite well if most of the
-indexed values were unique and only few repetitions occurred. But their
-performance suffered severly if the indexed attribute values repeated
-a lot &ndash; that is, when the indexed value had a <strong>low cardinality</strong> and thus
-the index had a <strong>low selectivity</strong>.</p>
-
-<p>This was a problem because it slowed down inserting new documents into
-a collection with such an index. And it also slowed down loading collections
-with low cardinality hash indexes.</p>
-
-<p>I am happy to state that in ArangoDB 2.3 this has been fixed, and the insert
-performance of non-unique hash indexes has been improved significantly.
-The index insertion time now scales quite well with the number
-of indexed documents regardless of the cardinality of the indexed
-attribute.</p>
-
-<p>Following are a few measurements of non-unique hash index insertion
-times from ArangoDB 2.3, for different cardinalities of the indexed
-attribute.</p>
-
-<p>The times reported are the net non-unique hash index
-insertion times (the documents were present already, just the index
-was created on them and index creation time was measured).</p>
-
-<p>Let&rsquo;s start with a not too challenging case: indexing documents in
-a collection with 100,000 different index values (<em>cardinality 100,000</em>):</p>
-
-<p><code>text index insertion times for cardinality 100,000
-number of documents:    128,000    =&gt;    time:   0.144 s
-number of documents:    256,000    =&gt;    time:   0.231 s
-number of documents:    512,000    =&gt;    time:   0.347 s
-number of documents:  1,024,000    =&gt;    time:   0.694 s
-number of documents:  2,048,000    =&gt;    time:   1.379 s
-</code></p>
-
-<p>The picture doesn&rsquo;t change much when reducing the cardinality
-by a factor or 10 (i.e. <em>cardinality 10,000</em>):</p>
-
-<p><code>text index insertion times for cardinality 10,000
-number of documents:    128,000    =&gt;    time:   0.169 s
-number of documents:    256,000    =&gt;    time:   0.194 s
-number of documents:    512,000    =&gt;    time:   0.355 s
-number of documents:  1,024,000    =&gt;    time:   0.668 s
-number of documents:  2,048,000    =&gt;    time:   1.325 s
-</code></p>
-
-<p>Let&rsquo;s again divide cardinality by 10 (now <em>cardinality 1,000</em>):</p>
-
-<p><code>text index insertion times for cardinality 1,000
-number of documents:    128,000    =&gt;    time:   0.130 s
-number of documents:    256,000    =&gt;    time:   0.152 s
-number of documents:    512,000    =&gt;    time:   0.261 s
-number of documents:  1,024,000    =&gt;    time:   0.524 s
-number of documents:  2,048,000    =&gt;    time:   0.934 s
-</code></p>
-
-<p><em>Cardinality 100</em>:</p>
-
-<p><code>text index insertion times for cardinality 100
-number of documents:    128,000    =&gt;    time:   0.114 s
-number of documents:    256,000    =&gt;    time:   0.148 s
-number of documents:    512,000    =&gt;    time:   0.337 s
-number of documents:  1,024,000    =&gt;    time:   0.452 s
-number of documents:  2,048,000    =&gt;    time:   0.907 s
-</code></p>
-
-<p><em>Cardinality 10</em>:</p>
-
-<p><code>text index insertion times for cardinality 10
-number of documents:    128,000    =&gt;    time:   0.130 s
-number of documents:    256,000    =&gt;    time:   0.327 s
-number of documents:    512,000    =&gt;    time:   0.239 s
-number of documents:  1,024,000    =&gt;    time:   0.442 s
-number of documents:  2,048,000    =&gt;    time:   0.827 s
-</code></p>
-
-<p>Finally we get to <em>cardinality 1</em>, the definitive indicator
-for the index being absolutely useless. Let&rsquo;s create it anyway,
-for the sake of completeness of this post:</p>
-
-<p><code>text index insertion times for cardinality 1
-number of documents:    128,000    =&gt;    time:   0.130 s
-number of documents:    128,000    =&gt;    time:   0.095 s
-number of documents:    256,000    =&gt;    time:   0.146 s
-number of documents:    512,000    =&gt;    time:   0.246 s
-number of documents:  1,024,000    =&gt;    time:   0.445 s
-number of documents:  2,048,000    =&gt;    time:   0.925 s
-</code></p>
-
-<p>On a side note: all indexed values were numeric. In absolute terms,
-indexing string values will be slower than indexing numbers, but insertion
-should still scale nicely with the number of documents as long as everything
-fits in RAM.</p>
 ]]></content>
   </entry>
   

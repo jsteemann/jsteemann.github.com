@@ -10,7 +10,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="ArangoDB 2.5 comes with an upgraded version of V8, Google&rsquo;s open source JavaScript engine. The built-in version of V8 has been upgraded from 3. &hellip;">
+  <meta name="description" content="I often find myself searching for certain commits using git log and friends. While I really love
+the power and flexibility that come with the git and &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -79,6 +80,54 @@
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/03/11/analyzing-git-commits-with-arangodb/">Analyzing Git Commits With ArangoDB</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-03-11T12:37:58+01:00" pubdate data-updated="true">Mar 11<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>I often find myself searching for certain commits using <code>git log</code> and friends. While I really love
+the power and flexibility that come with the git and other Unix command-line tools, sometimes it can be more
+convenient to use a database to filter and aggregate commit data.</p>
+
+<p>I gave it a quick try yesterday and imported the commit history of ArangoDB&rsquo;s Git repository into ArangoDB
+and ran some queries on the data. While the query results for our repository may not be interesting for everyone,
+I think it is still worth sharing what I did. Even though I didn&rsquo;t try it, I think the overall procedure is
+applicable with any other Git repository.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/03/11/analyzing-git-commits-with-arangodb/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -564,62 +613,6 @@ service).</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/12/19/using-es6-features-in-arangodb/">Using ES6 Features in ArangoDB</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-12-19T19:12:06+01:00" pubdate data-updated="true">Dec 19<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>ArangoDB 2.4 will be shipped with an <em>updated version of V8</em>.</p>
-
-<p>The V8 version included in 2.4 will be 3.29.59. This version will replace the
-almost two year old 3.16.14. A lot of things happened in V8 since then, and a lot
-of ES6 features have been added to it.</p>
-
-<p><strong>ES6 is not finalized yet</strong>, and support for it is a <a href="http://kangax.github.io/compat-table/es6/">work in progress on all
-platforms</a>.</p>
-
-<p>ES6 provides many cool features that can make JavaScript developer&rsquo;s life easier.
-In this blog post, I&rsquo;ll summarize a few ES6 features that are available in
-ArangoDB, either for scripting purposes in the ArangoShell, or in your server-side
-Foxx actions inside the database.</p>
-
-<p>I don&rsquo;t want to put you off until Doomsday. ArangoDB 2.4 should be released next
-week. Time to play with some ES6 features!</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2014/12/19/using-es6-features-in-arangodb/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/3/">&larr; Older</a>
@@ -644,6 +637,10 @@ week. Time to play with some ES6 features!</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/05/04/return-value-optimization-for-aql/">Return Value Optimization for AQL</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/04/24/exporting-data-for-offline-processing/">Exporting Data for Offline Processing</a>
       </li>
     
@@ -659,10 +656,6 @@ week. Time to play with some ES6 features!</p>
         <a href="/blog/2015/04/20/creating-highscore-lists/">Creating Highscore Lists</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/04/14/updating-documents-with-arangoimp/">Updating Documents With Arangoimp</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -671,11 +664,11 @@ week. Time to play with some ES6 features!</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (17)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (29)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (4)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (8)</a></li><li><a href='/blog/categories/performance/'>performance (2)</a></li><li><a href='/blog/categories/php/'>PHP (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (18)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (29)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (4)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (10)</a></li><li><a href='/blog/categories/php/'>PHP (1)</a></li><li><a href='/blog/categories/prformance/'>Prformance (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (19)</li><ul class="month_list"><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (20)</li><ul class="month_list"><li class="month"><a href='/blog/2015/05/'>MAY (1)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

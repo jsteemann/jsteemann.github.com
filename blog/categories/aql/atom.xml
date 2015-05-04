@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-04-25T01:06:54+02:00</updated>
+  <updated>2015-05-04T11:59:19+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,77 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Return Value Optimization for AQL]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql/"/>
+    <updated>2015-05-04T10:32:43+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql</id>
+    <content type="html"><![CDATA[<p>While in search for further AQL query optimizations last week, we found that intermediate AQL
+query results were copied one time too often in some cases. Precisely, the data that a query&rsquo;s
+<code>ReturnNode</code> will return to the caller was copied into the <code>ReturnNode</code>&rsquo;s own register. With
+<code>ReturnNode</code>s never modifying their input data, this demanded for something that is called
+<em>return-value optimization</em> in compilers.</p>
+
+<p>2.6 will now optimize away these copies in many cases, and this post shows which performance
+benefits can be expected due to the optimization.</p>
+
+<!-- more -->
+
+
+<p>The effect of the optimization can be demonstrated easily with a few simple AQL queries.</p>
+
+<p>Let&rsquo;s start with a query that simply returns all 100,000 documents from a collection <code>users</code>:
+<code>FOR u IN users RETURN u</code> (the source data for the collection can be found <a href="/downloads/code/users-100000.json.tar.gz">here</a>).</p>
+
+<p>This query&rsquo;s execution plan is already straight-forward and simple:</p>
+
+<p><img src="/downloads/screenshots/return.png"></p>
+
+<p>So where&rsquo;s the problem?</p>
+
+<p>The <code>ReturnNode</code> in this query (and other queries too) will copy its input data into its own output
+register, only to finally hand the results to the query&rsquo;s caller. This copying is most often unnecessary
+as the <code>ReturnNode</code> will not modify its input. So the idea was to get rid of the copying action and
+tell the query&rsquo;s calling code in which (now different) register to look for the results.</p>
+
+<p>Optimizing away the copying inside the <code>ReturnNode</code> made the query run faster already.
+The same query now returns the 100,000 documents in 0.24 to 0.26 seconds, compared to 0.27 to 0.30 s
+before applying the optimization.</p>
+
+<p>Returning just an attribute of each document shows about the same improvement rates. The execution
+times of the query <code>FOR u IN users RETURN u._key</code> drop to between 0.13 and 0.14 seconds with the
+optimization, from initially between 0.15 and 0.17 seconds.</p>
+
+<p>Another example query, <code>FOR i IN 1..1000000 RETURN i</code>, now runs in 0.58 to 0.61 seconds with
+the optimization, compared to between 0.77 and 0.81 seconds without it.</p>
+
+<p>These absolute figures may not look overly impressive, but they indicate relative improvements of
+between 10 and 25 %, which is quite nice. This is effectively saved CPU time that can now be used
+for something more productive.</p>
+
+<p>Of course the performance improvements may not be that high for every imaginable AQL query.
+Though the optimization may be active in most AQL queries, its effect will only be measurable
+for queries that return a significant number of documents/values. Otherwise the share of the
+<code>ReturnNode</code>&rsquo;s work in the query&rsquo;s overall computations may be too low to have any effect.
+Additionally, the more work a query spends in performing other operations (e.g. filtering,
+sorting, collecting), the less relevant will be the overall effect of the optimized <code>ReturnNode</code>.
+Finally, when query results need to be shipped from the server to the client over a network,
+the relative effect of the optimization may diminish further.</p>
+
+<p>So your mileage may vary. But the optimization will not do any harm, and together with some
+other query optimizations already finished for 2.6 it will contribute to many AQL queries
+running faster than before.</p>
+
+<p>AQL queries will benefit from the optimization automatically in ArangoDB 2.6, without requiring
+any adjustments to the query string, the server configuration etc. The optimizer will automatically
+apply the optimization for the main-level <code>ReturnNode</code> of every AQL query.</p>
+
+<p>On a side note: the optimization will not be shown in the list of applied optimizer rules for the
+query. This is because the optimization is performed in some different place in the query
+executor, after applying the optimizer rules.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Functions Improvements]]></title>
@@ -1034,179 +1105,6 @@ will eventually turn into a 2.6 release.</p>
 performance improvements when compared to 2.5. This can be seen from the comparison
 table above and also from the observations made
 <a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">here</a>.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Improvements for the Cursor API]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/"/>
-    <updated>2015-04-01T13:59:22+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api</id>
-    <content type="html"><![CDATA[<p>This week we pushed some modifications for ArangoDB&rsquo;s cursor API into the <code>devel</code> branch.
-The change will result in less copying of AQL query results between the AQL and the HTTP layers.
-As a positive side effect, this will reduce the amount of garbage collection the built-in V8
-has to do.</p>
-
-<p>These modifications should improve the cursor API performance significantly for many cases,
-while at the same time keeping its REST API stable.</p>
-
-<p>This blog post shows some first unscientific performance tests comparing the old cursor API with
-its new, improved implementation.</p>
-
-<!-- more -->
-
-
-<p>A good way to test the cursor API performance is to issue lots of queries from the
-ArangoShell. The ArangoShell will send the query to the server for execution. The server
-will respond with the first 1,000 results for the query.</p>
-
-<p>Additionally the server will create a server-side cursor if the result set is bigger than
-1,000 documents. In this case, the ArangoShell will issue subsequent HTTP requests that fetch
-the outstanding documents from the server.</p>
-
-<p>The above behavior is triggered automatically when <code>db._query(query).toArray()</code> is run in
-the ArangoShell.</p>
-
-<p>Here is a test function that executes a query <em>n</em> times and measures the total execution time.
-It will issue <em>n</em> HTTP requests to the server&rsquo;s cursor API for executing the query. It will
-also issue further HTTP requests if the total result set size is bigger than 1,000 documents.
-What is getting measured is thus the total execution time from the ArangoShell&rsquo;s point of view,
-including time spent in the server-side cursor functions as well as in HTTP traffic.</p>
-
-<p>```js function for testing the cursor API
-var test = function(query, n) {
-  var time = require(&ldquo;internal&rdquo;).time;
-  var s = time();
-  for (var i = 0; i &lt; n; ++i) {</p>
-
-<pre><code>db._query(query).toArray(); 
-</code></pre>
-
-<p>  }
-  return time() &ndash; s;
-};
-```</p>
-
-<p>The test function was run with different queries to check which types of queries will benefit
-from the cursor API change.</p>
-
-<p>Note that the ArangoShell will issue all its requests to the cursor API sequentially. This is
-ok for the purpose of this test, as the purpose was to measure the relative performance change
-between the old and the new API implementation.</p>
-
-<p>The ArangoShell and ArangoDB server were running on the same physical machine during the tests,
-so this is a <strong>localhost</strong> benchmark.</p>
-
-<h2>Detailed test results</h2>
-
-<p>Here are the results from my local machine.</p>
-
-<p>The first query was about the simplest one I could come up with. The query was sent to the
-server 10,000 times. The result set size per query ws 1, resulting in 10,000 calls to the cursor
-API with not much data to be transferred per call:</p>
-
-<p><code>js test query
-test("RETURN 1", 10000);
-</code></p>
-
-<p>Execution took 7.225 s with the old API, and 5.195 s with the new API (<strong>28 % improvement</strong>).</p>
-
-<p>A query returning a slightly more complex result value:</p>
-
-<p><code>js test query
-test("RETURN { one: 'test', two: 'another-value', three: [ 1, 2, 3 ] }", 10000);
-</code></p>
-
-<p>This took 8.046 s with the old API, and 5.829 s with the new one (<strong>27 % improvement</strong>).</p>
-
-<p>Another simple query, again executed 10,000 times, but now returning 10 values per query:</p>
-
-<p><code>js test query
-test("FOR i IN 1..10 RETURN i", 10000);
-</code></p>
-
-<p>Execution of this query took 7.951 s with the old, and 5.779 s with the new API (<strong>27 % improvement</strong>).</p>
-
-<p>Now raising the number of return values per query from 10 to 1,000:</p>
-
-<p><code>js test query
-test("FOR i IN 1..1000 RETURN i", 10000);
-</code></p>
-
-<p>This took 31.650 s with the old, and 28.504 s with the new API (<strong>10 % improvement</strong>).</p>
-
-<p>So far all query results contained 1,000 or less values. In this case the server is able to
-send the whole query result in response in one go, so there were only as many calls to the
-cursor API as there were queries. Even though the ArangoShell called the cursor API, the
-cursor only existed temporarily on the server but directly vanished when the server sent its
-response.</p>
-
-<p>Now let&rsquo;s run a query that returns more than 1,000 values each. The first call to the
-cursor API will then only return the first 1,000 results and additionally establish a
-server-side cursor so the client can fetch more results. This will mean that for each client
-query, there will be multiple HTTP requests.</p>
-
-<p>The following run issues 100,000 calls to the cursor API (10,000 queries times 10 batches per
-query):</p>
-
-<p><code>js test query
-test("FOR i IN 1..10000 RETURN i", 10000);
-</code></p>
-
-<p>This took 307.108 s with the old API, in contrast to 232.322 s with the new API (<strong>24 % improvement</strong>).</p>
-
-<p>The next queries I tested were collection-based. They returned data from a collection named
-<code>docs</code>. The collection contained 10,000 documents, and each document in the collection had
-5 attributes.</p>
-
-<p>The first query returned only a single one (random) document from the collection per query.</p>
-
-<p><code>js test query
-test("FOR i IN docs LIMIT 1 RETURN i", 10000);
-</code></p>
-
-<p>This took 8.689 s with the old API and 6.245 s with the new API (<strong>28 % improvement</strong>).</p>
-
-<p>The next query returned all the documents from the collection. The query was executed
-only 1,000 times because the result sets already got quite big. The combined size of all
-result sets was 1,000,000 documents (10,000 documents, 1,000 queries).</p>
-
-<p><code>js test query
-test("FOR i IN docs RETURN i", 1000);
-</code></p>
-
-<p>This took 453.736 s with the old, and 197.543 s with the new API (<strong>56 % improvement</strong>).</p>
-
-<p>The final query returned all document keys from the collection. The combined size of all result
-sets was 10,000,000 values (10,000 documents, 10,000 queries):</p>
-
-<p><code>js test query
-test("FOR i IN docs RETURN i._key", 10000);
-</code></p>
-
-<p>With the old API, this took 529.765 s, and with the new API it took 348.243 s (<strong>34 % improvement</strong>).</p>
-
-<h2>Summary</h2>
-
-<p>The new cursor API was faster than its old counterpart for all queries tested here. Total execution
-time as measured by the ArangoShell (representative for any other client program sending queries to
-ArangoDB) was consistenly lower than it was with the old API implementation.</p>
-
-<p>The improvements measured were varying. For the queries tested, the improvements fell into a range
-of <strong>10 % to even more than 50 % speedup</strong>.</p>
-
-<p>How much gain can be achieved in reality obviously depends on the type of query executed. There will
-also be queries that do not benefit from the new API implementation. For example, queries that do not
-return any results will not benefit much. This is because most of the optimizations done affect
-the buffering and the data transport internals of the cursor API. Furthermore, queries that run for
-a very long time but return only small amounts of data may not benefit considerably for the same reason.
-However, there should not be any queries which are negatively affected by the change.</p>
-
-<p>All in all, this looks quite promising, especially as the change will come <strong>for free</strong> for client
-applications. Client programs do not need to be adjusted to reap the benefits. This is because all
-that has changed were the <em>internals</em> of the cursor API. Its public REST interface remains unchanged.</p>
-
-<p>The changes are included in the <code>devel</code> branch and can be tested there.</p>
 ]]></content>
   </entry>
   

@@ -6,11 +6,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
-  <title>Category: Foxx - J@ArangoDB</title>
+  <title>Return Value Optimization for AQL - J@ArangoDB</title>
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="Category: Foxx">
+  <meta name="description" content="While in search for further AQL query optimizations last week, we found that intermediate AQL
+query results were copied one time too often in some &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -19,7 +20,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://jsteemann.github.ioblog/categories/foxx">
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
@@ -78,66 +79,146 @@
   <div id="main">
     <div id="content">
       <div>
-<article role="article">
+<article class="hentry" role="article">
   
   <header>
-    <h1 class="entry-title">Category: Foxx</h1>
+    
+      <h1 class="entry-title">Return Value Optimization for AQL</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-05-04T10:32:43+02:00" pubdate data-updated="true">May 4<span>th</span>, 2015</time>
+        
+      </p>
     
   </header>
-  
-  <div id="blog-archives" class="category">
 
 
+<div class="entry-content"><p>While in search for further AQL query optimizations last week, we found that intermediate AQL
+query results were copied one time too often in some cases. Precisely, the data that a query&rsquo;s
+<code>ReturnNode</code> will return to the caller was copied into the <code>ReturnNode</code>&rsquo;s own register. With
+<code>ReturnNode</code>s never modifying their input data, this demanded for something that is called
+<em>return-value optimization</em> in compilers.</p>
 
-  
-  <h2>2015</h2>
+<p>2.6 will now optimize away these copies in many cases, and this post shows which performance
+benefits can be expected due to the optimization.</p>
 
-<article>
-  
-<h1><a href="/blog/2015/02/26/more-es6-features/">More ES6 Features</a></h1>
-<time datetime="2015-02-26T12:00:46+01:00" pubdate><span class='month'>Feb</span> <span class='day'>26</span> <span class='year'>2015</span></time>
-
-<footer>
-  <span class="categories">posted in <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/es6/'>ES6</a>, <a class='category' href='/blog/categories/foxx/'>Foxx</a>, <a class='category' href='/blog/categories/javascript/'>JavaScript</a></span>
-</footer>
+<!-- more -->
 
 
-</article>
+<p>The effect of the optimization can be demonstrated easily with a few simple AQL queries.</p>
 
+<p>Let&rsquo;s start with a query that simply returns all 100,000 documents from a collection <code>users</code>:
+<code>FOR u IN users RETURN u</code> (the source data for the collection can be found <a href="/downloads/code/users-100000.json.tar.gz">here</a>).</p>
 
+<p>This query&rsquo;s execution plan is already straight-forward and simple:</p>
 
-  
-  <h2>2014</h2>
+<p><img src="/downloads/screenshots/return.png"></p>
 
-<article>
-  
-<h1><a href="/blog/2014/12/19/using-es6-features-in-arangodb/">Using ES6 Features in ArangoDB</a></h1>
-<time datetime="2014-12-19T19:12:06+01:00" pubdate><span class='month'>Dec</span> <span class='day'>19</span> <span class='year'>2014</span></time>
+<p>So where&rsquo;s the problem?</p>
 
-<footer>
-  <span class="categories">posted in <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/arangoshell/'>ArangoShell</a>, <a class='category' href='/blog/categories/es6/'>ES6</a>, <a class='category' href='/blog/categories/foxx/'>Foxx</a>, <a class='category' href='/blog/categories/javascript/'>JavaScript</a></span>
-</footer>
+<p>The <code>ReturnNode</code> in this query (and other queries too) will copy its input data into its own output
+register, only to finally hand the results to the query&rsquo;s caller. This copying is most often unnecessary
+as the <code>ReturnNode</code> will not modify its input. So the idea was to get rid of the copying action and
+tell the query&rsquo;s calling code in which (now different) register to look for the results.</p>
 
+<p>Optimizing away the copying inside the <code>ReturnNode</code> made the query run faster already.
+The same query now returns the 100,000 documents in 0.24 to 0.26 seconds, compared to 0.27 to 0.30 s
+before applying the optimization.</p>
 
-</article>
+<p>Returning just an attribute of each document shows about the same improvement rates. The execution
+times of the query <code>FOR u IN users RETURN u._key</code> drop to between 0.13 and 0.14 seconds with the
+optimization, from initially between 0.15 and 0.17 seconds.</p>
 
+<p>Another example query, <code>FOR i IN 1..1000000 RETURN i</code>, now runs in 0.58 to 0.61 seconds with
+the optimization, compared to between 0.77 and 0.81 seconds without it.</p>
 
+<p>These absolute figures may not look overly impressive, but they indicate relative improvements of
+between 10 and 25 %, which is quite nice. This is effectively saved CPU time that can now be used
+for something more productive.</p>
 
-<article>
-  
-<h1><a href="/blog/2014/10/15/handling-binary-data-in-foxx/">Handling Binary Data in Foxx</a></h1>
-<time datetime="2014-10-15T20:41:30+02:00" pubdate><span class='month'>Oct</span> <span class='day'>15</span> <span class='year'>2014</span></time>
+<p>Of course the performance improvements may not be that high for every imaginable AQL query.
+Though the optimization may be active in most AQL queries, its effect will only be measurable
+for queries that return a significant number of documents/values. Otherwise the share of the
+<code>ReturnNode</code>&rsquo;s work in the query&rsquo;s overall computations may be too low to have any effect.
+Additionally, the more work a query spends in performing other operations (e.g. filtering,
+sorting, collecting), the less relevant will be the overall effect of the optimized <code>ReturnNode</code>.
+Finally, when query results need to be shipped from the server to the client over a network,
+the relative effect of the optimization may diminish further.</p>
 
-<footer>
-  <span class="categories">posted in <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/foxx/'>Foxx</a>, <a class='category' href='/blog/categories/javascript/'>JavaScript</a></span>
-</footer>
+<p>So your mileage may vary. But the optimization will not do any harm, and together with some
+other query optimizations already finished for 2.6 it will contribute to many AQL queries
+running faster than before.</p>
 
+<p>AQL queries will benefit from the optimization automatically in ArangoDB 2.6, without requiring
+any adjustments to the query string, the server configuration etc. The optimizer will automatically
+apply the optimization for the main-level <code>ReturnNode</code> of every AQL query.</p>
 
-</article>
-
+<p>On a side note: the optimization will not be shown in the list of applied optimizer rules for the
+query. This is because the optimization is performed in some different place in the query
+executor, after applying the optimizer rules.</p>
 </div>
 
+
+  <footer>
+    <p class="meta">
+      
   
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-05-04T10:32:43+02:00" pubdate data-updated="true">May 4<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/performance/'>Performance</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/04/24/exporting-data-for-offline-processing/" title="Previous Post: Exporting data for offline processing">&laquo; Exporting data for offline processing</a>
+      
+      
+    </p>
+  </footer>
 </article>
 
 </div>
