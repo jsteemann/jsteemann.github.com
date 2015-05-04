@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-04T12:04:59+02:00</updated>
+  <updated>2015-05-04T15:28:52+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,76 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Subquery Optimizations]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations/"/>
+    <updated>2015-05-04T13:26:00+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations</id>
+    <content type="html"><![CDATA[<p>This is another post demonstrating some of the AQL query performance improvements
+that can be expected in ArangoDB 2.6. Specifically, this post is about an optimization
+for subqueries. AQL queries with multiple subqueries will likely benefit from it.</p>
+
+<!-- more -->
+
+
+<p>The following example queries use the same <code>users</code> collection with 100,000 documents
+that was used in the <a href="/blog/2015/05/04/return-value-optimization-for-aql/">previous post about return value optimizations</a>.
+Again, the source data for the collection can be found <a href="/downloads/code/users-100000.json.tar.gz">here</a>.</p>
+
+<p>We&rsquo;ll start with a query that uses a single subquery extracting all users from the
+collection into a flat result array:</p>
+
+<p><code>plain example query with single subquery
+RETURN [
+  (FOR u IN users RETURN u)
+]
+</code></p>
+
+<p>This query is equally fast with ArangoDB 2.5 and 2.6, no changes here.</p>
+
+<p>Let&rsquo;s ramp it up to using two subqueries, one for users with a <code>gender</code> attribute value
+of <code>male</code>, and one for users with <code>gender</code> attribute value <code>female</code>. No indexes were used
+for the extraction in 2.5 nor 2.6:</p>
+
+<p><code>plain example query with two subqueries
+RETURN [
+  (FOR u IN users FILTER u.gender == 'male' RETURN u),
+  (FOR u IN users FILTER u.gender == 'female' RETURN u)
+]
+</code></p>
+
+<p>The query takes 16.6 seconds to execute in 2.5, but only 2.95 seconds with ArangoDB 2.6.
+This 80 % reduction in execution time is due to ArangoDB 2.6 being a bit smarter about
+subqueries than 2.5 is.</p>
+
+<p>In the above query, the two subqueries are independent, so not only can they be executed in
+any order, but they also do not rely on each other&rsquo;s results. ArangoDB 2.6 will detect that
+and avoid copying variables and intermediate results into subqueries if they are actually not
+needed there. 2.5 copied all variables into subqueries unconditionally, even if variables
+were not needed there.</p>
+
+<p>In 2.6, any AQL query with multiple subqueries will benefit from this optimization. The
+performance improvements will be greater if subqueries late in the execution pipeline have a lot of
+intermediate results created in front of them, but do not rely on these intermediate results.</p>
+
+<p>Another nice example for a 2.6 speedup is extracting a single attribute per subquery, as is done
+for the <code>name</code> attribute in the following query:</p>
+
+<p><code>plain extracting a single attribute in two subqueries
+RETURN [
+  (FOR u IN users FILTER u.gender == 'male' RETURN u.name),
+  (FOR u IN users FILTER u.gender == 'female' RETURN u.name)
+]
+</code></p>
+
+<p>This takes 42 seconds to execute in 2.5, and only 0.86 seconds in 2.6. This is a more than
+95 % reduction in execution time. It is caused by a mix of factors, one of them again being
+the subquery optimization that avoids copying unneeded intermediate results.</p>
+
+<p>Enjoy!</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Return Value Optimization for AQL]]></title>
@@ -904,161 +974,6 @@ will still need to sort 1M input values. This is also the reason why the <strong
 is significantly faster here.</p>
 
 <p>As usual, your mileage may vary, so please run your own tests.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[More Efficient Data Exports]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/"/>
-    <updated>2015-04-04T21:51:33+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports</id>
-    <content type="html"><![CDATA[<p>I recently wrote about the <a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">performance improvements for the cursor API</a>
-made in ArangoDB 2.6. The performance improvements are due to a rewrite of the cursor API&rsquo;s internals.</p>
-
-<p>As a byproduct of this rewrite, an extra API was created for exporting all documents from a
-collection to a client application. With this being its only use case, it is clear that the new
-API will not solve every data export problem. However, the API&rsquo;s limitedness facilitated a very efficient
-implementation, resulting in <strong>nice speedups</strong> and <strong>lower memory usage</strong> when compared to the alternative
-way of exporting all documents into a client application.</p>
-
-<!-- more -->
-
-
-<p>There did not exist an <em>official</em> export API before. So users often ran AQL queries like the following
-to export all documents from a collection:</p>
-
-<p><code>plain AQL query to export all documents
-FOR doc IN collection
-  RETURN doc
-</code></p>
-
-<p>While such AQL queries will work for smaller result sets, they will get problematic when results get
-bigger. The reason is that the AQL very will effectively create a snapshot of all the documents present
-in the collection. Creating the snapshot is required for data consistency. Once the snapshot is created,
-clients can incrementally fetch the data from the snapshot and will still get a consistent result even
-if the underlying collections get modified.</p>
-
-<p>For smaller result sets, snapshotting is not a big issue. But when exporting all documents from a
-bigger collection, big result sets will be produced. In this case, the snapshotting can become expensive
-in terms of CPU time and also memory consumption.</p>
-
-<p>We couldn&rsquo;t get around the snapshotting completely, but we could take advantage of the fact that when exporting
-documents from a collection, all that can be snapshotted are documents. This is different to snapshotting
-arbitrary AQL queries, which can produce any kind and combination of JSON.</p>
-
-<p>Dealing only with documents allowed us to take an efficiency shortcut: instead of copying the complete
-documents it will only copy pointers to the document revisions presently in th collection. Not only is this
-much faster than doing a full copy of the document, but it also saves a lot of memory.</p>
-
-<h2>Invoking the API</h2>
-
-<p>While the invocation of the cursor API and the export API is slightly different, their result formats
-have intentionally been kept similar. This way client programs do not need to be adjusted much to consume
-the export API instead of the cursor API.</p>
-
-<p>An example command for exporting via the cursor API is:</p>
-
-<p>```bash exporting all documents via the cursor API
-curl -X POST \</p>
-
-<pre><code> "http://127.0.0.1:8529/_api/cursor" \
- --data '{"query":"FOR doc IN collection RETURN docs"}'
-</code></pre>
-
-<p>```</p>
-
-<p>A command for exporting via the new export API is:</p>
-
-<p>```bash exporting all documents via the export API
-curl -X POST \</p>
-
-<pre><code> "http://127.0.0.1:8529/_api/export?collection=docs"
-</code></pre>
-
-<p>```</p>
-
-<p>In both cases, the result will look like this:
-```json API results
-{
-  &ldquo;result&rdquo;: [</p>
-
-<pre><code>...
-</code></pre>
-
-<p>  ],
-  &ldquo;hasMore&rdquo;:true,
-  &ldquo;id&rdquo;:&ldquo;2221050516478&rdquo;
-}
-```</p>
-
-<p>The <code>result</code> attribute will contain the first few (1,000 by default) documents. The
-<code>hasMore</code> attribute will indicate whether there are more documents to fetch from the
-server. In this case the client can use the cursor id specified in the <code>id</code> attribute
-to fetch more result.</p>
-
-<p>The API can be invoked via any HTTP-capable client such as <code>curl</code> (as shown above).</p>
-
-<p>I have also added <a href="https://github.com/arangodb/arangodb-php/blob/devel/README.md#exporting_data">bindings to the ArangoDB-PHP driver</a>
-today (contained in the driver&rsquo;s <code>devel</code> branch).</p>
-
-<h2>API performance</h2>
-
-<p>Now, what can be gained by using the export API?</p>
-
-<p>The following table shows the execution times for fetching the first 1,000 documents
-from collections of different sizes, both with via the cursor API and the export API.
-Figures for the cursor API are shown for ArangoDB 2.5 and 2.6 (the version in which
-it was rewritten):</p>
-
-<p>```plain execution times for cursor API and export API</p>
-
-<h1>of documents    cursor API (2.5)    cursor API (2.6)      export API</h1>
-
-<hr />
-
-<pre><code>   100,000               1.9 s               0.3 s          0.04 s
-   500,000               9.5 s               1,4 s          0.08 s
- 1,000,000              19.0 s               2.8 s          0.14 s
- 2,000,000              39,0 s               7.5 s          0.19 s
- 5,000,000               n/a                 n/a            0.55 s
-10,000,000               n/a                 n/a            1.32 s
-</code></pre>
-
-<p>```</p>
-
-<p>Execution times are from my laptop, which only has 4 GB of RAM and a slow disk.</p>
-
-<p>As can be seen, the rewritten cursor API in 2.6 is already much faster than the one
-in 2.5. However, for exporting documents from one collection only, the new export API
-is superior.</p>
-
-<p>The export API also uses a lot less memory for snapshotting, as can be nicely seen in the
-two bottom rows of the results. For these cases, the snapshots done by the cursor API
-were bigger than the available RAM and the OS started swapping heavily. Snapshotting
-didn&rsquo;t complete within 15 minutes, so no results are shown above.</p>
-
-<p>Good news is that this didn&rsquo;t happen with the export API, due to the fact that the
-snapshots it creates are much more compact.</p>
-
-<p>Another nice side effect of the speedup is that the first results will arrive much
-earlier in the client application. This will help in reducing client connection timeouts
-in case clients are enforcing them on temporarily non-responding connections.</p>
-
-<h2>Summary</h2>
-
-<p>ArangoDB 2.6 provides a specialized export API for exporting all documents from a
-collection and shipping them to a client application. It is rather limited but
-faster than the general-purpose AQL cursor API and can store its snapshots using less
-memory.</p>
-
-<p>Therefore, exporting all documents from bigger collections calls for using the new
-export API from 2.6 on. The new export API is present in the <code>devel</code> branch, which
-will eventually turn into a 2.6 release.</p>
-
-<p>For other cases, when still using the cursor API, 2.6 will also provide significant
-performance improvements when compared to 2.5. This can be seen from the comparison
-table above and also from the observations made
-<a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">here</a>.</p>
 ]]></content>
   </entry>
   

@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-04T12:04:59+02:00</updated>
+  <updated>2015-05-04T15:28:52+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,84 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Subquery Optimizations]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations/"/>
+    <updated>2015-05-04T13:26:00+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations</id>
+    <content type="html"><![CDATA[<p>This is another post demonstrating some of the AQL query performance improvements
+that can be expected in ArangoDB 2.6. Specifically, this post is about an optimization
+for subqueries. AQL queries with multiple subqueries will likely benefit from it.</p>
+
+<!-- more -->
+
+
+<p>The following example queries use the same <code>users</code> collection with 100,000 documents
+that was used in the <a href="http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql/">previous post about return value optimizations</a>.
+Again, the source data for the collection can be found <a href="http://jsteemann.github.io/downloads/code/users-100000.json.tar.gz">here</a>.</p>
+
+<p>We&rsquo;ll start with a query that uses a single subquery extracting all users from the
+collection into a flat result array:</p>
+
+<figure class='code'><figcaption><span>example query with single subquery</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN [ 
+</span><span class='line'>  (FOR u IN users RETURN u) 
+</span><span class='line'>]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This query is equally fast with ArangoDB 2.5 and 2.6, no changes here.</p>
+
+<p>Let&rsquo;s ramp it up to using two subqueries, one for users with a <code>gender</code> attribute value
+of <code>male</code>, and one for users with <code>gender</code> attribute value <code>female</code>. No indexes were used
+for the extraction in 2.5 nor 2.6:</p>
+
+<figure class='code'><figcaption><span>example query with two subqueries</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN [ 
+</span><span class='line'>  (FOR u IN users FILTER u.gender == 'male' RETURN u), 
+</span><span class='line'>  (FOR u IN users FILTER u.gender == 'female' RETURN u) 
+</span><span class='line'>]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The query takes 16.6 seconds to execute in 2.5, but only 2.95 seconds with ArangoDB 2.6.
+This 80 % reduction in execution time is due to ArangoDB 2.6 being a bit smarter about
+subqueries than 2.5 is.</p>
+
+<p>In the above query, the two subqueries are independent, so not only can they be executed in
+any order, but they also do not rely on each other&rsquo;s results. ArangoDB 2.6 will detect that
+and avoid copying variables and intermediate results into subqueries if they are actually not
+needed there. 2.5 copied all variables into subqueries unconditionally, even if variables
+were not needed there.</p>
+
+<p>In 2.6, any AQL query with multiple subqueries will benefit from this optimization. The
+performance improvements will be greater if subqueries late in the execution pipeline have a lot of
+intermediate results created in front of them, but do not rely on these intermediate results.</p>
+
+<p>Another nice example for a 2.6 speedup is extracting a single attribute per subquery, as is done
+for the <code>name</code> attribute in the following query:</p>
+
+<figure class='code'><figcaption><span>extracting a single attribute in two subqueries</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN [ 
+</span><span class='line'>  (FOR u IN users FILTER u.gender == 'male' RETURN u.name), 
+</span><span class='line'>  (FOR u IN users FILTER u.gender == 'female' RETURN u.name) 
+</span><span class='line'>]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This takes 42 seconds to execute in 2.5, and only 0.86 seconds in 2.6. This is a more than
+95 % reduction in execution time. It is caused by a mix of factors, one of them again being
+the subquery optimization that avoids copying unneeded intermediate results.</p>
+
+<p>Enjoy!</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Return Value Optimization for AQL]]></title>
@@ -4875,199 +4953,6 @@ This should make it work from the ArangoShell (but not from the web interface).<
 the web interface, but as a backend developer, I am not able to do any
 serious UI work. I also put this together in my leisure time, and have to
 come to an end with it.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Returning Results From AQL INSERT/REMOVE/REPLACE Operations]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations/"/>
-    <updated>2015-01-13T22:53:40+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations</id>
-    <content type="html"><![CDATA[<p>ArangoDB provides many options for finding and modifying data. Though there are
-several more specialized operation, data-modification AQL queries are the most
-general solution in ArangoDB. They allow to find documents using arbitrary filter
-criteria, and to modify or remove the documents once found.</p>
-
-<p>Such <em>find-and-modify</em> operations can be executed with multiple queries (one for
-the find step, one for the modification step), or with a single query. Putting
-both steps into a single query will often save roundtrips between the application
-and the database and thus may be preferred over executing the steps separately.
-Putting both the find and the modify step into the same query also prevents other
-operations from interfering in between and tampering with the underlying data.</p>
-
-<p>Now what if the application not only requires the data to be updated, but also needs
-to keep track of which documents were found and modified by a <em>find-and-modify</em>
-query? This is often required when an application needs to keep database
-data in sync with data in some other datastore (e.g. the filesystem or a remote
-service).</p>
-
-<p>The pattern I would dub <em>find-modify-return</em> would be useful for this.</p>
-
-<!-- more -->
-
-
-<p>Unfortunately it hasn&rsquo;t been supported in AQL until very recently.
-We have been asked for this so many times that I stopped counting.</p>
-
-<p>I am glad that this got better with ArangoDB 2.4. Finding, modifying and returning
-documents is now possible from the same AQL query. The solution is not yet perfect,
-but at least it provides basic <em>find-modify-return</em> functionality for a lot of
-use cases, including multi-document, multi-collection queries.</p>
-
-<h2>INSERT</h2>
-
-<p>Let&rsquo;s start with an <code>INSERT</code> operation as it is the most simple to explain:</p>
-
-<figure class='code'><figcaption><span>insert query, not returning anything</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN 1..10
-</span><span class='line'>  INSERT { name: CONCAT("user", i), someValue: RAND() } IN testAccounts</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The above query does not explicitly specify the <code>_key</code> attribute for the inserted
-documents, meaning the database will create the documents keys automatically.
-Additionally, the query assigns a random value to an attribute <code>someValue</code>.
-Getting to know the created keys or random values required an extra lookup query
-before 2.4. Extra queries are something one wants to avoid for efficiency
-reasons.</p>
-
-<p>With 2.4, adding two lines at the end of the query will solve the problem so
-that everything can be done in one query:</p>
-
-<figure class='code'><figcaption><span>insert query, returning the inserted documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN 1..10
-</span><span class='line'>  INSERT { name: CONCAT("user", i), someValue: RAND() } IN testAccounts
-</span><span class='line'>  LET inserted = NEW
-</span><span class='line'>  RETURN inserted</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Using a <code>LET</code> with the pseudo-value of <code>NEW</code> after the <code>INSERT</code> together with
-a final <code>RETURN</code> statement will make the inserted documents appear in the query
-result. Note that the full documents will be returned and not just the specified
-attributes. This allows the application to track of all document attributes,
-even the auto-generated ones.</p>
-
-<h2>REMOVE</h2>
-
-<p>The mechanism works for <code>REMOVE</code> statements, too.</p>
-
-<p>Time to use a different example for this. Let&rsquo;s assume session metadata are
-stored in the database, and some bigger session files are stored somewhere
-in the filesystem. If the application needs to remove expired sessions, it
-will need to clean up in both places. It will first query the database to
-find the expired sessions, only to remove them from the filesystem (if the
-filesystem sessions were organized by session id from the database) and to
-finally remove the sessions from database itself.</p>
-
-<p>The following query could be used to find removal candidates:</p>
-
-<figure class='code'><figcaption><span>query for finding removal candidates</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR session IN sessions
-</span><span class='line'>  FILTER session.dateExpires &lt; DATE_NOW()
-</span><span class='line'>  LIMIT 1000
-</span><span class='line'>  RETURN session._key</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The results of this query can be used for cleaning up sessions in the filesystem,
-and for finally removing the sessions from the database. However, this would require
-an extra <code>REMOVE</code> query. And didn&rsquo;t we say we would like to avoid extra queries?</p>
-
-<p>The good news is that in 2.4 we can by putting at least the database part into a
-single query:</p>
-
-<figure class='code'><figcaption><span>query for removing and returning expired sessions</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR session IN sessions
-</span><span class='line'>  FILTER session.dateExpires &lt; DATE_NOW()
-</span><span class='line'>  LIMIT 1000
-</span><span class='line'>  REMOVE session IN sessions 
-</span><span class='line'>  LET removed = OLD
-</span><span class='line'>  RETURN removed</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The last two lines of the above query make sure the removed sessions are
-returned to the application, so the application can perform any filesystem
-cleanup using the session ids from the database.</p>
-
-<p>Note that in case of <code>REMOVE</code> one has to use the pseudo-value <code>OLD</code> because
-<code>REMOVE</code> can only return documents before removal. In the case of <code>INSERT</code>
-we can only refer to the pseudo-value <code>NEW</code>.</p>
-
-<h2>UPDATE and REPLACE</h2>
-
-<p>So far we saw <code>INSERT</code> and <code>REMOVE</code>, but there are also <code>UPDATE</code> and <code>REPLACE</code>.
-I will handle <code>UPDATE</code> and <code>REPLACE</code> in one go. All the following refers to
-<code>UPDATE</code>, but does apply to <code>REPLACE</code> as well.</p>
-
-<p>The mechanism to return documents from a query is the same as
-already demonstrated: simply append the <code>LET ... RETURN</code> sequence to the end
-of the original query.</p>
-
-<p>In addition, <code>UPDATE</code> allows to return either the <em>old</em> document revisions
-(before modification) or the <em>new</em> document revisions (after modification).
-This can be expressed by using either <code>OLD</code> or <code>NEW</code> in the final <code>LET</code>
-statement.</p>
-
-<p>Following is a more complex example for an <code>UPDATE</code> query that aggregates data
-from one collection (<code>phraseOccurrences</code>) in order to find and modify matching
-documents in another collection (<code>phrases</code>). It will return the documents from
-<code>phrases</code> before they got modified:</p>
-
-<figure class='code'><figcaption><span>update query returning &#8220;old&#8221; documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR po IN phraseOccurrences
-</span><span class='line'>  FILTER ! po.isSuspicious
-</span><span class='line'>  FILTER po.dateMentioned &gt;= '2015-01-01' && po.dateMentioned &lt;= '2015-01-09'
-</span><span class='line'>  COLLECT phrase = po.phrase WITH COUNT INTO occurrences
-</span><span class='line'>  FILTER occurrences % 42 != 23
-</span><span class='line'>  LIMIT 13
-</span><span class='line'>  UPDATE phrase WITH { isSuspicious: true } IN phrases
-</span><span class='line'>  LET previous = OLD  /* returns document revisions before UPDATE */
-</span><span class='line'>  RETURN previous</span></code></pre></td></tr></table></div></figure>
-
-
-<p>If we are interested in what the documents in <code>phrases</code> look like with the
-<code>UPDATE</code> applied, we can use <code>NEW</code> instead:</p>
-
-<figure class='code'><figcaption><span>update query returning &#8220;new&#8221; documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR po IN phraseOccurrences
-</span><span class='line'>  FILTER ! po.isSuspicious
-</span><span class='line'>  FILTER po.dateMentioned &gt;= '2015-01-01' && po.dateMentioned &lt;= '2015-01-09'
-</span><span class='line'>  COLLECT phrase = po.phrase WITH COUNT INTO occurrences
-</span><span class='line'>  FILTER occurrences % 42 != 23
-</span><span class='line'>  LIMIT 13
-</span><span class='line'>  UPDATE phrase WITH { isSuspicious: true } IN phrases
-</span><span class='line'>  LET modified = NEW  /* returns document revisions after UPDATE */
-</span><span class='line'>  RETURN modified</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Note that the full documents will be returned here, and not just the attributes
-specified in or modified by the <code>UPDATE</code> operation.</p>
 ]]></content>
   </entry>
   

@@ -6,11 +6,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
-  <title>Category: TravisCI - J@ArangoDB</title>
+  <title>Subquery Optimizations - J@ArangoDB</title>
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="Category: TravisCI">
+  <meta name="description" content="This is another post demonstrating some of the AQL query performance improvements
+that can be expected in ArangoDB 2.6. Specifically, this post is &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -19,7 +20,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://jsteemann.github.ioblog/categories/travisci">
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
@@ -78,49 +79,153 @@
   <div id="main">
     <div id="content">
       <div>
-<article role="article">
+<article class="hentry" role="article">
   
   <header>
-    <h1 class="entry-title">Category: TravisCI</h1>
+    
+      <h1 class="entry-title">Subquery Optimizations</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-05-04T13:26:00+02:00" pubdate data-updated="true">May 4<span>th</span>, 2015</time>
+        
+      </p>
     
   </header>
-  
-  <div id="blog-archives" class="category">
 
 
+<div class="entry-content"><p>This is another post demonstrating some of the AQL query performance improvements
+that can be expected in ArangoDB 2.6. Specifically, this post is about an optimization
+for subqueries. AQL queries with multiple subqueries will likely benefit from it.</p>
 
-  
-  <h2>2014</h2>
-
-<article>
-  
-<h1><a href="/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/">Getting Core Dumps of Failed TravisCI Builds</a></h1>
-<time datetime="2014-10-30T23:05:48+01:00" pubdate><span class='month'>Oct</span> <span class='day'>30</span> <span class='year'>2014</span></time>
-
-<footer>
-  <span class="categories">posted in <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>, <a class='category' href='/blog/categories/travisci/'>TravisCI</a></span>
-</footer>
+<!-- more -->
 
 
-</article>
+<p>The following example queries use the same <code>users</code> collection with 100,000 documents
+that was used in the <a href="/blog/2015/05/04/return-value-optimization-for-aql/">previous post about return value optimizations</a>.
+Again, the source data for the collection can be found <a href="/downloads/code/users-100000.json.tar.gz">here</a>.</p>
+
+<p>We&rsquo;ll start with a query that uses a single subquery extracting all users from the
+collection into a flat result array:</p>
+
+<figure class='code'><figcaption><span>example query with single subquery</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN [ 
+</span><span class='line'>  (FOR u IN users RETURN u) 
+</span><span class='line'>]</span></code></pre></td></tr></table></div></figure>
 
 
+<p>This query is equally fast with ArangoDB 2.5 and 2.6, no changes here.</p>
 
-<article>
-  
-<h1><a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">Using Travis CI for a C++11 Project</a></h1>
-<time datetime="2014-10-17T19:36:57+02:00" pubdate><span class='month'>Oct</span> <span class='day'>17</span> <span class='year'>2014</span></time>
+<p>Let&rsquo;s ramp it up to using two subqueries, one for users with a <code>gender</code> attribute value
+of <code>male</code>, and one for users with <code>gender</code> attribute value <code>female</code>. No indexes were used
+for the extraction in 2.5 nor 2.6:</p>
 
-<footer>
-  <span class="categories">posted in <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>, <a class='category' href='/blog/categories/travisci/'>TravisCI</a></span>
-</footer>
+<figure class='code'><figcaption><span>example query with two subqueries</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN [ 
+</span><span class='line'>  (FOR u IN users FILTER u.gender == 'male' RETURN u), 
+</span><span class='line'>  (FOR u IN users FILTER u.gender == 'female' RETURN u) 
+</span><span class='line'>]</span></code></pre></td></tr></table></div></figure>
 
 
-</article>
+<p>The query takes 16.6 seconds to execute in 2.5, but only 2.95 seconds with ArangoDB 2.6.
+This 80 % reduction in execution time is due to ArangoDB 2.6 being a bit smarter about
+subqueries than 2.5 is.</p>
 
+<p>In the above query, the two subqueries are independent, so not only can they be executed in
+any order, but they also do not rely on each other&rsquo;s results. ArangoDB 2.6 will detect that
+and avoid copying variables and intermediate results into subqueries if they are actually not
+needed there. 2.5 copied all variables into subqueries unconditionally, even if variables
+were not needed there.</p>
+
+<p>In 2.6, any AQL query with multiple subqueries will benefit from this optimization. The
+performance improvements will be greater if subqueries late in the execution pipeline have a lot of
+intermediate results created in front of them, but do not rely on these intermediate results.</p>
+
+<p>Another nice example for a 2.6 speedup is extracting a single attribute per subquery, as is done
+for the <code>name</code> attribute in the following query:</p>
+
+<figure class='code'><figcaption><span>extracting a single attribute in two subqueries</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN [ 
+</span><span class='line'>  (FOR u IN users FILTER u.gender == 'male' RETURN u.name), 
+</span><span class='line'>  (FOR u IN users FILTER u.gender == 'female' RETURN u.name) 
+</span><span class='line'>]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This takes 42 seconds to execute in 2.5, and only 0.86 seconds in 2.6. This is a more than
+95 % reduction in execution time. It is caused by a mix of factors, one of them again being
+the subquery optimization that avoids copying unneeded intermediate results.</p>
+
+<p>Enjoy!</p>
 </div>
 
+
+  <footer>
+    <p class="meta">
+      
   
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-05-04T13:26:00+02:00" pubdate data-updated="true">May 4<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/performance/'>Performance</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/05/04/return-value-optimization-for-aql/" title="Previous Post: Return value optimization for AQL">&laquo; Return value optimization for AQL</a>
+      
+      
+    </p>
+  </footer>
 </article>
 
 </div>
