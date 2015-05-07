@@ -11,7 +11,9 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="ArangoDB 2.6 comes with a specialized API for bulk document lookups. The new API allows fetching multiple documents from the server using a single &hellip;">
+  <meta name="description" content="A while ago our continuous integration builds on TravisCI
+began to fail seemingly randomly because the build worker was killed without
+an apparent &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -81,6 +83,90 @@
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/05/07/less-intrusive-linking/">Less Intrusive Linking</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-05-07T19:52:53+02:00" pubdate data-updated="true">May 7<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>A while ago our continuous integration builds on <a href="http://travis-ci.org">TravisCI</a>
+began to fail seemingly randomly because the build worker was killed without
+an apparent reason. Obviously the build process reached some resource limits
+though we couldn&rsquo;t find any documented limit that the build obviously violated.</p>
+
+<p>Some builds still succeeded without issues, but those builds that were killed
+had one thing in common: they were all stuck waiting the linker to finish.</p>
+
+<p>The default linker used on TravisCI is <em>GNU ld</em>. After some research, it turned
+out that replacing <em>GNU ld</em> with <em>GNU gold</em> not only made the linking much
+faster, but also less resource-intensive. Linking ArangoDB on my local machine
+is almost twice as fast with <em>gold</em> as with <em>ld</em>. Even better, after reconfiguring
+our TravisCI builds to also use <em>gold</em>, our builds weren&rsquo;t killed anymore by
+TravisCI&rsquo;s build scheduling system.</p>
+
+<p>To make TravisCI use <em>gold</em> instead of <em>ld</em>, add the following to your project&rsquo;s
+<code>.travis.yml</code> in the <code>install</code> section (so it gets execute before the actual build
+steps):</p>
+
+<figure class='code'><figcaption><span>commands to use gold</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo apt-get -y install binutils-gold
+</span><span class='line'>mkdir -p ~/bin/gold
+</span><span class='line'><span class="nb">echo</span> <span class="s1">&#39;#!/bin/bash&#39;</span> &gt; ~/bin/gold/ld
+</span><span class='line'><span class="nb">echo</span> <span class="s1">&#39;gold &quot;$@&quot;&#39;</span> &gt;&gt; ~/bin/gold/ld
+</span><span class='line'>chmod a+x ~/bin/gold/ld
+</span><span class='line'><span class="nb">export </span><span class="nv">CFLAGS</span><span class="o">=</span><span class="s2">&quot;-B$HOME/bin/gold $CFLAGS&quot;</span>
+</span><span class='line'><span class="nb">export </span><span class="nv">CXXFLAGS</span><span class="o">=</span><span class="s2">&quot;-B$HOME/bin/gold $CXXFLAGS&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The script downloads and installs <em>gold</em> and creates a tiny wrapper script in a
+file named <code>ld</code> in the user&rsquo;s home directory. The wrapper simply calls <em>gold</em>
+with all the arguments passed to the wrapper. Finally, the script modifies the
+environments <code>CFLAGS</code> and <code>CXXFLAGS</code> by setting the <code>-B</code> parameter to the
+wrapper script&rsquo;s directory.</p>
+
+<p><code>-B</code> is the option for the compiler&rsquo;s search path. The compiler (g++) at least
+will look in this path for any helper tools it invokes. As we have a file named
+<code>ld</code> in this directory, g++ will use our wrapper script instead of the original
+<code>ld</code> binary. This way we can keep the original version of <code>ld</code> in <code>/usr/bin</code>,
+and only override it using environment variables. This is also helpful in
+other contexts, e.g. when <code>ld</code> shall remain as the system&rsquo;s default linker but
+<code>gold</code>shall only be used for linking a few selected components.</p>
+</div>
+  
+  
+
+
+    </article>
   
   
     <article>
@@ -513,54 +599,6 @@ instructions and queries for setting up highscore lists with ArangoDB.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/04/14/updating-documents-with-arangoimp/">Updating Documents With Arangoimp</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-04-14T14:55:45+02:00" pubdate data-updated="true">Apr 14<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>Inspired by the feature request in <a href="https://github.com/arangodb/arangodb/issues/1298">Github issue #1298</a>,
-we added update and replace support for ArangoDB&rsquo;s import facilities.</p>
-
-<p>This extends ArangoDB&rsquo;s HTTP REST API for importing documents plus the arangoimp binary so they
-can not only insert new documents but also update existing ones.</p>
-
-<p>Inserts and updates can also be mixed in a single import run.
-This blog post provides a few usage examples.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/04/14/updating-documents-with-arangoimp/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -583,6 +621,10 @@ This blog post provides a few usage examples.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/05/07/less-intrusive-linking/">Less Intrusive Linking</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/05/07/bulk-document-lookups/">Bulk Document Lookups</a>
       </li>
     
@@ -602,10 +644,6 @@ This blog post provides a few usage examples.</p>
         <a href="/blog/2015/05/04/return-value-optimization-for-aql/">Return Value Optimization for AQL</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/04/24/exporting-data-for-offline-processing/">Exporting Data for Offline Processing</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -614,11 +652,11 @@ This blog post provides a few usage examples.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (20)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (36)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (3)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (14)</a></li><li><a href='/blog/categories/php/'>PHP (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (20)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (36)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (3)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (14)</a></li><li><a href='/blog/categories/php/'>PHP (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (24)</li><ul class="month_list"><li class="month"><a href='/blog/2015/05/'>MAY (5)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (25)</li><ul class="month_list"><li class="month"><a href='/blog/2015/05/'>MAY (6)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

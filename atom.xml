@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-07T18:36:03+02:00</updated>
+  <updated>2015-05-07T20:30:41+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,63 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Less Intrusive Linking]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking/"/>
+    <updated>2015-05-07T19:52:53+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking</id>
+    <content type="html"><![CDATA[<p>A while ago our continuous integration builds on <a href="http://travis-ci.org">TravisCI</a>
+began to fail seemingly randomly because the build worker was killed without
+an apparent reason. Obviously the build process reached some resource limits
+though we couldn&rsquo;t find any documented limit that the build obviously violated.</p>
+
+<p>Some builds still succeeded without issues, but those builds that were killed
+had one thing in common: they were all stuck waiting the linker to finish.</p>
+
+<p>The default linker used on TravisCI is <em>GNU ld</em>. After some research, it turned
+out that replacing <em>GNU ld</em> with <em>GNU gold</em> not only made the linking much
+faster, but also less resource-intensive. Linking ArangoDB on my local machine
+is almost twice as fast with <em>gold</em> as with <em>ld</em>. Even better, after reconfiguring
+our TravisCI builds to also use <em>gold</em>, our builds weren&rsquo;t killed anymore by
+TravisCI&rsquo;s build scheduling system.</p>
+
+<p>To make TravisCI use <em>gold</em> instead of <em>ld</em>, add the following to your project&rsquo;s
+<code>.travis.yml</code> in the <code>install</code> section (so it gets execute before the actual build
+steps):</p>
+
+<figure class='code'><figcaption><span>commands to use gold</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo apt-get -y install binutils-gold
+</span><span class='line'>mkdir -p ~/bin/gold
+</span><span class='line'><span class="nb">echo</span> <span class="s1">&#39;#!/bin/bash&#39;</span> &gt; ~/bin/gold/ld
+</span><span class='line'><span class="nb">echo</span> <span class="s1">&#39;gold &quot;$@&quot;&#39;</span> &gt;&gt; ~/bin/gold/ld
+</span><span class='line'>chmod a+x ~/bin/gold/ld
+</span><span class='line'><span class="nb">export </span><span class="nv">CFLAGS</span><span class="o">=</span><span class="s2">&quot;-B$HOME/bin/gold $CFLAGS&quot;</span>
+</span><span class='line'><span class="nb">export </span><span class="nv">CXXFLAGS</span><span class="o">=</span><span class="s2">&quot;-B$HOME/bin/gold $CXXFLAGS&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The script downloads and installs <em>gold</em> and creates a tiny wrapper script in a
+file named <code>ld</code> in the user&rsquo;s home directory. The wrapper simply calls <em>gold</em>
+with all the arguments passed to the wrapper. Finally, the script modifies the
+environments <code>CFLAGS</code> and <code>CXXFLAGS</code> by setting the <code>-B</code> parameter to the
+wrapper script&rsquo;s directory.</p>
+
+<p><code>-B</code> is the option for the compiler&rsquo;s search path. The compiler (g++) at least
+will look in this path for any helper tools it invokes. As we have a file named
+<code>ld</code> in this directory, g++ will use our wrapper script instead of the original
+<code>ld</code> binary. This way we can keep the original version of <code>ld</code> in <code>/usr/bin</code>,
+and only override it using environment variables. This is also helpful in
+other contexts, e.g. when <code>ld</code> shall remain as the system&rsquo;s default linker but
+<code>gold</code>shall only be used for linking a few selected components.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Bulk Document Lookups]]></title>
@@ -4248,146 +4305,6 @@ will be fixed in some future release.</p>
 <p>Though I think it will work perfectly, I am not at all an expert for Logstash or its plugins.
 I didn&rsquo;t spend much time with it yet, and I may have overlooked important things. So should you
 be interested in using it, please conduct your own tests first.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Using Dynamic Attribute Names in AQL]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/"/>
-    <updated>2015-02-03T00:12:39+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql</id>
-    <content type="html"><![CDATA[<p>On our mailing list, there is quite often the question whether attribute names in objects
-returned from AQL queries can be made dynamic.</p>
-
-<p>Here&rsquo;s a (non-working) example query for this:</p>
-
-<figure class='code'><figcaption><span>example query that does not work</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  RETURN { doc.type : doc.value }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The intention in the above query obviously is to use the dynamic value from <code>doc.type</code> as
-an attribute name in the result object and not to have an attribute named <code>"doc.type"</code>. This
-feature is probably in the top 20 of the most-often wished features.</p>
-
-<!-- more -->
-
-
-<p>However, the above query won&rsquo;t even parse. The AQL grammar only allows string values
-left of the colon in an object definition. Non-quoted strings are allowed there too, and are
-implicitly turned into quoted strings. It works similar to how object literals are defined
-in JavaScript:</p>
-
-<figure class='code'><figcaption><span>using unquoted and quoted string attribute names</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN { 
-</span><span class='line'>  foo : "bar",
-</span><span class='line'>  "baz" : "qux"
-</span><span class='line'>}</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Why not allow arbitrary expression left of the colon? The reason is simple: this would cause
-ambiguity and probably have side-effects. For an example, have a look at the following query:</p>
-
-<figure class='code'><figcaption><span>which attribute name to use here?</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  LET type = doc.type;
-</span><span class='line'>  RETURN { type : doc.value }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>If the <code>type</code> attribute name inside the object definition is interpreted as a string literal
-as it currently is an AQL (and always was), then the resulting attribute name is just <code>"type"</code>.</p>
-
-<p>If the <code>type</code> attribute name would now be intepreted as an expression, it would get the value
-that was assigned to the variable <code>type</code> by the <code>LET</code> statement. Removing the <code>LET</code> from the
-query would change the attribute name in the result back to the string literal <code>"type"</code>.</p>
-
-<p>The ambiguity could be solved by telling the parser what to do in such cases. While technically
-this could be working, I think it may have too many unintended side-effects. I already mentioned
-that introducing a <code>LET</code> statement into the query would change the attribute name in the result.
-The same could also happen if a collection named <code>type</code> was added to the query. And it would
-break compatibility with existing queries.</p>
-
-<p>JavaScript has the same problem, and it wasn&rsquo;t solved portably yet. However, there is a proposal
-for ES6 that suggests enclosing attribute name expressions in <code>[</code> and <code>]</code>.</p>
-
-<p>To me, this looks like a good solution for the problem. It&rsquo;s two bytes more when keying in
-queries, but the syntax is easy and explicit. There are no ambiguities.</p>
-
-<p>I prototyped this solution for AQL, so I could write:</p>
-
-<figure class='code'><figcaption><span>query using dynamic attribute names</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN 1..5 
-</span><span class='line'>  RETURN { 
-</span><span class='line'>    [ CONCAT('test', i) ] : i, 
-</span><span class='line'>    [ SUBSTITUTE(CONCAT('i is ', (i &lt;= 3 ? 'small' : 'not small')), { ' ' :  '_' } ) ] : i 
-</span><span class='line'>  }
-</span><span class='line'>
-</span><span class='line'>[
-</span><span class='line'>  { 
-</span><span class='line'>    "test1" : 1, 
-</span><span class='line'>    "i_is_small" : 1 
-</span><span class='line'>  }, 
-</span><span class='line'>  { 
-</span><span class='line'>    "test2" : 2, 
-</span><span class='line'>    "i_is_small" : 2 
-</span><span class='line'>  }, 
-</span><span class='line'>  { 
-</span><span class='line'>    "test3" : 3, 
-</span><span class='line'>    "i_is_small" : 3 
-</span><span class='line'>  }, 
-</span><span class='line'>  { 
-</span><span class='line'>    "test4" : 4, 
-</span><span class='line'>    "i_is_not_small" : 4 
-</span><span class='line'>  }, 
-</span><span class='line'>  { 
-</span><span class='line'>    "test5" : 5, 
-</span><span class='line'>    "i_is_not_small" : 5 
-</span><span class='line'>  } 
-</span><span class='line'>]</span></code></pre></td></tr></table></div></figure>
-
-
-<p>I ran a few queries with this, and they seemed to work. <del>However, I haven&rsquo;t
-committed the feature yet. There might still be cases in which it doesn&rsquo;t work. Tests
-for the feature are also still missing. I hope I can finalize the implementation soon
-so it becomes available in some release.</del></p>
-
-<p><strong>UPDATE</strong>: tests have been added, and the feature has been committed in devel. It is
-included in ArangoDB since version 2.5.</p>
-
-<p>Everyone is welcome to try it out already!</p>
 ]]></content>
   </entry>
   

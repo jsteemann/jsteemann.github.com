@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Linux | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/linux/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-07T18:36:03+02:00</updated>
+  <updated>2015-05-07T20:30:41+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,56 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Less Intrusive Linking]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking/"/>
+    <updated>2015-05-07T19:52:53+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking</id>
+    <content type="html"><![CDATA[<p>A while ago our continuous integration builds on <a href="http://travis-ci.org">TravisCI</a>
+began to fail seemingly randomly because the build worker was killed without
+an apparent reason. Obviously the build process reached some resource limits
+though we couldn&rsquo;t find any documented limit that the build obviously violated.</p>
+
+<p>Some builds still succeeded without issues, but those builds that were killed
+had one thing in common: they were all stuck waiting the linker to finish.</p>
+
+<p>The default linker used on TravisCI is <em>GNU ld</em>. After some research, it turned
+out that replacing <em>GNU ld</em> with <em>GNU gold</em> not only made the linking much
+faster, but also less resource-intensive. Linking ArangoDB on my local machine
+is almost twice as fast with <em>gold</em> as with <em>ld</em>. Even better, after reconfiguring
+our TravisCI builds to also use <em>gold</em>, our builds weren&rsquo;t killed anymore by
+TravisCI&rsquo;s build scheduling system.</p>
+
+<p>To make TravisCI use <em>gold</em> instead of <em>ld</em>, add the following to your project&rsquo;s
+<code>.travis.yml</code> in the <code>install</code> section (so it gets execute before the actual build
+steps):</p>
+
+<p><code>bash commands to use gold
+sudo apt-get -y install binutils-gold
+mkdir -p ~/bin/gold
+echo '#!/bin/bash' &gt; ~/bin/gold/ld
+echo 'gold "$@"' &gt;&gt; ~/bin/gold/ld
+chmod a+x ~/bin/gold/ld
+export CFLAGS="-B$HOME/bin/gold $CFLAGS"
+export CXXFLAGS="-B$HOME/bin/gold $CXXFLAGS"
+</code></p>
+
+<p>The script downloads and installs <em>gold</em> and creates a tiny wrapper script in a
+file named <code>ld</code> in the user&rsquo;s home directory. The wrapper simply calls <em>gold</em>
+with all the arguments passed to the wrapper. Finally, the script modifies the
+environments <code>CFLAGS</code> and <code>CXXFLAGS</code> by setting the <code>-B</code> parameter to the
+wrapper script&rsquo;s directory.</p>
+
+<p><code>-B</code> is the option for the compiler&rsquo;s search path. The compiler (g++) at least
+will look in this path for any helper tools it invokes. As we have a file named
+<code>ld</code> in this directory, g++ will use our wrapper script instead of the original
+<code>ld</code> binary. This way we can keep the original version of <code>ld</code> in <code>/usr/bin</code>,
+and only override it using environment variables. This is also helpful in
+other contexts, e.g. when <code>ld</code> shall remain as the system&rsquo;s default linker but
+<code>gold</code>shall only be used for linking a few selected components.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Using Ccache When Working With Different Branches]]></title>
@@ -381,269 +431,6 @@ compiler: g++</p>
 
 <p>I have set up an <a href="https://github.com/jsteemann/travis-cxx11">example project on Github</a>
 that demonstrates how to use it.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[How to Compile ArangoDB From Source]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/"/>
-    <updated>2014-10-16T22:24:48+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source</id>
-    <content type="html"><![CDATA[<p>Though we provide a lot of pre-built packages for the stable
-versions of ArangoDB <a href="https://www.arangodb.org/install">here</a>, it
-is often more interesting to play with the bleeding edge development
-version. New ArangoDB features are normally added to the <em>devel</em>
-branch, where they can be tested, documented and improved. When a
-feature matures, it is either backported to a stable branch or will
-eventually be released when the next stable branch is forked from
-<em>devel</em>.</p>
-
-<p>Contributing to the core of ArangoDB is also much easier with a
-ready-to-go <em>devel</em> version. This post explains how to set one up
-from scratch.</p>
-
-<!-- more -->
-
-
-<p>The following instructions are for Ubuntu 14.04 LTS, which seems to
-be quite popular at the moment. Other flavors of Linux are probably
-quite similar, though package manager and packages names will likely
-be somewhat different.</p>
-
-<h2>Using Vagrant</h2>
-
-<p>If you don&rsquo;t have an Ubuntu 14 installation yet, you can easily
-install one using <a href="http://www.vagrantup.com">Vagrant</a>. If you happen
-to have a Linux installation already and are familiar with it, just
-skip this section.</p>
-
-<p>After installing Vagrant on your system, pick a suitable Vagrant box from
-<a href="http://www.vagrantbox.es">here</a>. For example, I picked this 32 bit
-box from the list:</p>
-
-<pre><code>vagrant box add ubuntu-14.04-32 https://cloud-images.ubuntu.com/vagrant/trusty/current/trusty-server-cloudimg-i386-vagrant-disk1.box
-</code></pre>
-
-<p>After downloading the box, it can be made available via these commands:</p>
-
-<pre><code>mkdir temp
-cd temp
-vagrant init ubuntu-14.04-32
-vagrant up
-</code></pre>
-
-<p>After the VM is booted, connect to it via SSH:</p>
-
-<pre><code>vagrant ssh
-</code></pre>
-
-<h2>Cloning the repository</h2>
-
-<p>You&rsquo;re now on the Ubuntu VM. Next step is fetch the ArangoDB source
-code from Github. Cloning the repository from there requires <code>git</code>. Let&rsquo;s
-install it and clone the <em>devel</em> branch of the repository into a
-directory named <em>devel</em> on the VM:</p>
-
-<pre><code>sudo apt-get install git 
-git clone -b devel https://github.com/arangodb/arangodb.git
-</code></pre>
-
-<p>The repository contains a lot of history so cloning may take a while.
-In case you don&rsquo;t need the full history, you can create a shallow
-clone like this:</p>
-
-<pre><code>git clone -b devel --single-branch --depth 1 https://github.com/arangodb/arangodb.git 
-</code></pre>
-
-<p>This will reduce the download size from (currently) 375 MB to 56 MB
-and should be much faster. The downside of using a shallow copy is
-that there is no history and pushing and merging won&rsquo;t work most of
-the time. So it&rsquo;s better used for throw-away tests only.</p>
-
-<h2>Installing build tools and libraries</h2>
-
-<p>Now that the repository has been cloned into directory <em>arangodb</em>,
-we can install the required tools and libraries we need to build
-from source:</p>
-
-<pre><code>sudo apt-get install automake g++ libssl-dev libreadline-dev
-</code></pre>
-
-<p>If you prefer to install a different C++ compiler, please make sure it
-has proper support for C++11.</p>
-
-<p>Go 1.2 is also required. The official list of downloadable Go
-versions can be found <a href="https://golang.org/dl/">here</a>. In the example,
-I am using the 32 bit version in this example:</p>
-
-<pre><code>wget https://storage.googleapis.com/golang/go1.2.2.linux-386.tar.gz
-sudo tar -C /usr/local -xzf go1.2.2.linux-386.tar.gz
-export PATH=$PATH:/usr/local/go/bin
-echo "export PATH=\$PATH:/usr/local/go/bin" &gt;&gt; $HOME/.profile
-</code></pre>
-
-<h2>Compiling ArangoDB</h2>
-
-<p>With all prerequisites set up, it&rsquo;s now time to compile ArangoDB.</p>
-
-<p>You probably noticed that no <code>configure</code> file is shipped with ArangoDB
-in the <code>devel</code> branch. To create it, we need to execute <code>make setup</code>
-once. After that, <code>configure</code> can be executed to create the <code>Makefile</code>.
-The <code>Makefile</code> finally contains the stuff that <code>make</code> needs:</p>
-
-<pre><code>make setup
-./configure --enable-relative 
-make
-</code></pre>
-
-<p>There first <code>make</code> run will take a while as it will compile all support
-libraries (ICU, V8, libev, zlib) before it will actually compile ArangoDB.
-Further invocations of <code>make</code> will not build these libraries again.
-Only any changed code will be rebuilt.</p>
-
-<p>Note that <code>make</code> can be parallelized if you have multiple processors
-available. For 4 parallel <code>make</code> processes, use <code>make -j4</code>.</p>
-
-<p><code>make</code> will produce a lot of output. The most important information, whether
-or not an error occurred, can be found in its last line of its output. If
-it does <strong>not</strong> say something like this, <code>make</code> has probably succeeded:</p>
-
-<pre><code>make: *** [all] Error 2
-</code></pre>
-
-<p>You can also execute the following command directly after <code>make</code> to check
-the exit status of the <code>make</code> process:</p>
-
-<pre><code>echo $?
-</code></pre>
-
-<p>This will print <code>0</code> if <code>make</code> was successful, and a non-zero value otherwise.</p>
-
-<h2>Starting ArangoDB</h2>
-
-<p>When finished, <code>make</code> should have created all binaries in the <code>bin</code>
-subdirectory. We can now start <code>arangod</code> and the binaries directly from
-there without running a <code>make install</code>. In fact, <code>make install</code> is
-awkward to do if you do many change-compile-test cycles.</p>
-
-<pre><code>mkdir data          # creates a data directory
-bin/arangod data    # starts the server
-</code></pre>
-
-<p>The server will be started as a foreground process (which is ideal
-when developing the server). To stop the server, simply press CTRL-C.</p>
-
-<h2>Connecting to ArangoDB</h2>
-
-<p>To verify ArangoDB is actually working, open a separate terminal and
-connect to it with the ArangoShell.</p>
-
-<p>Note that if you used Vagrant, you will first need to connect to the
-Vagrant box in the other terminal using <code>vagrant ssh</code> from the directory
-you ran the <code>vagrant init</code> in. When connect to the Vagrant box, don&rsquo;t
-forget to switch into the <code>arangodb</code> directory.</p>
-
-<p>Once you&rsquo;re in the correct directory, just issue this:</p>
-
-<pre><code>bin/arangosh
-</code></pre>
-
-<p>This should bring up the ArangoShell connected to your devel ArangoDB
-instance.</p>
-
-<h2>Making changes</h2>
-
-<p>Time to make some changes in the code. A good place to start is usually
-<code>main</code>. Here are a few places to get you started:</p>
-
-<pre><code>~/arangodb$ grep -r "int main" arangod/ arangosh/
-arangod/RestServer/arangod.cpp:int main (int argc, char* argv[]) {
-arangosh/Benchmark/arangob.cpp:int main (int argc, char* argv[]) {
-arangosh/V8Client/arangorestore.cpp:int main (int argc, char* argv[]) {
-arangosh/V8Client/arangodump.cpp:int main (int argc, char* argv[]) {
-arangosh/V8Client/arangoimp.cpp:int main (int argc, char* argv[]) {
-arangosh/V8Client/arangosh.cpp:int main (int argc, char* argv[]) {
-</code></pre>
-
-<p>Once you&rsquo;re done with your changes, you need to re-compile and run:</p>
-
-<pre><code>make
-bin/arangod data
-</code></pre>
-
-<p>Don&rsquo;t worry, <code>make</code> will only recompile what you changed plus what
-depends on it and finally link it all together. This won&rsquo;t take as long
-as on the previous run.</p>
-
-<p>If you are serious about contributing to the server code, please let us
-know <a href="https://groups.google.com/forum/#!forum/arangodb">here</a> so we can assist you.</p>
-
-<h2>Getting updates</h2>
-
-<p>We keep developing ArangoDB! To keep up to date and retrieve the latest
-changes from our repository, issue the following commands:</p>
-
-<pre><code>git pull origin devel
-make
-</code></pre>
-
-<p>If <code>make</code> complains about files not found etc., the <code>Makefile</code> may have
-changed. Then it&rsquo;s time for a cleanup:</p>
-
-<pre><code>make clean
-make setup
-./configure --enable-relative 
-make
-</code></pre>
-
-<p>By the way, if you used special configure options and forgot them, you
-can retrieve your previous options by typing <code>head config.log</code>.
-Note: as of December 2014 (ArangoDB 2.4), most configure options starting
-with <code>--enable-all-in-one-</code> have been removed. If your <code>config.log</code> still
-contains them, you can safely omit them in any future invocations of
-<code>configure</code>.</p>
-
-<p>Sometimes <code>make clean</code> isn&rsquo;t enough. <code>make</code> creates cache files for the
-object files, and if they are too outdated, it will complain about files which
-have been renamed already etc. In this case, you can forcefully delete its
-caches by running an additional</p>
-
-<pre><code>make superclean
-</code></pre>
-
-<p>This also cleans already built libraries in the 3rdParty directory. It
-also removes the <code>configure</code> file, so after <code>make superclean</code> everything
-will need to be built from again. This may take a long time, so you should
-only run <code>make superclean</code> if after a <code>make clean</code> run there are still linker
-errors or complaints about missing files.</p>
-
-<h2>Debugging</h2>
-
-<p>If you are making changes in the ArangoDB C++ code and want to test them,
-it will be sensible to install debugging tools such as <em>gdb</em> and <em>valgrind</em>:</p>
-
-<pre><code>sudo apt-get install gdb valgrind   
-</code></pre>
-
-<p>Additionally, you may want to enable core files. This can be done by executing</p>
-
-<pre><code>ulimit -c unlimited
-</code></pre>
-
-<p>in the shell, and by putting the above line in your home directory&rsquo;s <code>.bashrc</code>
-file to make it a permanent setting.</p>
-
-<p>Additionally, you may want to set environment variables in your <code>.bashrc</code> that
-control compilation options. For development, I&rsquo;d recommend using the following
-options:</p>
-
-<pre><code>export CFLAGS="-g -O0"
-export CXXFLAGS="-g -O0"
-</code></pre>
-
-<p>This will turn off all optimizations and also generate debug symbols.</p>
-
-<p>Enjoy!</p>
 ]]></content>
   </entry>
   

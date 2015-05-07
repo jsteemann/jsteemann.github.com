@@ -7,11 +7,13 @@
   <meta charset="utf-8">
   <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
   <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
-  <title>Category: Development - J@ArangoDB</title>
+  <title>Less Intrusive Linking - J@ArangoDB</title>
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="Category: Development">
+  <meta name="description" content="A while ago our continuous integration builds on TravisCI
+began to fail seemingly randomly because the build worker was killed without
+an apparent &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -20,7 +22,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://jsteemann.github.ioblog/categories/development">
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
@@ -80,108 +82,132 @@
   <div id="main">
     <div id="content">
       <div>
-<article role="article">
+<article class="hentry" role="article">
   
   <header>
-    <h1 class="entry-title">Category: Development</h1>
+    
+      <h1 class="entry-title">Less Intrusive Linking</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-05-07T19:52:53+02:00" pubdate data-updated="true">May 7<span>th</span>, 2015</time>
+        
+      </p>
     
   </header>
-  
-  <div id="blog-archives" class="category">
 
 
+<div class="entry-content"><p>A while ago our continuous integration builds on <a href="http://travis-ci.org">TravisCI</a>
+began to fail seemingly randomly because the build worker was killed without
+an apparent reason. Obviously the build process reached some resource limits
+though we couldn&rsquo;t find any documented limit that the build obviously violated.</p>
 
-  
-  <h2>2015</h2>
+<p>Some builds still succeeded without issues, but those builds that were killed
+had one thing in common: they were all stuck waiting the linker to finish.</p>
 
-<article>
-  
-<h1><a href="/blog/2015/05/07/less-intrusive-linking/">Less Intrusive Linking</a></h1>
-<time datetime="2015-05-07T19:52:53+02:00" pubdate><span class='month'>May</span> <span class='day'>07</span> <span class='year'>2015</span></time>
+<p>The default linker used on TravisCI is <em>GNU ld</em>. After some research, it turned
+out that replacing <em>GNU ld</em> with <em>GNU gold</em> not only made the linking much
+faster, but also less resource-intensive. Linking ArangoDB on my local machine
+is almost twice as fast with <em>gold</em> as with <em>ld</em>. Even better, after reconfiguring
+our TravisCI builds to also use <em>gold</em>, our builds weren&rsquo;t killed anymore by
+TravisCI&rsquo;s build scheduling system.</p>
 
-<footer>
-  <span class="categories">posted in <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>, <a class='category' href='/blog/categories/travisci/'>TravisCI</a></span>
-</footer>
+<p>To make TravisCI use <em>gold</em> instead of <em>ld</em>, add the following to your project&rsquo;s
+<code>.travis.yml</code> in the <code>install</code> section (so it gets execute before the actual build
+steps):</p>
 
-
-</article>
-
-
-
-<article>
-  
-<h1><a href="/blog/2015/02/07/using-ccache-when-working-with-different-branches/">Using Ccache When Working With Different Branches</a></h1>
-<time datetime="2015-02-07T17:00:15+01:00" pubdate><span class='month'>Feb</span> <span class='day'>07</span> <span class='year'>2015</span></time>
-
-<footer>
-  <span class="categories">posted in <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>, <a class='category' href='/blog/categories/linux/'>Linux</a></span>
-</footer>
-
-
-</article>
-
-
-
-  
-  <h2>2014</h2>
-
-<article>
-  
-<h1><a href="/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/">Getting Core Dumps of Failed TravisCI Builds</a></h1>
-<time datetime="2014-10-30T23:05:48+01:00" pubdate><span class='month'>Oct</span> <span class='day'>30</span> <span class='year'>2014</span></time>
-
-<footer>
-  <span class="categories">posted in <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>, <a class='category' href='/blog/categories/travisci/'>TravisCI</a></span>
-</footer>
+<figure class='code'><figcaption><span>commands to use gold</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo apt-get -y install binutils-gold
+</span><span class='line'>mkdir -p ~/bin/gold
+</span><span class='line'><span class="nb">echo</span> <span class="s1">&#39;#!/bin/bash&#39;</span> &gt; ~/bin/gold/ld
+</span><span class='line'><span class="nb">echo</span> <span class="s1">&#39;gold &quot;$@&quot;&#39;</span> &gt;&gt; ~/bin/gold/ld
+</span><span class='line'>chmod a+x ~/bin/gold/ld
+</span><span class='line'><span class="nb">export </span><span class="nv">CFLAGS</span><span class="o">=</span><span class="s2">&quot;-B$HOME/bin/gold $CFLAGS&quot;</span>
+</span><span class='line'><span class="nb">export </span><span class="nv">CXXFLAGS</span><span class="o">=</span><span class="s2">&quot;-B$HOME/bin/gold $CXXFLAGS&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
 
 
-</article>
+<p>The script downloads and installs <em>gold</em> and creates a tiny wrapper script in a
+file named <code>ld</code> in the user&rsquo;s home directory. The wrapper simply calls <em>gold</em>
+with all the arguments passed to the wrapper. Finally, the script modifies the
+environments <code>CFLAGS</code> and <code>CXXFLAGS</code> by setting the <code>-B</code> parameter to the
+wrapper script&rsquo;s directory.</p>
 
-
-
-<article>
-  
-<h1><a href="/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/">What I Most Like About C++11</a></h1>
-<time datetime="2014-10-23T23:02:12+02:00" pubdate><span class='month'>Oct</span> <span class='day'>23</span> <span class='year'>2014</span></time>
-
-<footer>
-  <span class="categories">posted in <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a></span>
-</footer>
-
-
-</article>
-
-
-
-<article>
-  
-<h1><a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">Using Travis CI for a C++11 Project</a></h1>
-<time datetime="2014-10-17T19:36:57+02:00" pubdate><span class='month'>Oct</span> <span class='day'>17</span> <span class='year'>2014</span></time>
-
-<footer>
-  <span class="categories">posted in <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>, <a class='category' href='/blog/categories/travisci/'>TravisCI</a></span>
-</footer>
-
-
-</article>
-
-
-
-<article>
-  
-<h1><a href="/blog/2014/10/16/how-to-compile-arangodb-from-source/">How to Compile ArangoDB From Source</a></h1>
-<time datetime="2014-10-16T22:24:48+02:00" pubdate><span class='month'>Oct</span> <span class='day'>16</span> <span class='year'>2014</span></time>
-
-<footer>
-  <span class="categories">posted in <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>, <a class='category' href='/blog/categories/linux/'>Linux</a></span>
-</footer>
-
-
-</article>
-
+<p><code>-B</code> is the option for the compiler&rsquo;s search path. The compiler (g++) at least
+will look in this path for any helper tools it invokes. As we have a file named
+<code>ld</code> in this directory, g++ will use our wrapper script instead of the original
+<code>ld</code> binary. This way we can keep the original version of <code>ld</code> in <code>/usr/bin</code>,
+and only override it using environment variables. This is also helpful in
+other contexts, e.g. when <code>ld</code> shall remain as the system&rsquo;s default linker but
+<code>gold</code>shall only be used for linking a few selected components.</p>
 </div>
 
+
+  <footer>
+    <p class="meta">
+      
   
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-05-07T19:52:53+02:00" pubdate data-updated="true">May 7<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>, <a class='category' href='/blog/categories/travisci/'>TravisCI</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/05/07/bulk-document-lookups/" title="Previous Post: Bulk document lookups">&laquo; Bulk document lookups</a>
+      
+      
+    </p>
+  </footer>
 </article>
 
 </div>

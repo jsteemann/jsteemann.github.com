@@ -4,7 +4,7 @@
   <title><![CDATA[Category: TravisCI | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/travisci/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-07T18:36:03+02:00</updated>
+  <updated>2015-05-07T20:30:41+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,56 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Less Intrusive Linking]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking/"/>
+    <updated>2015-05-07T19:52:53+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking</id>
+    <content type="html"><![CDATA[<p>A while ago our continuous integration builds on <a href="http://travis-ci.org">TravisCI</a>
+began to fail seemingly randomly because the build worker was killed without
+an apparent reason. Obviously the build process reached some resource limits
+though we couldn&rsquo;t find any documented limit that the build obviously violated.</p>
+
+<p>Some builds still succeeded without issues, but those builds that were killed
+had one thing in common: they were all stuck waiting the linker to finish.</p>
+
+<p>The default linker used on TravisCI is <em>GNU ld</em>. After some research, it turned
+out that replacing <em>GNU ld</em> with <em>GNU gold</em> not only made the linking much
+faster, but also less resource-intensive. Linking ArangoDB on my local machine
+is almost twice as fast with <em>gold</em> as with <em>ld</em>. Even better, after reconfiguring
+our TravisCI builds to also use <em>gold</em>, our builds weren&rsquo;t killed anymore by
+TravisCI&rsquo;s build scheduling system.</p>
+
+<p>To make TravisCI use <em>gold</em> instead of <em>ld</em>, add the following to your project&rsquo;s
+<code>.travis.yml</code> in the <code>install</code> section (so it gets execute before the actual build
+steps):</p>
+
+<p><code>bash commands to use gold
+sudo apt-get -y install binutils-gold
+mkdir -p ~/bin/gold
+echo '#!/bin/bash' &gt; ~/bin/gold/ld
+echo 'gold "$@"' &gt;&gt; ~/bin/gold/ld
+chmod a+x ~/bin/gold/ld
+export CFLAGS="-B$HOME/bin/gold $CFLAGS"
+export CXXFLAGS="-B$HOME/bin/gold $CXXFLAGS"
+</code></p>
+
+<p>The script downloads and installs <em>gold</em> and creates a tiny wrapper script in a
+file named <code>ld</code> in the user&rsquo;s home directory. The wrapper simply calls <em>gold</em>
+with all the arguments passed to the wrapper. Finally, the script modifies the
+environments <code>CFLAGS</code> and <code>CXXFLAGS</code> by setting the <code>-B</code> parameter to the
+wrapper script&rsquo;s directory.</p>
+
+<p><code>-B</code> is the option for the compiler&rsquo;s search path. The compiler (g++) at least
+will look in this path for any helper tools it invokes. As we have a file named
+<code>ld</code> in this directory, g++ will use our wrapper script instead of the original
+<code>ld</code> binary. This way we can keep the original version of <code>ld</code> in <code>/usr/bin</code>,
+and only override it using environment variables. This is also helpful in
+other contexts, e.g. when <code>ld</code> shall remain as the system&rsquo;s default linker but
+<code>gold</code>shall only be used for linking a few selected components.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Getting Core Dumps of Failed TravisCI Builds]]></title>
