@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-07T18:32:15+02:00</updated>
+  <updated>2015-05-07T18:35:12+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -37,7 +37,7 @@ var keys = [ &ldquo;foo&rdquo;, &ldquo;bar&rdquo;, &ldquo;baz&rdquo;, &hellip;];
 <p>// sequentially fetch all documents from the server
 var results = [ ];
 for (var i = 0; i &lt; keys.length; ++i) {
-  results.push(db.collection.document(keys[i]));
+  results.push(db.test.document(keys[i]));
 }
 // now all documents are contained in variable &lsquo;results&rsquo;
 ```</p>
@@ -58,7 +58,7 @@ collection&rsquo;s <code>lookupByKeys</code> method:</p>
 // list of document keys
 var keys = [ &ldquo;foo&rdquo;, &ldquo;bar&rdquo;, &ldquo;baz&rdquo;, &hellip;];</p>
 
-<p>var results = db.collection.lookupByKeys(keys);
+<p>var results = db.test.lookupByKeys(keys);
 // now all documents are contained in variable &lsquo;results&rsquo;
 ```</p>
 
@@ -92,7 +92,7 @@ invoked directly via HTTP as follows:</p>
 curl                                                  \
   -X PUT                                              \
   http://127.0.0.1:8529/_api/simple/lookup-by-keys    \
-  --data '{"keys":["foo","bar","baz"]}'
+  --data '{"collection":"test","keys":["foo","bar","baz"]}'
 </code></p>
 
 <p>Restrictions: the bulk document API works only with document keys, not document ids.

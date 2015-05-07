@@ -134,7 +134,7 @@ fetch several documents from an ArangoDB server looks like this:</p>
 </span><span class='line'><span class="c1">// sequentially fetch all documents from the server</span>
 </span><span class='line'><span class="kd">var</span> <span class="nx">results</span> <span class="o">=</span> <span class="p">[</span> <span class="p">];</span>
 </span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">keys</span><span class="p">.</span><span class="nx">length</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">results</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="nx">db</span><span class="p">.</span><span class="nx">collection</span><span class="p">.</span><span class="nb">document</span><span class="p">(</span><span class="nx">keys</span><span class="p">[</span><span class="nx">i</span><span class="p">]));</span>
+</span><span class='line'>  <span class="nx">results</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="nx">db</span><span class="p">.</span><span class="nx">test</span><span class="p">.</span><span class="nb">document</span><span class="p">(</span><span class="nx">keys</span><span class="p">[</span><span class="nx">i</span><span class="p">]));</span>
 </span><span class='line'><span class="p">}</span>
 </span><span class='line'><span class="c1">// now all documents are contained in variable &#39;results&#39;</span>
 </span></code></pre></td></tr></table></div></figure>
@@ -160,7 +160,7 @@ collection&rsquo;s <code>lookupByKeys</code> method:</p>
 </pre></td><td class='code'><pre><code class='js'><span class='line'><span class="c1">// list of document keys</span>
 </span><span class='line'><span class="kd">var</span> <span class="nx">keys</span> <span class="o">=</span> <span class="p">[</span> <span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="s2">&quot;baz&quot;</span><span class="p">,</span> <span class="p">...];</span>
 </span><span class='line'>
-</span><span class='line'><span class="kd">var</span> <span class="nx">results</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">collection</span><span class="p">.</span><span class="nx">lookupByKeys</span><span class="p">(</span><span class="nx">keys</span><span class="p">);</span>
+</span><span class='line'><span class="kd">var</span> <span class="nx">results</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">test</span><span class="p">.</span><span class="nx">lookupByKeys</span><span class="p">(</span><span class="nx">keys</span><span class="p">);</span>
 </span><span class='line'><span class="c1">// now all documents are contained in variable &#39;results&#39;</span>
 </span></code></pre></td></tr></table></div></figure>
 
@@ -199,7 +199,7 @@ invoked directly via HTTP as follows:</p>
 </pre></td><td class='code'><pre><code class=''><span class='line'>curl                                                  \
 </span><span class='line'>  -X PUT                                              \
 </span><span class='line'>  http://127.0.0.1:8529/_api/simple/lookup-by-keys    \
-</span><span class='line'>  --data '{"keys":["foo","bar","baz"]}'</span></code></pre></td></tr></table></div></figure>
+</span><span class='line'>  --data '{"collection":"test","keys":["foo","bar","baz"]}'</span></code></pre></td></tr></table></div></figure>
 
 
 <p>Restrictions: the bulk document API works only with document keys, not document ids.
