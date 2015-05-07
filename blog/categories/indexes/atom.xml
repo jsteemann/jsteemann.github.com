@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Indexes | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/indexes/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-06T01:30:01+02:00</updated>
+  <updated>2015-05-07T16:29:56+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,252 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Fulltext Index Enhancements]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/07/fulltext-index-enhancements/"/>
+    <updated>2015-05-07T15:08:18+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/07/fulltext-index-enhancements</id>
+    <content type="html"><![CDATA[<p>This post is about improvements for the fulltext index in ArangoDB 2.6. The improvements
+address the problem that non-string attributes were ignored when fulltext-indexing.</p>
+
+<p>Effectively this prevented string values inside arrays or objects from being indexed. Though this
+behavior was documented, it was limited the usefulness of the fulltext index much. Several
+users requested the fulltext index to be able to index arrays and object attributes, too.</p>
+
+<p>Finally this has been accomplished, so the fulltext index in 2.6 supports indexing arrays
+and objects!</p>
+
+<!-- more -->
+
+
+<h2>Some history</h2>
+
+<p>So far (up to including ArangoDB 2.5) the fulltext indexing in ArangoDB only supported indexing
+<em>string</em> attributes. Documents in which the index attribute was an <em>array</em> of strings or an <em>object</em>
+with string member values were excluded from indexing.</p>
+
+<p>This turned out to be limiting, because more complex documents effectively couldn&rsquo;t be
+fulltext-indexed.</p>
+
+<p>Here&rsquo;s an example&hellip; Let&rsquo;s say we had a collection named <code>example</code> with a fulltext index
+defined on attribute <code>value</code>, set up as follows:</p>
+
+<p><code>js setting up a collection with a fulltext index
+var c = db._create("example");
+c.ensureFulltextIndex("value");
+</code></p>
+
+<p>Adding a document with a <code>value</code> attribute containing a string value adds all words contained
+in the string attribute to the fulltext index:</p>
+
+<p><code>js adding a document that is fulltext-indexed
+c.insert({ value: "Fox is the English translation of the German word Fuchs" });
+</code></p>
+
+<p>Now the index can be queried using any of the words:</p>
+
+<p><code>``js querying the fulltext index</code>
+c.fulltext(&ldquo;value&rdquo;, &ldquo;fox&rdquo;).toArray();
+[
+  {</p>
+
+<pre><code>... 
+"value" : "Fox is the English translation of the German word Fuchs" 
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<p>So far, so good. Now let&rsquo;s try it with more complex document structures.
+We&rsquo;re now using arrays and objects inside the <code>value</code> attribute instead of simple
+string values:</p>
+
+<p>```js adding documents that are not fulltext-indexed  <br/>
+c.insert({ value: { en: &ldquo;fox&rdquo;, de: &ldquo;Fuchs&rdquo;, fr: &ldquo;renard&rdquo;, ru: &ldquo;лиса&rdquo; } });
+c.insert({ value: [ &ldquo;ArangoDB&rdquo;, &ldquo;document&rdquo;, &ldquo;database&rdquo;, &ldquo;Foxx&rdquo; ] });
+c.insert({ value: [ { name: &ldquo;ArangoDB&rdquo;, type: &ldquo;database&rdquo; }, { name: &ldquo;Fox&rdquo;, type: &ldquo;animal&rdquo; } ] });</p>
+
+<p>c.fulltext(&ldquo;value&rdquo;, &ldquo;renard&rdquo;).toArray();
+[ ]</p>
+
+<p>c.fulltext(&ldquo;value&rdquo;, &ldquo;ArangoDB&rdquo;).toArray();
+[ ]</p>
+
+<p>c.fulltext(&ldquo;value&rdquo;, &ldquo;database&rdquo;).toArray();
+[ ]
+```</p>
+
+<p>Bad luck!</p>
+
+<p>None of the above documents made it into the fulltext index because the index attribute
+did not contain string values. Though that was documented, it was not the desirable
+behavior.</p>
+
+<h2>2.6</h2>
+
+<p>Retrying the same operations in ArangoDB 2.6 changes the picture.</p>
+
+<p>All the above example documents are included in the fulltext index in 2.6. The fulltext index
+in 2.6 can index <em>string</em> values, <em>object</em> values (it will index the object&rsquo;s members if they are strings)
+and <em>array</em> values (it will index the array members if they are strings or objects). Indexing
+is still limited to one sub-attribute level, so in deeply nested structures only the
+top level ones will be indexed.</p>
+
+<p>A few example queries on the index in 2.6 prove that now all the data from the more
+complex documents can be queried:</p>
+
+<p>```js querying the fulltext index in 2.6
+c.fulltext(&ldquo;value&rdquo;, &ldquo;renard&rdquo;).toArray();
+[
+  {</p>
+
+<pre><code>...
+"value" : { 
+  "en" : "fox", 
+  "de" : "Fuchs", 
+  "fr" : "renard", 
+  "ru" : "лиса" 
+} 
+</code></pre>
+
+<p>  }
+]</p>
+
+<p>c.fulltext(&ldquo;value&rdquo;, &ldquo;ArangoDB&rdquo;).toArray();
+[
+  {</p>
+
+<pre><code>... 
+"value" : [ 
+  "ArangoDB", 
+  "document", 
+  "database", 
+  "Foxx" 
+] 
+</code></pre>
+
+<p>  },
+  {</p>
+
+<pre><code>...
+"value" : [ 
+  { 
+    "name" : "ArangoDB", 
+    "type" : "database" 
+  }, 
+  { 
+    "name" : "Fox", 
+    "type" : "animal" 
+  } 
+] 
+</code></pre>
+
+<p>  }
+]</p>
+
+<p>c.fulltext(&ldquo;value&rdquo;, &ldquo;database&rdquo;).toArray();
+[
+  {</p>
+
+<pre><code>...
+"value" : [ 
+  "ArangoDB", 
+  "document", 
+  "database", 
+  "Foxx" 
+] 
+</code></pre>
+
+<p>  },
+  {</p>
+
+<pre><code>...
+"value" : [ 
+  { 
+    "name" : "ArangoDB", 
+    "type" : "database" 
+  }, 
+  { 
+    "name" : "Fox", 
+    "type" : "animal" 
+  } 
+] 
+</code></pre>
+
+<p>  }
+]</p>
+
+<p>c.fulltext(&ldquo;value&rdquo;, &ldquo;лиса&rdquo;).toArray();
+[
+  {</p>
+
+<pre><code>...
+"value" : { 
+  "en" : "fox", 
+  "de" : "Fuchs", 
+  "fr" : "renard", 
+  "ru" : "лиса" 
+} 
+</code></pre>
+
+<p>  }
+]</p>
+
+<p>c.fulltext(&ldquo;value&rdquo;, &ldquo;prefix:Fox&rdquo;).toArray();
+[
+  {</p>
+
+<pre><code>...
+"value" : "Fox is the English translation of the German word Fuchs" 
+</code></pre>
+
+<p>  },
+  {</p>
+
+<pre><code>...
+"value" : { 
+  "en" : "fox", 
+  "de" : "Fuchs", 
+  "fr" : "renard", 
+  "ru" : "лиса" 
+} 
+</code></pre>
+
+<p>  },
+  {</p>
+
+<pre><code>... 
+"value" : [ 
+  "ArangoDB", 
+  "document", 
+  "database", 
+  "Foxx" 
+] 
+</code></pre>
+
+<p>  },
+  {</p>
+
+<pre><code>...
+"value" : [ 
+  { 
+    "name" : "ArangoDB", 
+    "type" : "database" 
+  }, 
+  { 
+    "name" : "Fox", 
+    "type" : "animal" 
+  } 
+] 
+</code></pre>
+
+<p>  }
+]
+```</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[COLLECTing With a Hash Table]]></title>

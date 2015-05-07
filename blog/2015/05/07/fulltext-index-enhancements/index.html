@@ -1,0 +1,603 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>Fulltext Index Enhancements - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="This post is about improvements for the fulltext index in ArangoDB 2.6. The improvements
+address the problem that non-string attributes were ignored &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/05/07/fulltext-index-enhancements">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>{ "subject" : "ArangoDB", "tags": [ "multi-model", "database", "nosql" ] }</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Fulltext Index Enhancements</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-05-07T15:08:18+02:00" pubdate data-updated="true">May 7<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>This post is about improvements for the fulltext index in ArangoDB 2.6. The improvements
+address the problem that non-string attributes were ignored when fulltext-indexing.</p>
+
+<p>Effectively this prevented string values inside arrays or objects from being indexed. Though this
+behavior was documented, it was limited the usefulness of the fulltext index much. Several
+users requested the fulltext index to be able to index arrays and object attributes, too.</p>
+
+<p>Finally this has been accomplished, so the fulltext index in 2.6 supports indexing arrays
+and objects!</p>
+
+<!-- more -->
+
+
+<h2>Some history</h2>
+
+<p>So far (up to including ArangoDB 2.5) the fulltext indexing in ArangoDB only supported indexing
+<em>string</em> attributes. Documents in which the index attribute was an <em>array</em> of strings or an <em>object</em>
+with string member values were excluded from indexing.</p>
+
+<p>This turned out to be limiting, because more complex documents effectively couldn&rsquo;t be
+fulltext-indexed.</p>
+
+<p>Here&rsquo;s an example&hellip; Let&rsquo;s say we had a collection named <code>example</code> with a fulltext index
+defined on attribute <code>value</code>, set up as follows:</p>
+
+<figure class='code'><figcaption><span>setting up a collection with a fulltext index</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">c</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;example&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">ensureFulltextIndex</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Adding a document with a <code>value</code> attribute containing a string value adds all words contained
+in the string attribute to the fulltext index:</p>
+
+<figure class='code'><figcaption><span>adding a document that is fulltext-indexed</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">value</span><span class="o">:</span> <span class="s2">&quot;Fox is the English translation of the German word Fuchs&quot;</span> <span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now the index can be queried using any of the words:</p>
+
+<figure class='code'><figcaption><span>querying the fulltext index`</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">fulltext</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;fox&quot;</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'>    <span class="s2">&quot;value&quot;</span> <span class="o">:</span> <span class="s2">&quot;Fox is the English translation of the German word Fuchs&quot;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>So far, so good. Now let&rsquo;s try it with more complex document structures.
+We&rsquo;re now using arrays and objects inside the <code>value</code> attribute instead of simple
+string values:</p>
+
+<figure class='code'><figcaption><span>adding documents that are not fulltext-indexed    </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">value</span><span class="o">:</span> <span class="p">{</span> <span class="nx">en</span><span class="o">:</span> <span class="s2">&quot;fox&quot;</span><span class="p">,</span> <span class="nx">de</span><span class="o">:</span> <span class="s2">&quot;Fuchs&quot;</span><span class="p">,</span> <span class="nx">fr</span><span class="o">:</span> <span class="s2">&quot;renard&quot;</span><span class="p">,</span> <span class="nx">ru</span><span class="o">:</span> <span class="s2">&quot;лиса&quot;</span> <span class="p">}</span> <span class="p">});</span>
+</span><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">value</span><span class="o">:</span> <span class="p">[</span> <span class="s2">&quot;ArangoDB&quot;</span><span class="p">,</span> <span class="s2">&quot;document&quot;</span><span class="p">,</span> <span class="s2">&quot;database&quot;</span><span class="p">,</span> <span class="s2">&quot;Foxx&quot;</span> <span class="p">]</span> <span class="p">});</span>
+</span><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">value</span><span class="o">:</span> <span class="p">[</span> <span class="p">{</span> <span class="nx">name</span><span class="o">:</span> <span class="s2">&quot;ArangoDB&quot;</span><span class="p">,</span> <span class="nx">type</span><span class="o">:</span> <span class="s2">&quot;database&quot;</span> <span class="p">},</span> <span class="p">{</span> <span class="nx">name</span><span class="o">:</span> <span class="s2">&quot;Fox&quot;</span><span class="p">,</span> <span class="nx">type</span><span class="o">:</span> <span class="s2">&quot;animal&quot;</span> <span class="p">}</span> <span class="p">]</span> <span class="p">});</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">fulltext</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;renard&quot;</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span><span class='line'><span class="p">[</span> <span class="p">]</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">fulltext</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;ArangoDB&quot;</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span><span class='line'><span class="p">[</span> <span class="p">]</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">fulltext</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;database&quot;</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span><span class='line'><span class="p">[</span> <span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Bad luck!</p>
+
+<p>None of the above documents made it into the fulltext index because the index attribute
+did not contain string values. Though that was documented, it was not the desirable
+behavior.</p>
+
+<h2>2.6</h2>
+
+<p>Retrying the same operations in ArangoDB 2.6 changes the picture.</p>
+
+<p>All the above example documents are included in the fulltext index in 2.6. The fulltext index
+in 2.6 can index <em>string</em> values, <em>object</em> values (it will index the object&rsquo;s members if they are strings)
+and <em>array</em> values (it will index the array members if they are strings or objects). Indexing
+is still limited to one sub-attribute level, so in deeply nested structures only the
+top level ones will be indexed.</p>
+
+<p>A few example queries on the index in 2.6 prove that now all the data from the more
+complex documents can be queried:</p>
+
+<figure class='code'><figcaption><span>querying the fulltext index in 2.6</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+<span class='line-number'>78</span>
+<span class='line-number'>79</span>
+<span class='line-number'>80</span>
+<span class='line-number'>81</span>
+<span class='line-number'>82</span>
+<span class='line-number'>83</span>
+<span class='line-number'>84</span>
+<span class='line-number'>85</span>
+<span class='line-number'>86</span>
+<span class='line-number'>87</span>
+<span class='line-number'>88</span>
+<span class='line-number'>89</span>
+<span class='line-number'>90</span>
+<span class='line-number'>91</span>
+<span class='line-number'>92</span>
+<span class='line-number'>93</span>
+<span class='line-number'>94</span>
+<span class='line-number'>95</span>
+<span class='line-number'>96</span>
+<span class='line-number'>97</span>
+<span class='line-number'>98</span>
+<span class='line-number'>99</span>
+<span class='line-number'>100</span>
+<span class='line-number'>101</span>
+<span class='line-number'>102</span>
+<span class='line-number'>103</span>
+<span class='line-number'>104</span>
+<span class='line-number'>105</span>
+<span class='line-number'>106</span>
+<span class='line-number'>107</span>
+<span class='line-number'>108</span>
+<span class='line-number'>109</span>
+<span class='line-number'>110</span>
+<span class='line-number'>111</span>
+<span class='line-number'>112</span>
+<span class='line-number'>113</span>
+<span class='line-number'>114</span>
+<span class='line-number'>115</span>
+<span class='line-number'>116</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">fulltext</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;renard&quot;</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'>    <span class="s2">&quot;value&quot;</span> <span class="o">:</span> <span class="p">{</span>
+</span><span class='line'>      <span class="s2">&quot;en&quot;</span> <span class="o">:</span> <span class="s2">&quot;fox&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;de&quot;</span> <span class="o">:</span> <span class="s2">&quot;Fuchs&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;fr&quot;</span> <span class="o">:</span> <span class="s2">&quot;renard&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;ru&quot;</span> <span class="o">:</span> <span class="s2">&quot;лиса&quot;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">fulltext</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;ArangoDB&quot;</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'>    <span class="s2">&quot;value&quot;</span> <span class="o">:</span> <span class="p">[</span>
+</span><span class='line'>      <span class="s2">&quot;ArangoDB&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;document&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;database&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;Foxx&quot;</span>
+</span><span class='line'>    <span class="p">]</span>
+</span><span class='line'>  <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'>    <span class="s2">&quot;value&quot;</span> <span class="o">:</span> <span class="p">[</span>
+</span><span class='line'>      <span class="p">{</span>
+</span><span class='line'>        <span class="s2">&quot;name&quot;</span> <span class="o">:</span> <span class="s2">&quot;ArangoDB&quot;</span><span class="p">,</span>
+</span><span class='line'>        <span class="s2">&quot;type&quot;</span> <span class="o">:</span> <span class="s2">&quot;database&quot;</span>
+</span><span class='line'>      <span class="p">},</span>
+</span><span class='line'>      <span class="p">{</span>
+</span><span class='line'>        <span class="s2">&quot;name&quot;</span> <span class="o">:</span> <span class="s2">&quot;Fox&quot;</span><span class="p">,</span>
+</span><span class='line'>        <span class="s2">&quot;type&quot;</span> <span class="o">:</span> <span class="s2">&quot;animal&quot;</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">]</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">fulltext</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;database&quot;</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'>    <span class="s2">&quot;value&quot;</span> <span class="o">:</span> <span class="p">[</span>
+</span><span class='line'>      <span class="s2">&quot;ArangoDB&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;document&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;database&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;Foxx&quot;</span>
+</span><span class='line'>    <span class="p">]</span>
+</span><span class='line'>  <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'>    <span class="s2">&quot;value&quot;</span> <span class="o">:</span> <span class="p">[</span>
+</span><span class='line'>      <span class="p">{</span>
+</span><span class='line'>        <span class="s2">&quot;name&quot;</span> <span class="o">:</span> <span class="s2">&quot;ArangoDB&quot;</span><span class="p">,</span>
+</span><span class='line'>        <span class="s2">&quot;type&quot;</span> <span class="o">:</span> <span class="s2">&quot;database&quot;</span>
+</span><span class='line'>      <span class="p">},</span>
+</span><span class='line'>      <span class="p">{</span>
+</span><span class='line'>        <span class="s2">&quot;name&quot;</span> <span class="o">:</span> <span class="s2">&quot;Fox&quot;</span><span class="p">,</span>
+</span><span class='line'>        <span class="s2">&quot;type&quot;</span> <span class="o">:</span> <span class="s2">&quot;animal&quot;</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">]</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">fulltext</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;лиса&quot;</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'>    <span class="s2">&quot;value&quot;</span> <span class="o">:</span> <span class="p">{</span>
+</span><span class='line'>      <span class="s2">&quot;en&quot;</span> <span class="o">:</span> <span class="s2">&quot;fox&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;de&quot;</span> <span class="o">:</span> <span class="s2">&quot;Fuchs&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;fr&quot;</span> <span class="o">:</span> <span class="s2">&quot;renard&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;ru&quot;</span> <span class="o">:</span> <span class="s2">&quot;лиса&quot;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">c</span><span class="p">.</span><span class="nx">fulltext</span><span class="p">(</span><span class="s2">&quot;value&quot;</span><span class="p">,</span> <span class="s2">&quot;prefix:Fox&quot;</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'>    <span class="s2">&quot;value&quot;</span> <span class="o">:</span> <span class="s2">&quot;Fox is the English translation of the German word Fuchs&quot;</span>
+</span><span class='line'>  <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'>    <span class="s2">&quot;value&quot;</span> <span class="o">:</span> <span class="p">{</span>
+</span><span class='line'>      <span class="s2">&quot;en&quot;</span> <span class="o">:</span> <span class="s2">&quot;fox&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;de&quot;</span> <span class="o">:</span> <span class="s2">&quot;Fuchs&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;fr&quot;</span> <span class="o">:</span> <span class="s2">&quot;renard&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;ru&quot;</span> <span class="o">:</span> <span class="s2">&quot;лиса&quot;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>  <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'>    <span class="s2">&quot;value&quot;</span> <span class="o">:</span> <span class="p">[</span>
+</span><span class='line'>      <span class="s2">&quot;ArangoDB&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;document&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;database&quot;</span><span class="p">,</span>
+</span><span class='line'>      <span class="s2">&quot;Foxx&quot;</span>
+</span><span class='line'>    <span class="p">]</span>
+</span><span class='line'>  <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="p">...</span>
+</span><span class='line'>    <span class="s2">&quot;value&quot;</span> <span class="o">:</span> <span class="p">[</span>
+</span><span class='line'>      <span class="p">{</span>
+</span><span class='line'>        <span class="s2">&quot;name&quot;</span> <span class="o">:</span> <span class="s2">&quot;ArangoDB&quot;</span><span class="p">,</span>
+</span><span class='line'>        <span class="s2">&quot;type&quot;</span> <span class="o">:</span> <span class="s2">&quot;database&quot;</span>
+</span><span class='line'>      <span class="p">},</span>
+</span><span class='line'>      <span class="p">{</span>
+</span><span class='line'>        <span class="s2">&quot;name&quot;</span> <span class="o">:</span> <span class="s2">&quot;Fox&quot;</span><span class="p">,</span>
+</span><span class='line'>        <span class="s2">&quot;type&quot;</span> <span class="o">:</span> <span class="s2">&quot;animal&quot;</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">]</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-05-07T15:08:18+02:00" pubdate data-updated="true">May 7<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/indexes/'>Indexes</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/05/07/fulltext-index-enhancements/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/05/07/fulltext-index-enhancements/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/05/04/subquery-optimizations/" title="Previous Post: Subquery optimizations">&laquo; Subquery optimizations</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/05/07/fulltext-index-enhancements/">Fulltext Index Enhancements</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/04/subquery-optimizations/">Subquery Optimizations</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/04/return-value-optimization-for-aql/">Return Value Optimization for AQL</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/24/exporting-data-for-offline-processing/">Exporting Data for Offline Processing</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/23/aql-functions-improvements/">AQL Functions Improvements</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing With a Hash Table</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (19)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (34)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (12)</a></li><li><a href='/blog/categories/php/'>PHP (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (22)</li><ul class="month_list"><li class="month"><a href='/blog/2015/05/'>MAY (3)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

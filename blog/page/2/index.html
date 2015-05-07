@@ -11,7 +11,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="This week saw the completion of the AQL UPSERT command. This command will be very helpful in a lot of use cases, including the following: ensure that &hellip;">
+  <meta name="description" content="Data-modification queries were enhanced in ArangoDB 2.4 to be able to also return
+the inserted, update or removed documents. For example, the &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -81,6 +82,69 @@
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/03/27/improvements-for-data-modification-queries/">Improvements for Data-modification Queries</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-03-27T23:29:19+01:00" pubdate data-updated="true">Mar 27<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>Data-modification queries were enhanced in ArangoDB 2.4 to be able to also return
+the inserted, update or removed documents.</p>
+
+<p>For example, the following statement inserted a few documents and also returned
+them with all their attributes:</p>
+
+<figure class='code'><figcaption><span>AQL insert query returning documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN 1..10
+</span><span class='line'>  INSERT { value: i } IN test
+</span><span class='line'>  LET inserted = NEW
+</span><span class='line'>  RETURN inserted</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The syntax for returning documents from data-modification queries only supported
+the exact above format. Using a <code>LET</code> clause was required, and the <code>RETURN</code> clause
+was limited to returning the variable introduced by the <code>LET</code>.</p>
+
+<p>These syntax restrictions have been lifted in the <code>devel</code> branch, which will become
+release 2.6 eventually. The changes make returning values from data-modification
+statements easier and also more flexible.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/03/27/improvements-for-data-modification-queries/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -549,66 +613,6 @@ ones.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/01/23/explaining-aql-queries-the-fancy-way/">Explaining AQL Queries the Fancier Way</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-01-23T01:00:03+01:00" pubdate data-updated="true">Jan 23<span>rd</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>I have been looking at many AQL queries during the last few weeks.</p>
-
-<p>Looking back, I can say that the JSON query execution plans provided by
-the <code>explain()</code> method have provided me with a lot of useful information
-about how the AQL optimizer had transformed a given query. This has
-helped testing and improving the query optimizer a great deal.</p>
-
-<p>However, the JSON output produced by <code>explain()</code> is so detailed that even
-for the simplest cases queries it will span multiple screens. This is far
-too much for quicking assesing what a query will be doing and how it will
-be executed.</p>
-
-<p>I therefore quickly put together a function that provides a much more
-compact explain output. Its input parameter is a query string, which it
-will send to the ArangoDB server to have it explained.</p>
-
-<p>But it doesn&rsquo;t print a voluminous JSON object. This one is for developers
-with a full schedule.</p>
-
-<p><img src="/downloads/screenshots/explainer.png"></p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/01/23/explaining-aql-queries-the-fancy-way/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/3/">&larr; Older</a>
@@ -633,6 +637,10 @@ with a full schedule.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/05/07/fulltext-index-enhancements/">Fulltext Index Enhancements</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/05/04/subquery-optimizations/">Subquery Optimizations</a>
       </li>
     
@@ -652,10 +660,6 @@ with a full schedule.</p>
         <a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing With a Hash Table</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/04/20/creating-highscore-lists/">Creating Highscore Lists</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -664,11 +668,11 @@ with a full schedule.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (19)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (33)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (4)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (12)</a></li><li><a href='/blog/categories/php/'>PHP (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (19)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (34)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (2)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (5)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (5)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (5)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (12)</a></li><li><a href='/blog/categories/php/'>PHP (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (2)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (21)</li><ul class="month_list"><li class="month"><a href='/blog/2015/05/'>MAY (2)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (22)</li><ul class="month_list"><li class="month"><a href='/blog/2015/05/'>MAY (3)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>
