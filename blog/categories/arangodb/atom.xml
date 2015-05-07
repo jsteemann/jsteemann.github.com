@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-07T17:33:22+02:00</updated>
+  <updated>2015-05-07T17:37:27+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -79,7 +79,8 @@ IN-list sizes, run on both ArangoDB 2.5 and 2.6.</p>
 <p>```</p>
 
 <p>Looks like 2.6 handles longer IN-lists way better than 2.5! The above figures suggest that execution
-times now scale about linearly with the number of IN-list values.</p>
+times now scale about linearly with the number of IN-list values. This also leads to reductions in query
+execution times of 90 % and more percent.</p>
 
 <p>Please note that longer IN-lists will still make a the query run longer than when
 using shorter IN-lists. This is expected because longer IN-lists require more comparisons to
