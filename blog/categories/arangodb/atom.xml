@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-07T16:29:56+02:00</updated>
+  <updated>2015-05-07T17:33:22+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,80 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[IN-list Improvements]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/07/in-list-improvements/"/>
+    <updated>2015-05-07T16:46:30+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/07/in-list-improvements</id>
+    <content type="html"><![CDATA[<p>We have worked on many AQL optimizations for ArangoDB 2.6.</p>
+
+<p>As a side effect of one of these optimizations, some cases involving the handling
+of large IN-lists have become much faster than before. Large IN-lists are normally
+used when comparing attribute or index values against some big array of lookup values
+or keys provided by the application.</p>
+
+<!-- more -->
+
+
+<p>Let&rsquo;s quickly create and populate a collection named <code>keys</code> so that we can use some
+IN-list queries on it later on:</p>
+
+<p>```js setting up example data
+db._create(&ldquo;keys&rdquo;);</p>
+
+<p>// insert 100k documents with some defined keys into the collection
+for (var i = 0; i &lt; 100000; ++i) {
+  db.keys.insert({ _key: &ldquo;test&rdquo; + i });
+}
+```</p>
+
+<p>And here is a query to all find documents with one of the provided keys <code>test0</code> to <code>test999</code>.
+The IN-list here contains 1,000 values:</p>
+
+<p><code>js using an IN-list with 1,000 values
+var keys = [ ];
+var n = 1000;
+for (var i = 0; i &lt; n; ++i) {
+  keys.push("test" + i);
+}
+db._query("FOR doc IN keys FILTER doc._key IN @keys RETURN doc", { keys: keys }); });
+</code></p>
+
+<p>When invoked from the ArangoShell, this takes around 0.6 seconds to complete with ArangoDB 2.5.</p>
+
+<p>Increasing the length of the IN-list from 1,000 to 5,000 values makes this run in around 15 seconds.
+With an IN-list of 10,000 values, this already takes more than 60 seconds to complete in 2.5.</p>
+
+<p>Obviously longer IN-lists weren&rsquo;t handled terribly efficiently in 2.5, and should be avoided there
+if possible.</p>
+
+<p>I am glad this has been fixed in 2.6. Following is a comparison of the above query for different
+IN-list sizes, run on both ArangoDB 2.5 and 2.6.</p>
+
+<p>```plain 2.5 and 2.6 with different IN-list sizes</p>
+
+<h1>of IN-list values    Execution time (2.5)   Execution time (2.6)</h1>
+
+<hr />
+
+<pre><code>          1,000                  0.67 s                 0.03 s
+          5,000                 15.34 s                 0.12 s
+         10,000                 63.48 s                 0.20 s
+         50,000                   n/a                   0.81 s
+        100,000                   n/a                   1.60 s
+</code></pre>
+
+<p>```</p>
+
+<p>Looks like 2.6 handles longer IN-lists way better than 2.5! The above figures suggest that execution
+times now scale about linearly with the number of IN-list values.</p>
+
+<p>Please note that longer IN-lists will still make a the query run longer than when
+using shorter IN-lists. This is expected because longer IN-lists require more comparisons to
+be made and will lead (in the above example) to more documents being returned.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Fulltext Index Enhancements]]></title>
@@ -798,145 +872,6 @@ curl                                                   \
 
 <p>That&rsquo;s about it. Using the export API it should be fairly simple to ship bulk
 ArangoDB data to client applications or data processing tools.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Functions Improvements]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements/"/>
-    <updated>2015-04-23T10:24:53+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements</id>
-    <content type="html"><![CDATA[<p>Waiting for a <code>git pull</code> to complete over an 8 KiB/s internet connection is boring.
-So I thought I&rsquo;d rather use the idle time and quickly write about some performance
-improvements for certain AQL functions that were recently completed and that will
-become available with ArangoDB 2.6.</p>
-
-<p>The improvements affect the following AQL functions:</p>
-
-<ul>
-<li><code>UNSET()</code>: remove specified attributes from an object/document</li>
-<li><code>KEEP()</code>: keep only specified attributes of an object/document</li>
-<li><code>MERGE()</code>: merge the attributes of multiple objects/documents</li>
-</ul>
-
-
-<p>This blog post shows a few example queries that will benefit from <strong>50 to more than 60 %
-reductions</strong> in query execution times due to the changes done to these functions.</p>
-
-<!-- more -->
-
-
-<h2>When to expect benefits</h2>
-
-<p>Reductions in execution time can be expected for AQL queries invoking one of the above
-AQL functions many times, and if the AQL function is used in a so-called <em>simple</em>
-calculation. Whether or not a calculation is considered <em>simple</em> is shown in the detailed
-JSON output of an <code>explain()</code>.</p>
-
-<p>Queries will not benefit if they invoke the AQL functions only a few times or when the
-function call is contained in an expression that is executed using the non-<em>simple</em> code path.</p>
-
-<h2>Example queries</h2>
-
-<p>Following are a few example queries for the three AQL functions, showing the reductions in
-execution times. They all use the <em>simple</em> code path so the benefits can be reaped.</p>
-
-<p>For comparing the execution times between 2.5 and 2.6, I have prepared a simple test setup.
-Here is a test function that will create a collection named <code>test</code> and populate it
-with a configurable amount documents. It will then run an AQL query that will update
-each document in the collection, using one of the named AQL functions. The function
-will return the execution time for the AQL query, excluding the collection setup time:</p>
-
-<p>```js test function
-var run = function (n, query) {
-  var time = require(&ldquo;internal&rdquo;).time;
-  var db = require(&ldquo;org/arangodb&rdquo;).db;</p>
-
-<p>  // drop and re-create test collection
-  db.<em>drop(&ldquo;test&rdquo;);
-  var c = db.</em>create(&ldquo;test&rdquo;);</p>
-
-<p>  // insert n documents
-  for (var i = 0; i &lt; n; ++i) {</p>
-
-<pre><code>c.insert({ value1: i, value2: i, value3: 'foobar' + i }); 
-</code></pre>
-
-<p>  }</p>
-
-<p>  // flush write-ahead log and wait a few seconds before running query
-  require(&ldquo;internal&rdquo;).wal.flush();
-  require(&ldquo;internal&rdquo;).wait(5);</p>
-
-<p>  // run query
-  var s = time();
-  db._query(query);
-  return time() &ndash; s;
-};
-```</p>
-
-<h3>UNSET()</h3>
-
-<p>Let&rsquo;s start with the <code>UNSET()</code> AQL function. Its purpose is to remove or multiple
-attributes from an object/document. Here is an example AQL query that removes
-attribute <code>value2</code> from each document in the <code>test</code> collection:</p>
-
-<p><code>js invocation of UNSET()
-run(n, "FOR t IN test LET modified = UNSET(t, 'value2') REPLACE t WITH modified IN test");
-</code></p>
-
-<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
-
-<p>```plain execution times of UNSET() query in 2.5 and 2.6</p>
-
-<h2>value of n       time 2.5       time 2.6       speedup</h2>
-
-<p>   100,000         3.28 s         1.13 s          65 %
-   500,000        16.93 s         5.38 s          68 %
- 1,000,000        32.60 s        11.40 s          65 %
-```</p>
-
-<h3>KEEP()</h3>
-
-<p>The purpose of <code>KEEP()</code> is to remove all attributes from an object/document but the
-specified ones. Here&rsquo;s an example query that uses <code>KEEP()</code> to remove all attributes
-from the documents in the <code>test</code> collectionn but attribute <code>value2</code>:</p>
-
-<p><code>js invocation of KEEP()
-run(n, "FOR t IN test LET modified = KEEP(t, 'value2') REPLACE t WITH modified IN test");
-</code></p>
-
-<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
-
-<p>```plain execution times of KEEP() query in 2.5 and 2.6</p>
-
-<h2>value of n       time 2.5       time 2.6       speedup</h2>
-
-<p>   100,000         1.98 s         0.87 s          56 %
-   500,000         9.34 s         4.09 s          56 %
- 1,000,000        18.86 s         8.23 s          56 %
-```</p>
-
-<h3>MERGE()</h3>
-
-<p>Finally, the <code>MERGE()</code> function can be used to merge multiple objects/documents in a
-single one. The following query will add an attribute <code>value4</code> to all documents in
-collection <code>test</code>:</p>
-
-<p><code>js invocation of MERGE()
-run(n, "FOR t IN test LET modified = MERGE(t, { value4 : 1 }) REPLACE t WITH modified IN test");
-</code></p>
-
-<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
-
-<p>```plain execution times of MERGE() query in 2.5 and 2.6</p>
-
-<h2>value of n       time 2.5       time 2.6       speedup</h2>
-
-<p>   100,000         3.93 s         1.22 s          68 %
-   500,000        19.17 s         5.91 s          69 %
- 1,000,000        38.27 s        12.33 s          67 %
-```</p>
 ]]></content>
   </entry>
   
