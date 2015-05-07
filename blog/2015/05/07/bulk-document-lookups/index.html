@@ -7,12 +7,11 @@
   <meta charset="utf-8">
   <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
   <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
-  <title>IN-list Improvements - J@ArangoDB</title>
+  <title>Bulk Document Lookups - J@ArangoDB</title>
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="We have worked on many AQL optimizations for ArangoDB 2.6. As a side effect of one of these optimizations, some cases involving the handling
-of large &hellip;">
+  <meta name="description" content="ArangoDB 2.6 comes with a specialized API for bulk document lookups. The new API allows fetching multiple documents from the server using a single &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -21,7 +20,7 @@ of large &hellip;">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/05/07/in-list-improvements">
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/05/07/bulk-document-lookups">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
@@ -85,7 +84,7 @@ of large &hellip;">
   
   <header>
     
-      <h1 class="entry-title">IN-list Improvements</h1>
+      <h1 class="entry-title">Bulk Document Lookups</h1>
     
     
       <p class="meta">
@@ -101,93 +100,115 @@ of large &hellip;">
   
 
 
-<time datetime="2015-05-07T16:46:30+02:00" pubdate data-updated="true">May 7<span>th</span>, 2015</time>
+<time datetime="2015-05-07T17:48:21+02:00" pubdate data-updated="true">May 7<span>th</span>, 2015</time>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p>We have worked on many AQL optimizations for ArangoDB 2.6.</p>
+<div class="entry-content"><p>ArangoDB 2.6 comes with a specialized API for bulk document lookups.</p>
 
-<p>As a side effect of one of these optimizations, some cases involving the handling
-of large IN-lists have become much faster than before. Large IN-lists are normally
-used when comparing attribute or index values against some big array of lookup values
-or keys provided by the application.</p>
+<p>The new API allows fetching multiple documents from the server using a single
+request, making bulk document retrieval more efficient than when using
+one request per document to fetch.</p>
 
 <!-- more -->
 
 
-<p>Let&rsquo;s quickly create and populate a collection named <code>keys</code> so that we can use some
-IN-list queries on it later on:</p>
+<p>The straight-forward implementation of a client application that needs to
+fetch several documents from an ArangoDB server looks like this:</p>
 
-<figure class='code'><figcaption><span>setting up example data</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;keys&quot;</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// insert 100k documents with some defined keys into the collection</span>
-</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="mi">100000</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">db</span><span class="p">.</span><span class="nx">keys</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">_key</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span> <span class="p">});</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>And here is a query to all find documents with one of the provided keys <code>test0</code> to <code>test999</code>.
-The IN-list here contains 1,000 values:</p>
-
-<figure class='code'><figcaption><span>using an IN-list with 1,000 values</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">keys</span> <span class="o">=</span> <span class="p">[</span> <span class="p">];</span>
-</span><span class='line'><span class="kd">var</span> <span class="nx">n</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">;</span>
-</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">n</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">keys</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span><span class="p">);</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="s2">&quot;FOR doc IN keys FILTER doc._key IN @keys RETURN doc&quot;</span><span class="p">,</span> <span class="p">{</span> <span class="nx">keys</span><span class="o">:</span> <span class="nx">keys</span> <span class="p">});</span> <span class="p">});</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>When invoked from the ArangoShell, this takes around 0.6 seconds to complete with ArangoDB 2.5.</p>
-
-<p>Increasing the length of the IN-list from 1,000 to 5,000 values makes this run in around 15 seconds.
-With an IN-list of 10,000 values, this already takes more than 60 seconds to complete in 2.5.</p>
-
-<p>Obviously longer IN-lists weren&rsquo;t handled terribly efficiently in 2.5, and should be avoided there
-if possible.</p>
-
-<p>I am glad this has been fixed in 2.6. Following is a comparison of the above query for different
-IN-list sizes, run on both ArangoDB 2.5 and 2.6.</p>
-
-<figure class='code'><figcaption><span>2.5 and 2.6 with different IN-list sizes </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span>fetching multiple documents from the server one by one</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
 <span class='line-number'>5</span>
 <span class='line-number'>6</span>
 <span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'># of IN-list values    Execution time (2.5)   Execution time (2.6)
-</span><span class='line'>------------------------------------------------------------------
-</span><span class='line'>              1,000                  0.67 s                 0.03 s
-</span><span class='line'>              5,000                 15.34 s                 0.12 s
-</span><span class='line'>             10,000                 63.48 s                 0.20 s
-</span><span class='line'>             50,000                   n/a                   0.81 s
-</span><span class='line'>            100,000                   n/a                   1.60 s</span></code></pre></td></tr></table></div></figure>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="c1">// list of document keys</span>
+</span><span class='line'><span class="kd">var</span> <span class="nx">keys</span> <span class="o">=</span> <span class="p">[</span> <span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="s2">&quot;baz&quot;</span><span class="p">,</span> <span class="p">...];</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// sequentially fetch all documents from the server</span>
+</span><span class='line'><span class="kd">var</span> <span class="nx">results</span> <span class="o">=</span> <span class="p">[</span> <span class="p">];</span>
+</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">keys</span><span class="p">.</span><span class="nx">length</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">results</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="nx">db</span><span class="p">.</span><span class="nx">collection</span><span class="p">.</span><span class="nb">document</span><span class="p">(</span><span class="nx">keys</span><span class="p">[</span><span class="nx">i</span><span class="p">]));</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="c1">// now all documents are contained in variable &#39;results&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
 
 
-<p>Looks like 2.6 handles longer IN-lists way better than 2.5! The above figures suggest that execution
-times now scale about linearly with the number of IN-list values. This also leads to reductions in query
-execution times of 90 % and more percent.</p>
+<p>This works fine but causes excessive HTTP communication between the client
+application and the server when many documents need to be fetched. In fact,
+the above code will issue as many HTTP requests as there are documents to fetch.</p>
 
-<p>Please note that longer IN-lists will still make a the query run longer than when
-using shorter IN-lists. This is expected because longer IN-lists require more comparisons to
-be made and will lead (in the above example) to more documents being returned.</p>
+<p>From the performance point of view, it would be much better to reduce the
+number of HTTP requests, and retrieve multiple documents from the server in
+one go, using a single request.</p>
+
+<p>This is where the new document lookup function comes into play. Provided the
+documents keys are known, all the client application needs to do is to call the
+collection&rsquo;s <code>lookupByKeys</code> method:</p>
+
+<figure class='code'><figcaption><span>bulk method: fetching multiple documents at once</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="c1">// list of document keys</span>
+</span><span class='line'><span class="kd">var</span> <span class="nx">keys</span> <span class="o">=</span> <span class="p">[</span> <span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="s2">&quot;baz&quot;</span><span class="p">,</span> <span class="p">...];</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">results</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">collection</span><span class="p">.</span><span class="nx">lookupByKeys</span><span class="p">(</span><span class="nx">keys</span><span class="p">);</span>
+</span><span class='line'><span class="c1">// now all documents are contained in variable &#39;results&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Following is a comparison of the execution times for the two different methds.
+All test runs were conducted in the same ArangoDB 2.6 instance. The tests were
+run from the ArangoShell. The ArangoShell and the ArangoDB server were located on
+the same physical host.</p>
+
+<figure class='code'><figcaption><span>comparing single document requests and bulk requests</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>Number of keys     Single documents        Bulk
+</span><span class='line'>-----------------------------------------------
+</span><span class='line'>         1,000               0.24 s      0.04 s
+</span><span class='line'>        10,000               1.23 s      0.31 s
+</span><span class='line'>       100,000              10.89 s      2.13 s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As can be seen, the bulk method can provide a substantial speedup in case lots
+of documents need to be fetched by their keys at once. The actual speedups might be
+even higher when using a remote ArangoDB server instead of a localhost connection.</p>
+
+<p>In 2.6 there is currently an ArangoShell implementation for bulk document lookups.
+Other drivers will follow.</p>
+
+<p>Additionally, the server-side REST API method for bulk document lookups can be
+invoked directly via HTTP as follows:</p>
+
+<figure class='code'><figcaption><span>invoking bulk document lookups via HTTP</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>curl                                                  \
+</span><span class='line'>  -X PUT                                              \
+</span><span class='line'>  http://127.0.0.1:8529/_api/simple/lookup-by-keys    \
+</span><span class='line'>  --data '{"keys":["foo","bar","baz"]}'</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Restrictions: the bulk document API works only with document keys, not document ids.
+Additionally, it works on a single collection at a time and cannot be leveraged to fetch
+documents from multiple collections. Still, a client application can group document keys
+by collection beforehand and send one bulk request per involved collection. Finally,
+trying to fetch a document using a non-existing key will not produce an error with the
+bulk API. Using the one-by-one method, trying to fetch a non-existing document will throw
+an exception.</p>
 </div>
 
 
@@ -210,12 +231,12 @@ be made and will lead (in the above example) to more documents being returned.</
   
 
 
-<time datetime="2015-05-07T16:46:30+02:00" pubdate data-updated="true">May 7<span>th</span>, 2015</time>
+<time datetime="2015-05-07T17:48:21+02:00" pubdate data-updated="true">May 7<span>th</span>, 2015</time>
       
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/performance/'>Performance</a>
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/performance/'>performance</a>
   
 </span>
 
@@ -224,7 +245,7 @@ be made and will lead (in the above example) to more documents being returned.</
     
       <div class="sharing">
   
-  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/05/07/in-list-improvements/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/05/07/in-list-improvements/" >Tweet</a>
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/05/07/bulk-document-lookups/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/05/07/bulk-document-lookups/" >Tweet</a>
   
   
   
@@ -233,10 +254,8 @@ be made and will lead (in the above example) to more documents being returned.</
     
     <p class="meta">
       
-        <a class="basic-alignment left" href="/blog/2015/05/07/fulltext-index-enhancements/" title="Previous Post: Fulltext index enhancements">&laquo; Fulltext index enhancements</a>
+        <a class="basic-alignment left" href="/blog/2015/05/07/in-list-improvements/" title="Previous Post: IN-list improvements">&laquo; IN-list improvements</a>
       
-      
-        <a class="basic-alignment right" href="/blog/2015/05/07/bulk-document-lookups/" title="Next Post: Bulk document lookups">Bulk document lookups &raquo;</a>
       
     </p>
   </footer>
