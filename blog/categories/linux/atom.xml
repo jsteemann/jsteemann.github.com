@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Linux | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/linux/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-21T00:13:30+02:00</updated>
+  <updated>2015-05-21T00:30:58+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -322,9 +322,10 @@ source, this should already be the case.</p>
 build-completions.sh arangodb
 </code>
 This will write the completions script for all binaries into the file <code>arangodb</code>.
-An already generated version for devel can be found <a href="/downloads/code/completions-devel">here</a>.
-Completions for 2.3 can be found <a href="/downloads/code/completions-2.3">here</a>, the ones for 2.2
-are <a href="/downloads/code/completions-2.2">here</a>.</p>
+Pre-generated completion scripts for various ArangoDB versions can be found here:
+<a href="/downloads/code/completions-2.2">2.2</a> <a href="/downloads/code/completions-2.3">2.3</a>
+<a href="/downloads/code/completions-2.4">2.4</a> <a href="/downloads/code/completions-2.5">2.5</a>
+<a href="/downloads/code/completions-2.6">2.6</a></p>
 
 <p>To activate completions, copy the appropriate file into <code>/etc/bash_completion.d/arangodb</code>.
 Note that completion may need to be re-initialized once in order to make work:
@@ -334,23 +335,23 @@ Note that completion may need to be re-initialized once in order to make work:
 
 <h2>Quick setup</h2>
 
-<p>The following command should install the completions for 2.3 and activate them:
+<p>The following command should install the completions for 2.5 and activate them:
 ```bash activate completions for ArangoDB 2.3
 sudo \
   wget -O /etc/bash_completion.d/arangodb \</p>
 
-<pre><code>https://jsteemann.github.io/downloads/code/completions-2.3 &amp;&amp; \
+<pre><code>https://jsteemann.github.io/downloads/code/completions-2.5 &amp;&amp; \
 </code></pre>
 
 <p>  . /etc/bash_completion.d/arangodb
 ```</p>
 
-<p>The command for 2.2 is:
-```bash activate completions for ArangoDB 2.2
+<p>The command for 2.4 is:
+```bash activate completions for ArangoDB 2.4
 sudo \
   wget -O /etc/bash_completion.d/arangodb \</p>
 
-<pre><code>https://jsteemann.github.io/downloads/code/completions-2.2 &amp;&amp; \
+<pre><code>https://jsteemann.github.io/downloads/code/completions-2.4 &amp;&amp; \
 </code></pre>
 
 <p>  . /etc/bash_completion.d/arangodb
@@ -367,18 +368,18 @@ with other Linux distributions let alone other shells.</em></p>
 of them. For such environments, downloading and sourcing the completions script should work:</p>
 
 <p>```bash activate completion without bash_completion.d
-wget -O ~/arangodb-completions-2.3 \</p>
+wget -O ~/arangodb-completions-2.5 \</p>
 
-<pre><code>https://jsteemann.github.io/downloads/code/completions-2.3
+<pre><code>https://jsteemann.github.io/downloads/code/completions-2.5
 </code></pre>
 
-<p>. ~/arangodb-completions-2.3
+<p>. ~/arangodb-completions-2.5
 ```</p>
 
 <p>This will enable the completions in the current shell. To enable them permanently, add the
 completions script to your <code>.bashrc</code> file:
 <code>bash adding completions to .bashrc
-echo ". ~/arangodb-completions-2.3" &gt;&gt; ~/.bashrc
+echo ". ~/arangodb-completions-2.5" &gt;&gt; ~/.bashrc
 </code></p>
 ]]></content>
   </entry>
