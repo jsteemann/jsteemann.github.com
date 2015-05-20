@@ -11,9 +11,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="A while ago our continuous integration builds on TravisCI
-began to fail seemingly randomly because the build worker was killed without
-an apparent &hellip;">
+  <meta name="description" content="We are currently preparing ArangoDB 2.6 for release. A lot of work has been put into this release,
+and I really hope we can ship a first 2.6 release &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -83,6 +82,58 @@ an apparent &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">The Great AQL Shootout: ArangoDB 2.5 vs 2.6</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-05-20T18:04:04+02:00" pubdate data-updated="true">May 20<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>We are currently preparing ArangoDB 2.6 for release. A lot of work has been put into this release,
+and I really hope we can ship a first 2.6 release soon.</p>
+
+<p>To keep you hanging on in the meantime, I put together some performance tests results from 2.6.
+The tests I ran compared AQL query execution times in 2.6 and 2.5.</p>
+
+<p>The results look quite promising: <strong>2.6 outperformed 2.5 for all tested queries</strong>, mostly by
+factors of 2 to 5. A few dedicated AQL features in the tests got boosted even more, resulting in
+query execution time reductions of 90 % and more.
+Finally, the tests also revealed a dedicated case for which 2.6 provides a several hundredfold speedup.</p>
+
+<p>Also good news is that not a single of the test queries ran slower in 2.6 than in 2.5.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -553,52 +604,6 @@ to use the new or the traditional implementation.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/04/20/creating-highscore-lists/">Creating Highscore Lists</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-04-20T20:18:59+02:00" pubdate data-updated="true">Apr 20<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>I just came across a question about how to create highscore lists or
-leaderboards in ArangoDB, and how they would work when compared to
-<a href="http://redis.io/topics/data-types-intro#sorted-sets">Redis sorted sets</a>.</p>
-
-<p>This blog post tries to give an answer on the topic and also detailed
-instructions and queries for setting up highscore lists with ArangoDB.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/04/20/creating-highscore-lists/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -621,6 +626,10 @@ instructions and queries for setting up highscore lists with ArangoDB.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">The Great AQL Shootout: ArangoDB 2.5 vs 2.6</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/05/07/less-intrusive-linking/">Less Intrusive Linking</a>
       </li>
     
@@ -640,10 +649,6 @@ instructions and queries for setting up highscore lists with ArangoDB.</p>
         <a href="/blog/2015/05/04/subquery-optimizations/">Subquery Optimizations</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/05/04/return-value-optimization-for-aql/">Return Value Optimization for AQL</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -652,11 +657,11 @@ instructions and queries for setting up highscore lists with ArangoDB.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (20)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (36)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (3)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (14)</a></li><li><a href='/blog/categories/php/'>PHP (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (21)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (37)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (3)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (15)</a></li><li><a href='/blog/categories/php/'>PHP (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (25)</li><ul class="month_list"><li class="month"><a href='/blog/2015/05/'>MAY (6)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (26)</li><ul class="month_list"><li class="month"><a href='/blog/2015/05/'>MAY (7)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

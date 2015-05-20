@@ -201,12 +201,18 @@
         <lastmod>2015-05-07T20:28:58+02:00</lastmod>
     </url>
     <url>
+        <loc>
+            http://jsteemann.github.io/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/
+        </loc>
+        <lastmod>2015-05-20T22:05:52+02:00</lastmod>
+    </url>
+    <url>
         <loc>http://jsteemann.github.io/about/</loc>
-        <lastmod>2015-05-07T20:28:58+02:00</lastmod>
+        <lastmod>2015-05-20T22:05:52+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2015-05-07T20:28:58+02:00</lastmod>
+        <lastmod>2015-05-20T22:05:52+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -214,6 +220,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2015-05-07T20:28:58+02:00</lastmod>
+        <lastmod>2015-05-20T22:05:52+02:00</lastmod>
     </url>
 </urlset>

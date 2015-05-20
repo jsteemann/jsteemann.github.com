@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-07T20:30:41+02:00</updated>
+  <updated>2015-05-20T22:06:55+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,234 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[The Great AQL Shootout: ArangoDB 2.5 vs 2.6]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/"/>
+    <updated>2015-05-20T18:04:04+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26</id>
+    <content type="html"><![CDATA[<p>We are currently preparing ArangoDB 2.6 for release. A lot of work has been put into this release,
+and I really hope we can ship a first 2.6 release soon.</p>
+
+<p>To keep you hanging on in the meantime, I put together some performance tests results from 2.6.
+The tests I ran compared AQL query execution times in 2.6 and 2.5.</p>
+
+<p>The results look quite promising: <strong>2.6 outperformed 2.5 for all tested queries</strong>, mostly by
+factors of 2 to 5. A few dedicated AQL features in the tests got boosted even more, resulting in
+query execution time reductions of 90 % and more.
+Finally, the tests also revealed a dedicated case for which 2.6 provides a several hundredfold speedup.</p>
+
+<p>Also good news is that not a single of the test queries ran slower in 2.6 than in 2.5.</p>
+
+<!-- more -->
+
+
+<h1>What was tested?</h1>
+
+<p>The tests execute several read-only AQL queries on datasets of different sizes and measure the
+query execution times. The tests were conducted in both ArangoDB 2.5 (2.5.4, the current stable version)
+and 2.6 (2.6.0-alpha2, the upcoming version), so the results of the two ArangoDB versions can be compared.</p>
+
+<p>Though the tests do not cover every possible type of AQL operation, feature and function, they still do
+cover a wide range of features, e.g. lookups, joins, COLLECT operations, sorting, subqueries,
+and some AQL functions. Overall, the test suite contains 33 different cases.</p>
+
+<p>All queries were run on datasets of three different sizes to validate that the results are relevant
+for datasets of various sizes. The dataset sizes are 10,000 documents, 100,000 documents, and 1,000,000
+documents. Each query was repeated a few times so outliers in execution time can be identified.</p>
+
+<p>There is full disclosure of the test methodology and the test script below, so anyone interested
+can repeat the tests locally and verify the results.</p>
+
+<h1>Test results</h1>
+
+<p>The combined test results from 2.5 and 2.6 can be found in this
+<a href="/downloads/code/arango-25-26-shootout-results.pdf">PDF file</a>.
+There is also an <em>ods</em> version of the same file <a href="/downloads/code/arango-25-26-shootout-results.ods">here</a>.
+A description of the columns and test cases used in these files can be found further below.</p>
+
+<p>For the detail-loving folks, here are the raw results for both versions in isolation:
+<a href="/downloads/code/arango-25-26-shootout-results-25.txt">2.5</a>,
+<a href="/downloads/code/arango-25-26-shootout-results-26.txt">2.6</a>.</p>
+
+<p>The results show that ArangoDB 2.6 was consistently faster for <strong>all</strong> AQL queries included in the
+tests.</p>
+
+<p>The queries that improved most in 2.6 over 2.5 include:</p>
+
+<ul>
+<li><code>FILTER</code> conditions: simple <code>FILTER</code> conditions as used in the tests are 3 to 5 times faster</li>
+<li>simple joins using the primary index (<code>_key</code> attribute), hash index or skiplist index are
+2 to 3.5 times faster</li>
+<li>sorting on a string attribute is 2.5 to 3 times faster</li>
+<li>extracting the <code>_key</code> or other top-level attributes from documents is 4 to 5 times faster</li>
+<li><code>COLLECT</code> statements: simple <code>COLLECT</code> statements like the ones in the tests are 7 to 15 times
+faster</li>
+<li>looking up documents using <code>IN</code> lists with a substantial amount of values contained in the <code>IN</code>
+list is 250 to 700 times faster</li>
+</ul>
+
+
+<p>The one thing that did not change much when comparing 2.6 with 2.5 is iterating over a collection
+and returning all its documents unmodified. The speedups observed for this type of query are between
+18 and 25 %, which is the lowest speedup measured by the tests. Still 18 to 25 % seem okay
+as a free take-away.</p>
+
+<p>Speedups were observed for all three test dataset sizes alike. In some cases, the speedups
+varied a bit with the dataset sizes, but it was still in the same ballpark for all three datasets.
+The conclusion is thus that the speedups did not depend much on the dataset sizes.</p>
+
+<h1>Reasons for speedups</h1>
+
+<p>There are several reasons why the 2.6 performance is better than in previous versions. The main
+reason is that we spent much time optimizing some of the crtical AQL code paths. Then we also
+worked on optimizations for specific features, which are used by some of the tested queries.</p>
+
+<p>If you&rsquo;re interested in the details, here they are:</p>
+
+<ul>
+<li><a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing with a hash table</a></li>
+<li><a href="/blog/2015/04/23/aql-functions-improvements/">AQL functions improvements</a></li>
+<li><a href="/blog/2015/05/04/subquery-optimizations/">Subquery optimizations</a></li>
+<li><a href="/blog/2015/05/04/return-value-optimization-for-aql/">Return value optimization for AQL</a></li>
+<li><a href="/blog/2015/05/07/in-list-improvements/">IN-list improvements</a></li>
+</ul>
+
+
+<p>Additionally, UTF-8 string comparisons were boosted by the upgrade from ICU 52 to ICU 54. The
+latter version contains a rewritten and much faster UTF-8-aware strcmp, which we heavily rely on.</p>
+
+<h1>Test methodology</h1>
+
+<p>Each query was run five times on each dataset, so execution time outliers can be identified. The
+results contain the minimum, maximum and average execution times for each query.</p>
+
+<p>Queries were run in isolation on an otherwise idle server. The queries were all run inside the
+server, so there was no HTTP/network traffic involved for shipping query results (note: this
+was also <a href="/blog/2015/04/01/improvements-for-the-cursor-api/">vastly improved in 2.6</a> but this is
+not the subject of this post).</p>
+
+<p>All tests were run on my local machine, which has 4 cores, 8 CPUs (though the number of CPUs will
+not matter for any of the tests), 12 GB of physical memory, a Linux 3.16 kernel and an Ubuntu 15
+OS. All datasets fit into the main memory, so tests were not I/O-bound.</p>
+
+<p>The ArangoDB versions tested were 2.5.4 and 2.6.0-alpha2. Both versions were hand-compiled with
+g++ 4.9.1 with options <code>CC='gcc' CXX='g++' CFLAGS='-O3 -Wall' CXXFLAGS='-O3 -Wall'</code>.</p>
+
+<p>The complete test script, including the setup of the test data, is contained in
+<a href="/downloads/code/arango-25-26-shootout-script.js">this file</a>. It can be run inside <em>arangod</em> by
+typing the following in the server console:</p>
+
+<p><code>js running the tests inside arangod
+require("internal").load("/path/to/arango-25-26-shootout-script.js");
+</code></p>
+
+<p>Note that this needs an <em>arangod</em> started with option <code>--console</code>. Also note that running the
+script will only test the current <em>arangod</em> instance, so the script needs to be run once in a
+2.5 instance and once in 2.6.</p>
+
+<p>Running the script will set up the test collections, run all queries on them (you will need some
+patience for this) and finally print a table like the following:</p>
+
+<p>```plain excerpt from test results</p>
+
+<h2>test name                     | collection  |    runs |     min (s) |     max (s) |     avg (s)</h2>
+
+<p>collect-number                | 10k         |       5 |      0.0760 |      0.1638 |      0.0943
+collect-number                | 100k        |       5 |      0.8697 |      0.8966 |      0.8803
+collect-number                | 1000k       |       5 |     10.4320 |     10.6597 |     10.5314
+collect-string                | 10k         |       5 |      0.1211 |      0.1319 |      0.1250
+collect-string                | 100k        |       5 |      1.5406 |      1.5974 |      1.5641
+collect-string                | 1000k       |       5 |     19.0708 |     19.0966 |     19.0825
+collect-count-number          | 10k         |       5 |      0.0763 |      0.0792 |      0.0778
+```</p>
+
+<p>These result columns have the following meanings:</p>
+
+<ul>
+<li><em>test name</em>: name of test</li>
+<li><em>collection</em>: name of collection. <em>10k</em> is a collection with 10,000 documents, <em>100k</em> contains
+ 100,000 documents, and <em>1000k</em> contains 1,000,000 documents.</li>
+<li><em>runs</em>: number of times the query was run</li>
+<li><em>min (s)</em>: minimum query execution time (in seconds)</li>
+<li><em>max (s)</em>: maximum query execution time (in seconds)</li>
+<li><em>avg (s)</em>: average query execution time (in seconds)</li>
+</ul>
+
+
+<h1>Test data</h1>
+
+<p>The test datasets for the three collections are filled with artifical data. Test documents are
+created like this:</p>
+
+<p><code>js test document creation
+collection.insert({
+  _key: "test" + i,
+  value1: i,
+  value2: "test" + i,
+  value3: i,
+  value4: "test" + i,
+  value5: i,
+  value6: "test" + i,
+  value7: i % g,
+  value8: "test" + (i % g)
+});
+</code></p>
+
+<p>Each document has a <code>_key</code> attribute and 8 other attributes, <code>value1</code> to <code>value8</code>.</p>
+
+<p><code>value1</code>, <code>value3</code>, <code>value5</code> and <code>value7</code> are numeric attributes, the other attributes contain
+string values. The attributes <code>value1</code> to <code>value6</code> contain unique values. The attributes <code>value7</code>
+and <code>value8</code> contain repeating values. They are used for <code>COLLECT</code> queries.</p>
+
+<p><code>value1</code> and <code>value2</code> are each indexed with a hash index. <code>value3</code> and <code>value4</code> are each indexed with
+a skiplist index. <code>value5</code> to <code>value8</code> are not indexed. This way queries can be run on the same values,
+but with different indexes and even without indexes.</p>
+
+<h1>Test cases</h1>
+
+<p>The test cases cover the following queries:</p>
+
+<ul>
+<li><em>collect-number</em> and <em>collect-string</em>: run <code>COLLECT</code> on a repeating attribute, which is either
+numeric or a string</li>
+<li><em>collect-count-number</em> and <em>collect-count-string</em>: ditto, but also calculate the group lengths
+using <code>WITH COUNT INTO</code></li>
+<li><em>subquery</em>: run a single-document subquery for each document of the original collection</li>
+<li><em>concat</em>: for each document in the collection, concat the document <code>_key</code> attribute with another
+ document attribute using <code>CONCAT()</code></li>
+<li><em>merge</em>: for each document in the collection, merge the document with another object using <code>MERGE()</code></li>
+<li><em>keep</em>: for each document in the collection, remove all but a few named attributes from it using
+<code>KEEP()</code></li>
+<li><em>unset</em>: for each document in the collection, remove a few named attributes from it using <code>UNSET()</code></li>
+<li><em>min-number</em> and <em>min-string</em>: return the minimum value of a specific attribute from all documents in
+ the collection, which is either numeric or a string. This uses <code>MIN()</code></li>
+<li><em>max-number</em> and <em>max-string</em>: ditto, but using <code>MAX()</code></li>
+<li><em>sort-number</em> and <em>sort-string</em>: sort all documents in the collection by a non-indexed attribute,
+ which is either numeric or a string</li>
+<li><em>filter-number</em> and <em>filter-string</em>: filter all documents in the collection using a non-indexed attribute,
+ which is either numeric or a string</li>
+<li><em>extract-doc</em>: return all documents in the collection unmodified</li>
+<li><em>extract-key</em>: return the <code>_key</code> attribute of all documents in the collection</li>
+<li><em>extract-number</em> and <em>extract-string</em>: return an attribute from all documents in the collection,
+ which is either numeric or a string</li>
+<li><em>join-key</em>: for each document in the collection, perform a join on the <code>_key</code> attribute on the collection
+ itself (i.e. <code>FOR c1 IN @@c FOR c2 IN @@c FILTER c1._key == c2._key RETURN c1</code>)</li>
+<li><em>join-id</em>: ditto, but perform the join using the <code>_id</code> attribute</li>
+<li><em>join-hash-number</em> and <em>join-hash-string</em>: ditto, but join using a hash index on a numeric or string
+ attribute</li>
+<li><em>join-skiplist-number</em> and <em>join-skiplist-string</em>: ditto, but join using a skiplist index on a numeric or
+ string attribute</li>
+<li><em>lookup-key</em>, <em>lookup-hash-number</em>, <em>lookup-hash-string</em>, <em>lookup-skiplist-number</em>, <em>lookup-skiplist-string</em>:
+ compile an IN-list of 10,000 lookup values and search these 10,000 documents in the collection using
+ either the primary index (<code>_key</code> attribute), a hash index or a skiplist index. The latter two are tested
+ on numeric and string attributes.</li>
+</ul>
+
+
+<p>Further implementation details can be checked in the <a href="/downloads/code/arango-25-26-shootout-script.js">test script</a>.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[IN-list Improvements]]></title>
@@ -364,289 +592,6 @@ run(n, "FOR t IN test LET modified = MERGE(t, { value4 : 1 }) REPLACE t WITH mod
    500,000        19.17 s         5.91 s          69 %
  1,000,000        38.27 s        12.33 s          67 %
 ```</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[COLLECTing With a Hash Table]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table/"/>
-    <updated>2015-04-22T13:53:10+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table</id>
-    <content type="html"><![CDATA[<p>ArangoDB 2.6 will feature an alternative <strong>hash</strong> implementation of the AQL <code>COLLECT</code>
-operation. The new implementation can speed up some AQL queries that can not exploit indexes
-on the <code>COLLECT</code> group criteria.</p>
-
-<p>This blog post provides a preview of the feature and shows some nice performance improvements.
-It also explains the <code>COLLECT</code>-related optimizer parts and how the optimizer will decide whether
-to use the new or the traditional implementation.</p>
-
-<!-- more -->
-
-
-<h2>Introduction to COLLECT</h2>
-
-<p>A quick recap: in AQL, the <code>COLLECT</code> operation can be used for grouping and optionally counting values.</p>
-
-<p>Here&rsquo;s an example, using flight data:</p>
-
-<p><code>plain AQL COLLECT example
-FOR flight IN flights
-  COLLECT from = flight._from WITH COUNT INTO count
-  RETURN { from: from, count: count }
-</code></p>
-
-<p>This query will iterate over all documents in collection <code>flights</code>, and count the
-number of flights per different <code>_from</code> value (origin airport). The query result will
-contain only unique <code>from</code> values plus a counter for each:</p>
-
-<p><code>json query result, grouped by from
-[
-  { "from" : "airports/ABE", "count" : 6205 },
-  { "from" : "airports/ABQ", "count" : 39346 },
-  { "from" : "airports/ACV", "count" : 362 },
-  ...
-  { "from" : "airports/YAP", "count" : 285 },
-  { "from" : "airports/YKM", "count" : 879 },
-  { "from" : "airports/YUM", "count" : 2275 }
-]
-</code></p>
-
-<p>As the <code>COLLECT</code> will group its result according to the specified group criteria (<code>flights._from</code>
-in the above query), it needs a way of figuring out to which group any input value does belong.</p>
-
-<p>Before ArangoDB 2.6, there was a single method for determining the group. Starting with ArangoDB
-2.6, the query optimizer can choose between two different <code>COLLECT</code> methods, the <strong>sorted</strong> method
-and the <strong>hash</strong> method.</p>
-
-<h2>Sorted COLLECT method</h2>
-
-<p>The traditional method for determining the group values is the <strong>sorted</strong> method. It has been
-available in ArangoDB since the very start.</p>
-
-<p>The sorted method of <code>COLLECT</code> requires its input to be sorted by the group criteria specified
-in the <code>COLLECT</code> statement. Because there is no guarantee that the input data are already sorted
-in the same way, the query optimizer will automatically insert a <code>SORT</code> statement into the query
-in front of the <code>COLLECT</code>. In case there is a sorted index present on the group criteria attributes,
-the optimizer may be able to optimize away the <code>SORT</code> again. If there is no sorted index present
-on the group criteria attributes, the <code>SORT</code> will remain in the execution plan.</p>
-
-<p>Here is the execution plan for the above query using the <strong>sorted</strong> method of <code>COLLECT</code>. We can see
-the extra <code>SortNode</code> with id #7 being added by the optimizer in front of the <code>COLLECT</code>:</p>
-
-<p><img src="/downloads/screenshots/collect-sorted.png"></p>
-
-<p>The <strong>sorted</strong> method of <code>COLLECT</code> is efficient because it can write out a group result whenever
-an input value will start a new group. Therefore it does not need to keep the whole <code>COLLECT</code>
-result in memory. The downside of using the sorted method is that it requires its input to be
-sorted, and that this requires adding an extra <code>SORT</code> for not properly sorted input.</p>
-
-<h2>Hash COLLECT method</h2>
-
-<p>Since ArangoDB 2.6, the query optimizer can also employ the <strong>hash</strong> method for <code>COLLECT</code>. The
-hash method works by assigning the input values of the <code>COLLECT</code> to slots in a hash table. It
-does not require its input to be sorted. Because the entries in the hash table do not have a
-particular order, the query optimizer will add a post-<code>COLLECT</code> <code>SORT</code> statement. With this extra
-sort of the <code>COLLECT</code> result, the optimizer ensures that the output of the sorted <code>COLLECT</code> will
-be the same as the output of the hash <code>COLLECT</code>.</p>
-
-<p>Here is the execution plan for the above query when using the <strong>hash</strong> method of <code>COLLECT</code>.
-Here we can see the extra <code>SortNode</code> with id #7 being added post-<code>COLLECT</code>:</p>
-
-<p><img src="/downloads/screenshots/collect-hash.png"></p>
-
-<p>The <strong>hash</strong> method is beneficial because it does not require sorted input and thus no extra
-<code>SORT</code> step in front. However, as the input is not sorted, it is never clear when a group is
-actually finished. The hash method therefore needs to build the whole <code>COLLECT</code> result in memory
-until the input is exhausted. Then it can safely write out all group results. Additionally,
-the result of the hash <code>COLLECT</code> is unsorted. Therefore the optimizer will add a post-<code>COLLECT</code>
-sort to ensure the result will be identical to a <strong>sorted</strong> <code>COLLECT</code>.</p>
-
-<h2>Which method will be used when?</h2>
-
-<p>The query optimizer will always take the initial query plan and specialize its <code>COLLECT</code> nodes to
-using the <strong>sorted</strong> method. It will also add the pre-<code>COLLECT</code> <code>SORT</code> in the original plan.</p>
-
-<p>In addition, for every <code>COLLECT</code> statement not using an <code>INTO</code> clause, the optimizer will create
-a plan variant that uses the <strong>hash</strong> method. In that plan variant, the post-<code>COLLECT</code> <code>SORT</code>
-will be added. Note that a <code>WITH COUNT INTO</code> is still ok here, but that using a regular <code>INTO</code>
-clause will disable the usage of the <strong>hash</strong> method:</p>
-
-<p><code>plain a query that cannot use the hash method
-FOR flight IN flights
-  COLLECT from = flight._from INTO allFlights
-  RETURN { from: from, flights: allFlights }
-</code></p>
-
-<p>If more than one <code>COLLECT</code> method can be used for a query, the created plans will be shipped through
-the regular optimization pipeline. In the end, the optimizer will pick the plan with the lowest
-estimated total cost as it will do for all other queries.</p>
-
-<p>The <strong>hash</strong> variant does not require an up-front sort of the <code>COLLECT</code> input, and will thus be
-preferred over the <strong>sorted</strong> method if the optimizer estimates many input elements for the <code>COLLECT</code>
-and cannot use an index to process them in already sorted order. In this case, the optimizer
-will estimate that post-sorting the result of the <strong>hash</strong> <code>COLLECT</code> will be more efficient than
-pre-sorting the input for the <strong>sorted</strong> <code>COLLECT</code>.</p>
-
-<p>The main assumption behind this estimation is that the result of any <code>COLLECT</code> statement will
-contain at most as many elements as there are input elements to it. Therefore, the output of
-a <code>COLLECT</code> is likely to be smaller (in terms of rows) than its input, making post-sorting more
-efficient than pre-sorting.</p>
-
-<p>If there is a sorted index on the <code>COLLECT</code> group criteria that the optimizer can exploit, the
-optimizer will pick the <strong>sorted</strong> method because thanks to the index it can optimize away the
-pre-<code>COLLECT</code> sort, leaving no sorts left in the final execution plan.</p>
-
-<p>To override the optimizer decision, <code>COLLECT</code> statements now have an <code>OPTIONS</code> modifier. This
-modifier can be used to force the optimizer to use the <strong>sorted</strong> variant:</p>
-
-<p><code>plain forcing the use of the sorted variant
-FOR flight IN flights
-  COLLECT from = flight._from WITH COUNT INTO count OPTIONS { method: "sorted" }
-  RETURN { from: from, count: count }
-</code></p>
-
-<p>Note that specifying <strong>hash</strong> in <code>method</code> will not force the optimizer to use the <strong>hash</strong> method.
-The reason is that the <strong>hash</strong> variant cannot be used for all queries (only <code>COLLECT</code> statements
-without an <code>INTO</code> clause are eligible). If <code>OPTIONS</code> are omitted or any other method than <code>sorted</code>
-is specified, the optimizer will ignore it and use its regular cost estimations.</p>
-
-<h2>Understanding execution plans</h2>
-
-<p>Which method is actually used in a query can found out by explaining it and looking at its
-execution plan.</p>
-
-<p>A <code>COLLECT</code> is internally handled by an object called <code>AggregateNode</code>, so we have to look for that.
-In the above screenshots, the <code>AggregateNode</code>s are tagged with either <strong>hash</strong> or <strong>sorted</strong>. This can
-also be checked programatically by looking at the <code>aggregationOptions.method</code> attributes in the
-JSON result of an explain().</p>
-
-<p>Here is some example code to extract this information, limited to the <code>AggregateNode</code>s of the
-query already:</p>
-
-<p><code>js extracting just the AggregateNodes from an explain
-var query = `
-  FOR flight IN flights
-  COLLECT from = flight._from WITH COUNT INTO count
-  RETURN { from: from, count: count }
-`;
-var stmt = db._createStatement(query);
-var plan = stmt.explain().plan;
-plan.nodes.filter(function(node) {
-  return node.type === 'AggregateNode';
-});
-</code></p>
-
-<p>For the above query, this will produce something like this:</p>
-
-<p>```json JSON explain result for AggregateNode
-[
-  {</p>
-
-<pre><code>"type" : "AggregateNode", 
-...
-"aggregationOptions" : { 
-  "method" : "hash" 
-}  
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<p>Here we can see that the query is using the <strong>hash</strong> method.</p>
-
-<h2>Optimizing away post-COLLECT sorts</h2>
-
-<p>If a query uses the <strong>hash</strong> method for a <code>COLLECT</code> but the sort order of the <code>COLLECT</code> result
-is irrelevant to the user, the user can provide a hint to the optimizer to remove the
-post-<code>COLLECT</code> sort.</p>
-
-<p>This can be achieved by simplying appending a <code>SORT null</code> to the original <code>COLLECT</code> statement.
-Here we can see that this removes the post-<code>COLLECT</code> sort:</p>
-
-<p><img src="/downloads/screenshots/collect-nosort.png"></p>
-
-<h2>Performance improvements</h2>
-
-<p>The improvements achievable by using the <strong>hash</strong> method instead of the <strong>sorted</strong> method obviously
-depend on whether there are appropriate indexes present for the group criteria. If an index can
-be exploited, the <strong>sorted</strong> method may be just fine. However, there are cases when no indexes are
-present, for example, when running arbitrary ad-hoc queries or when indexes are too expensive
-(indexes need to be updated on insert/update/remove and also will use memory).</p>
-
-<p>Following are a few comparisons of the <strong>sorted</strong> and the <strong>hash</strong> methods in case no indexes can be
-used.</p>
-
-<p>Here&rsquo;s the setup for the test data. This generates 1M documents with both unique and repeating
-string and numeric values. For the non-unique values, we&rsquo;ll use 20 different categories:</p>
-
-<p>```js setting up test data
-var test = db._create(&ldquo;test&rdquo;);
-for (var i = 0; i &lt; 1000000; ++i) {
-  test.insert({</p>
-
-<pre><code>uniqueNumber: i, 
-uniqueString: String("test" + i), 
-repeatingNumber: (i % 20), 
-repeatingString: String("test" + (i % 20)) 
-</code></pre>
-
-<p>  });
-}
-```</p>
-
-<p>Now let&rsquo;s run the following query on the data and measure its execution time:</p>
-
-<p><code>plain test query
-FOR v IN test
-  COLLECT value = v.@attribute WITH COUNT INTO count
-  RETURN { value: value, count: count }
-</code></p>
-
-<p>The worst case is when the <code>COLLECT</code> will produce as many output rows as there are input
-rows. This will happen when using a unique attribute as the grouping criterion. We&rsquo;ll run
-tests on both numeric and string values.</p>
-
-<p>Here are the execution times for unique inputs. It can be seen that the <strong>hash</strong> method
-here will be beneficial if the post-<code>COLLECT</code> sort can be optimized away. As demonstrated
-above, this can be achieved by adding an extra <code>SORT null</code> after the <code>COLLECT</code> statement.
-If the post-<code>COLLECT</code> sort is not optimized away, it will make the hash method a bit more
-expensive than the <strong>sorted</strong> method:</p>
-
-<p>```plain COLLECT performance with unique inputs</p>
-
-<h2>collect method       @attribute                duration</h2>
-
-<p>sorted               uniqueNumber               11.92 s
-hash                 uniqueNumber               13.40 s
-hash (sort null)     uniqueNumber               10.13 s
-sorted               uniqueString               22.04 s
-hash                 uniqueString               27.35 s
-hash (sort null)     uniqueString               12.12 s
-```</p>
-
-<p>Now let&rsquo;s check the results when we group on an attribute that is non-unique. Following
-are the results for numeric and string attributes with 20 different categories each:</p>
-
-<p>```plain COLLECT performance with non-unique inputs</p>
-
-<h2>collect method       @attribute                duration</h2>
-
-<p>sorted               repeatingNumber             5.56 s
-hash                 repeatingNumber             0.94 s
-hash (sort null)     repeatingNumber             0.94 s
-sorted               repeatingString            10.56 s
-hash                 repeatingString             1.09 s
-hash (sort null)     repeatingString             1.09 s
-```</p>
-
-<p>In these cases, the result of the <code>COLLECT</code> will be much smaller than its input (we&rsquo;ll
-only get 20 result rows out instead of 1M). Therefore the post-<code>COLLECT</code> sort for the <strong>hash</strong>
-method will not make any difference, but the pre-<code>COLLECT</code> sort for the <strong>sorted</strong> method
-will still need to sort 1M input values. This is also the reason why the <strong>hash</strong> method
-is significantly faster here.</p>
-
-<p>As usual, your mileage may vary, so please run your own tests.</p>
 ]]></content>
   </entry>
   

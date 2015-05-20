@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-07T20:30:41+02:00</updated>
+  <updated>2015-05-20T22:06:55+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,253 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[The Great AQL Shootout: ArangoDB 2.5 vs 2.6]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/"/>
+    <updated>2015-05-20T18:04:04+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26</id>
+    <content type="html"><![CDATA[<p>We are currently preparing ArangoDB 2.6 for release. A lot of work has been put into this release,
+and I really hope we can ship a first 2.6 release soon.</p>
+
+<p>To keep you hanging on in the meantime, I put together some performance tests results from 2.6.
+The tests I ran compared AQL query execution times in 2.6 and 2.5.</p>
+
+<p>The results look quite promising: <strong>2.6 outperformed 2.5 for all tested queries</strong>, mostly by
+factors of 2 to 5. A few dedicated AQL features in the tests got boosted even more, resulting in
+query execution time reductions of 90 % and more.
+Finally, the tests also revealed a dedicated case for which 2.6 provides a several hundredfold speedup.</p>
+
+<p>Also good news is that not a single of the test queries ran slower in 2.6 than in 2.5.</p>
+
+<!-- more -->
+
+
+<h1>What was tested?</h1>
+
+<p>The tests execute several read-only AQL queries on datasets of different sizes and measure the
+query execution times. The tests were conducted in both ArangoDB 2.5 (2.5.4, the current stable version)
+and 2.6 (2.6.0-alpha2, the upcoming version), so the results of the two ArangoDB versions can be compared.</p>
+
+<p>Though the tests do not cover every possible type of AQL operation, feature and function, they still do
+cover a wide range of features, e.g. lookups, joins, COLLECT operations, sorting, subqueries,
+and some AQL functions. Overall, the test suite contains 33 different cases.</p>
+
+<p>All queries were run on datasets of three different sizes to validate that the results are relevant
+for datasets of various sizes. The dataset sizes are 10,000 documents, 100,000 documents, and 1,000,000
+documents. Each query was repeated a few times so outliers in execution time can be identified.</p>
+
+<p>There is full disclosure of the test methodology and the test script below, so anyone interested
+can repeat the tests locally and verify the results.</p>
+
+<h1>Test results</h1>
+
+<p>The combined test results from 2.5 and 2.6 can be found in this
+<a href="http://jsteemann.github.io/downloads/code/arango-25-26-shootout-results.pdf">PDF file</a>.
+There is also an <em>ods</em> version of the same file <a href="http://jsteemann.github.io/downloads/code/arango-25-26-shootout-results.ods">here</a>.
+A description of the columns and test cases used in these files can be found further below.</p>
+
+<p>For the detail-loving folks, here are the raw results for both versions in isolation:
+<a href="http://jsteemann.github.io/downloads/code/arango-25-26-shootout-results-25.txt">2.5</a>,
+<a href="http://jsteemann.github.io/downloads/code/arango-25-26-shootout-results-26.txt">2.6</a>.</p>
+
+<p>The results show that ArangoDB 2.6 was consistently faster for <strong>all</strong> AQL queries included in the
+tests.</p>
+
+<p>The queries that improved most in 2.6 over 2.5 include:</p>
+
+<ul>
+<li><code>FILTER</code> conditions: simple <code>FILTER</code> conditions as used in the tests are 3 to 5 times faster</li>
+<li>simple joins using the primary index (<code>_key</code> attribute), hash index or skiplist index are
+2 to 3.5 times faster</li>
+<li>sorting on a string attribute is 2.5 to 3 times faster</li>
+<li>extracting the <code>_key</code> or other top-level attributes from documents is 4 to 5 times faster</li>
+<li><code>COLLECT</code> statements: simple <code>COLLECT</code> statements like the ones in the tests are 7 to 15 times
+faster</li>
+<li>looking up documents using <code>IN</code> lists with a substantial amount of values contained in the <code>IN</code>
+list is 250 to 700 times faster</li>
+</ul>
+
+
+<p>The one thing that did not change much when comparing 2.6 with 2.5 is iterating over a collection
+and returning all its documents unmodified. The speedups observed for this type of query are between
+18 and 25 %, which is the lowest speedup measured by the tests. Still 18 to 25 % seem okay
+as a free take-away.</p>
+
+<p>Speedups were observed for all three test dataset sizes alike. In some cases, the speedups
+varied a bit with the dataset sizes, but it was still in the same ballpark for all three datasets.
+The conclusion is thus that the speedups did not depend much on the dataset sizes.</p>
+
+<h1>Reasons for speedups</h1>
+
+<p>There are several reasons why the 2.6 performance is better than in previous versions. The main
+reason is that we spent much time optimizing some of the crtical AQL code paths. Then we also
+worked on optimizations for specific features, which are used by some of the tested queries.</p>
+
+<p>If you&rsquo;re interested in the details, here they are:</p>
+
+<ul>
+<li><a href="http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing with a hash table</a></li>
+<li><a href="http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements/">AQL functions improvements</a></li>
+<li><a href="http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations/">Subquery optimizations</a></li>
+<li><a href="http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql/">Return value optimization for AQL</a></li>
+<li><a href="http://jsteemann.github.io/blog/2015/05/07/in-list-improvements/">IN-list improvements</a></li>
+</ul>
+
+
+<p>Additionally, UTF-8 string comparisons were boosted by the upgrade from ICU 52 to ICU 54. The
+latter version contains a rewritten and much faster UTF-8-aware strcmp, which we heavily rely on.</p>
+
+<h1>Test methodology</h1>
+
+<p>Each query was run five times on each dataset, so execution time outliers can be identified. The
+results contain the minimum, maximum and average execution times for each query.</p>
+
+<p>Queries were run in isolation on an otherwise idle server. The queries were all run inside the
+server, so there was no HTTP/network traffic involved for shipping query results (note: this
+was also <a href="http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">vastly improved in 2.6</a> but this is
+not the subject of this post).</p>
+
+<p>All tests were run on my local machine, which has 4 cores, 8 CPUs (though the number of CPUs will
+not matter for any of the tests), 12 GB of physical memory, a Linux 3.16 kernel and an Ubuntu 15
+OS. All datasets fit into the main memory, so tests were not I/O-bound.</p>
+
+<p>The ArangoDB versions tested were 2.5.4 and 2.6.0-alpha2. Both versions were hand-compiled with
+g++ 4.9.1 with options <code>CC='gcc' CXX='g++' CFLAGS='-O3 -Wall' CXXFLAGS='-O3 -Wall'</code>.</p>
+
+<p>The complete test script, including the setup of the test data, is contained in
+<a href="http://jsteemann.github.io/downloads/code/arango-25-26-shootout-script.js">this file</a>. It can be run inside <em>arangod</em> by
+typing the following in the server console:</p>
+
+<figure class='code'><figcaption><span>running the tests inside arangod</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">load</span><span class="p">(</span><span class="s2">&quot;/path/to/arango-25-26-shootout-script.js&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note that this needs an <em>arangod</em> started with option <code>--console</code>. Also note that running the
+script will only test the current <em>arangod</em> instance, so the script needs to be run once in a
+2.5 instance and once in 2.6.</p>
+
+<p>Running the script will set up the test collections, run all queries on them (you will need some
+patience for this) and finally print a table like the following:</p>
+
+<figure class='code'><figcaption><span>excerpt from test results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>test name                     | collection  |    runs |     min (s) |     max (s) |     avg (s)
+</span><span class='line'>---------------------------------------------------------------------------------------------------
+</span><span class='line'>collect-number                | 10k         |       5 |      0.0760 |      0.1638 |      0.0943
+</span><span class='line'>collect-number                | 100k        |       5 |      0.8697 |      0.8966 |      0.8803
+</span><span class='line'>collect-number                | 1000k       |       5 |     10.4320 |     10.6597 |     10.5314
+</span><span class='line'>collect-string                | 10k         |       5 |      0.1211 |      0.1319 |      0.1250
+</span><span class='line'>collect-string                | 100k        |       5 |      1.5406 |      1.5974 |      1.5641
+</span><span class='line'>collect-string                | 1000k       |       5 |     19.0708 |     19.0966 |     19.0825
+</span><span class='line'>collect-count-number          | 10k         |       5 |      0.0763 |      0.0792 |      0.0778</span></code></pre></td></tr></table></div></figure>
+
+
+<p>These result columns have the following meanings:</p>
+
+<ul>
+<li><em>test name</em>: name of test</li>
+<li><em>collection</em>: name of collection. <em>10k</em> is a collection with 10,000 documents, <em>100k</em> contains
+ 100,000 documents, and <em>1000k</em> contains 1,000,000 documents.</li>
+<li><em>runs</em>: number of times the query was run</li>
+<li><em>min (s)</em>: minimum query execution time (in seconds)</li>
+<li><em>max (s)</em>: maximum query execution time (in seconds)</li>
+<li><em>avg (s)</em>: average query execution time (in seconds)</li>
+</ul>
+
+
+<h1>Test data</h1>
+
+<p>The test datasets for the three collections are filled with artifical data. Test documents are
+created like this:</p>
+
+<figure class='code'><figcaption><span>test document creation</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">collection</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span>
+</span><span class='line'>  <span class="nx">_key</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span><span class="p">,</span>
+</span><span class='line'>  <span class="nx">value1</span><span class="o">:</span> <span class="nx">i</span><span class="p">,</span>
+</span><span class='line'>  <span class="nx">value2</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span><span class="p">,</span>
+</span><span class='line'>  <span class="nx">value3</span><span class="o">:</span> <span class="nx">i</span><span class="p">,</span>
+</span><span class='line'>  <span class="nx">value4</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span><span class="p">,</span>
+</span><span class='line'>  <span class="nx">value5</span><span class="o">:</span> <span class="nx">i</span><span class="p">,</span>
+</span><span class='line'>  <span class="nx">value6</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span><span class="p">,</span>
+</span><span class='line'>  <span class="nx">value7</span><span class="o">:</span> <span class="nx">i</span> <span class="o">%</span> <span class="nx">g</span><span class="p">,</span>
+</span><span class='line'>  <span class="nx">value8</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="p">(</span><span class="nx">i</span> <span class="o">%</span> <span class="nx">g</span><span class="p">)</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Each document has a <code>_key</code> attribute and 8 other attributes, <code>value1</code> to <code>value8</code>.</p>
+
+<p><code>value1</code>, <code>value3</code>, <code>value5</code> and <code>value7</code> are numeric attributes, the other attributes contain
+string values. The attributes <code>value1</code> to <code>value6</code> contain unique values. The attributes <code>value7</code>
+and <code>value8</code> contain repeating values. They are used for <code>COLLECT</code> queries.</p>
+
+<p><code>value1</code> and <code>value2</code> are each indexed with a hash index. <code>value3</code> and <code>value4</code> are each indexed with
+a skiplist index. <code>value5</code> to <code>value8</code> are not indexed. This way queries can be run on the same values,
+but with different indexes and even without indexes.</p>
+
+<h1>Test cases</h1>
+
+<p>The test cases cover the following queries:</p>
+
+<ul>
+<li><em>collect-number</em> and <em>collect-string</em>: run <code>COLLECT</code> on a repeating attribute, which is either
+numeric or a string</li>
+<li><em>collect-count-number</em> and <em>collect-count-string</em>: ditto, but also calculate the group lengths
+using <code>WITH COUNT INTO</code></li>
+<li><em>subquery</em>: run a single-document subquery for each document of the original collection</li>
+<li><em>concat</em>: for each document in the collection, concat the document <code>_key</code> attribute with another
+ document attribute using <code>CONCAT()</code></li>
+<li><em>merge</em>: for each document in the collection, merge the document with another object using <code>MERGE()</code></li>
+<li><em>keep</em>: for each document in the collection, remove all but a few named attributes from it using
+<code>KEEP()</code></li>
+<li><em>unset</em>: for each document in the collection, remove a few named attributes from it using <code>UNSET()</code></li>
+<li><em>min-number</em> and <em>min-string</em>: return the minimum value of a specific attribute from all documents in
+ the collection, which is either numeric or a string. This uses <code>MIN()</code></li>
+<li><em>max-number</em> and <em>max-string</em>: ditto, but using <code>MAX()</code></li>
+<li><em>sort-number</em> and <em>sort-string</em>: sort all documents in the collection by a non-indexed attribute,
+ which is either numeric or a string</li>
+<li><em>filter-number</em> and <em>filter-string</em>: filter all documents in the collection using a non-indexed attribute,
+ which is either numeric or a string</li>
+<li><em>extract-doc</em>: return all documents in the collection unmodified</li>
+<li><em>extract-key</em>: return the <code>_key</code> attribute of all documents in the collection</li>
+<li><em>extract-number</em> and <em>extract-string</em>: return an attribute from all documents in the collection,
+ which is either numeric or a string</li>
+<li><em>join-key</em>: for each document in the collection, perform a join on the <code>_key</code> attribute on the collection
+ itself (i.e. <code>FOR c1 IN @@c FOR c2 IN @@c FILTER c1._key == c2._key RETURN c1</code>)</li>
+<li><em>join-id</em>: ditto, but perform the join using the <code>_id</code> attribute</li>
+<li><em>join-hash-number</em> and <em>join-hash-string</em>: ditto, but join using a hash index on a numeric or string
+ attribute</li>
+<li><em>join-skiplist-number</em> and <em>join-skiplist-string</em>: ditto, but join using a skiplist index on a numeric or
+ string attribute</li>
+<li><em>lookup-key</em>, <em>lookup-hash-number</em>, <em>lookup-hash-string</em>, <em>lookup-skiplist-number</em>, <em>lookup-skiplist-string</em>:
+ compile an IN-list of 10,000 lookup values and search these 10,000 documents in the collection using
+ either the primary index (<code>_key</code> attribute), a hash index or a skiplist index. The latter two are tested
+ on numeric and string attributes.</li>
+</ul>
+
+
+<p>Further implementation details can be checked in the <a href="http://jsteemann.github.io/downloads/code/arango-25-26-shootout-script.js">test script</a>.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Less Intrusive Linking]]></title>
@@ -4104,207 +4351,6 @@ It cannot help here, because the new code was never compiled before and thus in 
 
 <p>Additionally, <code>make</code> is smart enough on its own to only re-build the parts of the program that
 have actually changed or depend on the changes you made.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Using ArangoDB as a Logstash Output]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/02/05/using-arangodb-as-a-logstash-output/"/>
-    <updated>2015-02-05T23:39:23+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/02/05/using-arangodb-as-a-logstash-output</id>
-    <content type="html"><![CDATA[<p>Inspired by a question on <a href="http://stackoverflow.com/questions/28314711/logstash-output-for-arangodb">StackOverflow</a>,
-I did some investigation about how to make <a href="http://www.elasticsearch.org/overview/logstash/">Logstash</a>
-send log events to ArangoDB.</p>
-
-<p>There is no dedicated Logstash output plugin for ArangoDB on the
-<a href="https://github.com/logstash-plugins">Logstash plugins page</a>, so I had already accepted to write
-one on my own.</p>
-
-<p>Browsing the plugins page for inspiration, I found an
-<a href="https://github.com/logstash-plugins/logstash-output-http">HTTP output plugin for Logstash</a>.
-It seems to be general enough that it can send the log event in JSON format to any HTTP-speaking backend.</p>
-
-<p>ArangoDB&rsquo;s API is JSON over HTTP, so it sounded like a perfect match. I briefly tried it out and
-it seemed to work fine.</p>
-
-<!-- more -->
-
-
-<p>Here are the steps I carried out to connect the two:</p>
-
-<h2>Prepare an ArangoDB server</h2>
-
-<p>I started an ArangoDB server with default configuration (binding to IP address 127.0.0.1 and port
-8529). I then used the ArangoShell to create a collection named <code>logstash</code>:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;logstash&quot;</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This collection will be used for storing the log events sent by Logstash.</p>
-
-<h2>Download Logstash</h2>
-
-<p>In order to run Logstash, you must have Java installed, which I assume you already have.</p>
-
-<p>Now it&rsquo;s time to download Logstash. You can download and unpack it with the command following.
-The current version is 1.5.0 beta1 (<strong>warning: 100 MB download!</strong>):</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget <span class="s2">&quot;http://download.elasticsearch.org/logstash/logstash/logstash-1.5.0.beta1.tar.gz&quot;</span>
-</span><span class='line'>tar xvfz logstash-1.5.0.beta1.tar.gz
-</span><span class='line'><span class="nb">cd </span>Downloads/logstash-1.5.0.beta1
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Connecting Logstash with ArangoDB</h2>
-
-<p>We are now ready to start Logstash. I&rsquo;ll start it in a mode that will send all input from
-stdin as log events to ArangoDB. I am using the <code>stdin</code> input plugin, and the <code>http</code> output
-plugin for this. The <code>http</code> output plugin needs to know the URL to send the log events to.</p>
-
-<p>The URL is ArangoDB&rsquo;s base URL plus the REST API method for storing a single document, with
-the name of the target collection (<code>logstash</code>) appended.</p>
-
-<p>Here is the full command:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>bin/logstash -e <span class="s1">&#39;input { stdin } } output { http { http_method =&gt; &quot;post&quot; url =&gt; &quot;http://127.0.0.1:8529/_api/document?collection=logstash&quot; format =&gt; &quot;json&quot; } }&#39;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Logstash may need a few seconds to start. The HTTP plugin will print a message about itself
-being a milestone 1 release only, but it works. Anything entered in the terminal should now be
-sent as a log event to ArangoDB.</p>
-
-<p>For example, type <code>fingers crossed!</code> and hit enter:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>Using milestone 1 output plugin <span class="s1">&#39;http&#39;</span>. This plugin should work, but would benefit from use by folks like you. Please <span class="nb">let </span>us know <span class="k">if </span>you find bugs or have suggestions on how to improve this plugin.  For more information on plugin milestones, see http://logstash.net/docs/1.5.0.beta1/plugin-milestones <span class="o">{</span>:level<span class="o">=</span>&gt;:warn<span class="o">}</span>
-</span><span class='line'>fingers crossed!
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Let&rsquo;s check if the log event made it into ArangoDB. I have used the ArangoShell for this:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">logstash</span><span class="p">.</span><span class="nx">toArray</span><span class="p">()</span>
-</span><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="s2">&quot;_id&quot;</span> <span class="o">:</span> <span class="s2">&quot;logstash/3507690866496&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="s2">&quot;_key&quot;</span> <span class="o">:</span> <span class="s2">&quot;3507690866496&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="s2">&quot;_rev&quot;</span> <span class="o">:</span> <span class="s2">&quot;3507690866496&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="s2">&quot;@version&quot;</span> <span class="o">:</span> <span class="s2">&quot;1&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="s2">&quot;host&quot;</span> <span class="o">:</span> <span class="s2">&quot;kalk&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="s2">&quot;message&quot;</span> <span class="o">:</span> <span class="s2">&quot;fingers crossed!&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="s2">&quot;@timestamp&quot;</span> <span class="o">:</span> <span class="s2">&quot;2015-02-05T23:17:39.982Z&quot;</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>Querying log events</h3>
-
-<p>So we&rsquo;re getting log events in from Logstash.</p>
-
-<p>We can use AQL to query the received log events in ArangoDB. But before we run a query,
-we probably want to index the <code>@timestamp</code> attribute of the events, so we can efficiently
-find and filter them by date and time:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">logstash</span><span class="p">.</span><span class="nx">ensureSkiplist</span><span class="p">(</span><span class="s2">&quot;@timestamp&quot;</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Now we can run the following AQL query to find the latest 5 log events:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR l IN logstash 
-</span><span class='line'>  FILTER l.`@timestamp` &lt;= '2099' /* arbitrary max value */ 
-</span><span class='line'>  SORT l.`@timestamp` DESC 
-</span><span class='line'>  LIMIT 5 
-</span><span class='line'>  RETURN l</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Note: the <code>@timestamp</code> attribute name needs to be enclosed in backticks because a <code>@</code> prefix
-is used to designate bind parameters in AQL. Enclosing the names in backticks will make AQL treat
-them as attribute name literals.</p>
-
-<p>For the simple types of events triggered by the <code>stdin</code> input plugin, this is already sufficient.
-However, log events may look different, depending on the type of input plugins that are used. For
-other inputs, other attributes may need to be indexed, too.</p>
-
-<h3>Adjusting IP, port and authentication</h3>
-
-<p>Above I have used the default configuration of ArangoDB, that is IP 127.0.0.1, port 8529, and no
-authentication. You probably want to change this.</p>
-
-<p>To make ArangoDB listen on any other IP address or port, change the <code>endpoint</code> setting in its
-configuration file <code>/etc/arangod.conf</code>. You may also want to set the <code>disable-authentication</code>
-flag to <code>false</code>, meaning authentication is turned on.</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>[server]
-</span><span class='line'>endpoint = tcp://192.168.173.13:9999
-</span><span class='line'>disable-authentication = false</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Before activating the new configuration, let&rsquo;s create a dedicated ArangoDB user <code>logstash</code>.
-I will also change the default password of the <code>root</code> user. The following ArangoShell commands
-do this:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/users&quot;</span><span class="p">).</span><span class="nx">save</span><span class="p">(</span><span class="s2">&quot;logstash&quot;</span><span class="p">,</span> <span class="s2">&quot;secret-logging&quot;</span><span class="p">,</span> <span class="kc">true</span><span class="p">);</span>
-</span><span class='line'><span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/users&quot;</span><span class="p">).</span><span class="nx">save</span><span class="p">(</span><span class="s2">&quot;root&quot;</span><span class="p">,</span> <span class="s2">&quot;nobody-will-ever-guess&quot;</span><span class="p">,</span> <span class="kc">true</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>To make logstash use the above settings, we have to adjust the command-line:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>bin/logstash -e <span class="s1">&#39;input { stdin } } output { http { http_method =&gt; &quot;post&quot; url =&gt; &quot;http://logstash:secret-logging@192.168.173.13:9999/_api/document?collection=logstash&quot; format =&gt; &quot;json&quot; } }&#39;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>Pitfalls</h3>
-
-<p>Though Logstash itself can write a logfile (<code>--log</code> option) and can provide debug information
-(<code>--debug</code>), I did not get it log or print errors when misconfiguring the HTTP output plugin.
-For example, specifying a wrong target URL will make all HTTP requests from Logstash to ArangoDB
-silently fail, with the log events being lost if not stored elsewhere.</p>
-
-<p>Maybe this is configurable somewhere, but then I didn&rsquo;t find it. It is also possible that this
-will be fixed in some future release.</p>
-
-<h3>Disclaimer</h3>
-
-<p>Please feel free to use this blog as a starting point but not as an endorsement.</p>
-
-<p>Though I think it will work perfectly, I am not at all an expert for Logstash or its plugins.
-I didn&rsquo;t spend much time with it yet, and I may have overlooked important things. So should you
-be interested in using it, please conduct your own tests first.</p>
 ]]></content>
   </entry>
   
