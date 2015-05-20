@@ -2,217 +2,217 @@
 <urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/06/03/schema-handling-in-arangodb/</loc>
-        <lastmod>2014-08-15T01:52:55+02:00</lastmod>
+        <lastmod>2015-05-20T22:59:43+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/08/06/how-arangodbs-write-ahead-log-works/</loc>
-        <lastmod>2014-08-15T01:53:58+02:00</lastmod>
+        <lastmod>2015-05-20T22:59:51+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/
         </loc>
-        <lastmod>2014-08-15T01:58:20+02:00</lastmod>
+        <lastmod>2015-05-20T22:59:57+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/08/14/why-json/</loc>
-        <lastmod>2014-08-20T22:09:30+02:00</lastmod>
+        <lastmod>2015-05-20T23:00:07+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/08/20/speeding-up-server-side-operations/</loc>
-        <lastmod>2014-08-31T03:30:04+02:00</lastmod>
+        <lastmod>2015-05-20T23:00:40+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed/
         </loc>
-        <lastmod>2014-08-31T03:24:24+02:00</lastmod>
+        <lastmod>2015-05-20T23:00:54+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/10/15/handling-binary-data-in-foxx/</loc>
-        <lastmod>2014-10-16T02:16:30+02:00</lastmod>
+        <lastmod>2015-05-20T23:01:09+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/</loc>
-        <lastmod>2015-01-30T00:15:00+01:00</lastmod>
+        <lastmod>2015-05-20T23:01:27+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/
         </loc>
-        <lastmod>2014-10-30T23:06:36+01:00</lastmod>
+        <lastmod>2015-05-20T23:01:48+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/
         </loc>
-        <lastmod>2014-12-15T22:19:02+01:00</lastmod>
+        <lastmod>2015-05-20T23:02:05+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/
         </loc>
-        <lastmod>2014-10-24T01:44:15+02:00</lastmod>
+        <lastmod>2015-05-20T23:02:29+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/
         </loc>
-        <lastmod>2014-10-31T00:50:15+01:00</lastmod>
+        <lastmod>2015-05-20T23:02:54+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/11/04/setting-up-test-data/</loc>
-        <lastmod>2014-11-05T01:28:02+01:00</lastmod>
+        <lastmod>2015-05-20T23:03:11+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/11/07/improved-non-unique-hash-indexes/</loc>
-        <lastmod>2014-11-07T22:22:55+01:00</lastmod>
+        <lastmod>2015-05-20T23:03:26+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2014/11/07/a-tour-around-the-aql-query-optimizer/
         </loc>
-        <lastmod>2014-11-10T12:26:31+01:00</lastmod>
+        <lastmod>2015-05-20T23:03:38+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/12/12/aql-improvements-for-24/</loc>
-        <lastmod>2014-12-21T17:13:34+01:00</lastmod>
+        <lastmod>2015-05-20T23:03:52+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/12/14/99-bottles-of-beer/</loc>
-        <lastmod>2014-12-14T13:20:46+01:00</lastmod>
+        <lastmod>2015-05-20T23:04:06+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/12/19/using-es6-features-in-arangodb/</loc>
-        <lastmod>2015-02-26T13:25:24+01:00</lastmod>
+        <lastmod>2015-05-20T23:04:27+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2015/01/13/returning-results-from-aql-insert-update-remove-operations/
         </loc>
-        <lastmod>2015-01-14T01:37:54+01:00</lastmod>
+        <lastmod>2015-05-20T22:52:01+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2015/01/23/explaining-aql-queries-the-fancy-way/
         </loc>
-        <lastmod>2015-01-30T00:12:52+01:00</lastmod>
+        <lastmod>2015-05-20T22:52:10+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2015/01/28/using-custom-visitors-in-aql-graph-traversals/
         </loc>
-        <lastmod>2015-02-03T20:24:51+01:00</lastmod>
+        <lastmod>2015-05-20T22:52:25+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/</loc>
-        <lastmod>2015-01-31T19:40:17+01:00</lastmod>
+        <lastmod>2015-05-20T22:52:33+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/
         </loc>
-        <lastmod>2015-02-26T11:50:21+01:00</lastmod>
+        <lastmod>2015-05-20T22:52:46+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/02/05/using-arangodb-as-a-logstash-output/</loc>
-        <lastmod>2015-02-06T01:16:21+01:00</lastmod>
+        <lastmod>2015-05-20T22:52:54+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2015/02/07/using-ccache-when-working-with-different-branches/
         </loc>
-        <lastmod>2015-02-07T18:04:07+01:00</lastmod>
+        <lastmod>2015-05-20T22:53:26+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25/</loc>
-        <lastmod>2015-02-26T11:53:16+01:00</lastmod>
+        <lastmod>2015-05-20T22:54:20+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/02/26/more-es6-features/</loc>
-        <lastmod>2015-02-26T13:31:03+01:00</lastmod>
+        <lastmod>2015-05-20T22:54:55+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb/</loc>
-        <lastmod>2015-03-11T13:34:07+01:00</lastmod>
+        <lastmod>2015-05-20T22:55:07+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/03/27/preview-of-the-upsert-command/</loc>
-        <lastmod>2015-03-30T09:18:38+02:00</lastmod>
+        <lastmod>2015-05-20T22:55:35+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries/
         </loc>
-        <lastmod>2015-03-28T00:18:47+01:00</lastmod>
+        <lastmod>2015-05-20T22:55:26+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/</loc>
-        <lastmod>2015-04-05T01:12:04+02:00</lastmod>
+        <lastmod>2015-05-20T22:55:58+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/</loc>
-        <lastmod>2015-04-05T01:09:02+02:00</lastmod>
+        <lastmod>2015-05-20T22:56:09+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/04/14/updating-documents-with-arangoimp/</loc>
-        <lastmod>2015-04-14T20:59:47+02:00</lastmod>
+        <lastmod>2015-05-20T22:56:21+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/04/20/creating-highscore-lists/</loc>
-        <lastmod>2015-04-21T02:33:56+02:00</lastmod>
+        <lastmod>2015-05-20T22:56:34+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table/</loc>
-        <lastmod>2015-05-04T12:04:32+02:00</lastmod>
+        <lastmod>2015-05-20T22:56:52+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements/</loc>
-        <lastmod>2015-05-04T12:04:19+02:00</lastmod>
+        <lastmod>2015-05-20T22:57:00+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2015/04/24/exporting-data-for-offline-processing/
         </loc>
-        <lastmod>2015-05-04T12:02:36+02:00</lastmod>
+        <lastmod>2015-05-20T22:57:23+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql/</loc>
-        <lastmod>2015-05-04T12:04:49+02:00</lastmod>
+        <lastmod>2015-05-20T22:57:36+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations/</loc>
-        <lastmod>2015-05-04T15:28:46+02:00</lastmod>
+        <lastmod>2015-05-20T22:57:43+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/05/07/fulltext-index-enhancements/</loc>
-        <lastmod>2015-05-07T16:29:04+02:00</lastmod>
+        <lastmod>2015-05-20T22:58:21+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/05/07/in-list-improvements/</loc>
-        <lastmod>2015-05-07T17:37:22+02:00</lastmod>
+        <lastmod>2015-05-20T22:58:31+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/05/07/bulk-document-lookups/</loc>
-        <lastmod>2015-05-07T18:34:52+02:00</lastmod>
+        <lastmod>2015-05-20T22:58:07+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking/</loc>
-        <lastmod>2015-05-07T20:28:58+02:00</lastmod>
+        <lastmod>2015-05-20T23:21:07+02:00</lastmod>
     </url>
     <url>
         <loc>
             http://jsteemann.github.io/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/
         </loc>
-        <lastmod>2015-05-20T22:05:52+02:00</lastmod>
+        <lastmod>2015-05-20T22:59:21+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/about/</loc>
-        <lastmod>2015-05-20T22:05:52+02:00</lastmod>
+        <lastmod>2015-05-20T23:21:07+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2015-05-20T22:05:52+02:00</lastmod>
+        <lastmod>2015-05-20T23:21:07+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -220,6 +220,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2015-05-20T22:05:52+02:00</lastmod>
+        <lastmod>2015-05-20T23:21:07+02:00</lastmod>
     </url>
 </urlset>
