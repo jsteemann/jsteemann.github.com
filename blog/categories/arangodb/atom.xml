@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-21T00:30:58+02:00</updated>
+  <updated>2015-05-26T11:37:48+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,149 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Diffing Two Documents in AQL]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/26/diffing-two-documents-in-aql/"/>
+    <updated>2015-05-26T11:08:31+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/26/diffing-two-documents-in-aql</id>
+    <content type="html"><![CDATA[<p>I just stumbled upon a <a href="https://www.arangodb.com/2015/04/aql-functions-improvements/">comment in the ArangoDB blog</a>
+asking how to create a diff of two documents with AQL.</p>
+
+<p>Though there is no built-in AQL function to diff two documents, it is easily possible to build your own like in
+the following query.</p>
+
+<!-- more -->
+
+
+<p>```plain AQL code for diffing two documents
+/<em> input document 1</em>/
+LET doc1 = {
+  &ldquo;foo&rdquo; : &ldquo;bar&rdquo;,
+  &ldquo;a&rdquo; : 1,
+  &ldquo;b&rdquo; : 2
+}</p>
+
+<p>/<em> input document 2 </em>/
+LET doc2 = {
+  &ldquo;foo&rdquo; : &ldquo;baz&rdquo;,
+  &ldquo;a&rdquo; : 2,
+  &ldquo;c&rdquo; : 3
+}</p>
+
+<p>/<em> collect attributes present in doc1, but missing in doc2 </em>/
+LET missing = (
+  FOR key IN ATTRIBUTES(doc1)</p>
+
+<pre><code>FILTER ! HAS(doc2, key)
+RETURN {
+  [ key ]: doc1[key]
+}
+</code></pre>
+
+<p>)</p>
+
+<p>/<em> collect attributes present in both docs, but that have different values </em>/
+LET changed = (
+  FOR key IN ATTRIBUTES(doc1)</p>
+
+<pre><code>FILTER HAS(doc2, key) &amp;&amp; doc1[key] != doc2[key]
+RETURN {
+  [ key ] : {
+    old: doc1[key],
+    new: doc2[key]
+  }
+}
+</code></pre>
+
+<p>)</p>
+
+<p>/<em> collect attributes present in doc2, but missing in doc1 </em>/
+LET added = (
+  FOR key IN ATTRIBUTES(doc2)</p>
+
+<pre><code>FILTER ! HAS(doc1, key)
+RETURN {
+  [ key ] : doc2[key]
+}
+</code></pre>
+
+<p>)</p>
+
+<p>/<em> return final result </em>/
+RETURN {
+  &ldquo;missing&rdquo; : missing,
+  &ldquo;changed&rdquo; : changed,
+  &ldquo;added&rdquo; : added
+}
+```</p>
+
+<p>Note: the query may look a bit lengthy, but much of that is due to formatting. A more terse
+version can be found below.</p>
+
+<p>The above query will return a document with three attributes:</p>
+
+<ul>
+<li><em>missing</em>: contains all attributes only present in first document (i.e. missing in second document)</li>
+<li><em>changed</em>: contains all attributes present in both documents that have different values</li>
+<li><em>added</em>: contains all attributes only present in second document (i.e. missing in first document)</li>
+</ul>
+
+
+<p>For the two example documents it will return:
+```json diff query result
+[
+  {</p>
+
+<pre><code>"missing" : [ 
+  { 
+    "b" : 2 
+  } 
+], 
+"changed" : [ 
+  { 
+    "foo" : { 
+      "old" : "bar", 
+      "new" : "baz" 
+    } 
+  }, 
+  { 
+    "a" : { 
+      "old" : 1, 
+      "new" : 2 
+    } 
+  } 
+], 
+"added" : [ 
+  { 
+    "c" : 3 
+  } 
+] 
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<p>That output format was the first that came to my mind. It is of course possible to adjust the query so
+it produces a different output format.</p>
+
+<p>Following is a version of the same query that can be invoked from JavaScript easily. It passes the two
+documents as bind parameters and calls <code>db._query</code>. The query is now a one-liner (less readable but easier
+to copy&amp;paste):</p>
+
+<p>```js
+bindVariables = {
+  doc1 : { &ldquo;foo&rdquo; : &ldquo;bar&rdquo;, &ldquo;a&rdquo; : 1, &ldquo;b&rdquo; : 2 },
+  doc2 : { &ldquo;foo&rdquo; : &ldquo;baz&rdquo;, &ldquo;a&rdquo; : 2, &ldquo;c&rdquo; : 3 }
+};</p>
+
+<p>query = &ldquo;LET doc1 = @doc1, doc2 = @doc2, missing = (FOR key IN ATTRIBUTES(doc1) FILTER ! HAS(doc2, key) RETURN { [ key ]: doc1[key] }), changed = (FOR key IN ATTRIBUTES(doc1) FILTER HAS(doc2, key) &amp;&amp; doc1[key] != doc2[key] RETURN { [ key ] : { old: doc1[key], new: doc2[key] } }), added = (FOR key IN ATTRIBUTES(doc2) FILTER ! HAS(doc1, key) RETURN { [ key ] : doc2[key] }) RETURN { missing : missing, changed : changed, added : added }&rdquo;;</p>
+
+<p>result = db._query(query, bindVariables).toArray();
+```</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[The Great AQL Shootout: ArangoDB 2.5 vs 2.6]]></title>
@@ -651,76 +794,6 @@ c.fulltext(&ldquo;value&rdquo;, &ldquo;renard&rdquo;).toArray();
 <p>  }
 ]
 ```</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Subquery Optimizations]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations/"/>
-    <updated>2015-05-04T13:26:00+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations</id>
-    <content type="html"><![CDATA[<p>This is another post demonstrating some of the AQL query performance improvements
-that can be expected in ArangoDB 2.6. Specifically, this post is about an optimization
-for subqueries. AQL queries with multiple subqueries will likely benefit from it.</p>
-
-<!-- more -->
-
-
-<p>The following example queries use the same <code>users</code> collection with 100,000 documents
-that was used in the <a href="/blog/2015/05/04/return-value-optimization-for-aql/">previous post about return value optimizations</a>.
-Again, the source data for the collection can be found <a href="/downloads/code/users-100000.json.tar.gz">here</a>.</p>
-
-<p>We&rsquo;ll start with a query that uses a single subquery extracting all users from the
-collection into a flat result array:</p>
-
-<p><code>plain example query with single subquery
-RETURN [
-  (FOR u IN users RETURN u)
-]
-</code></p>
-
-<p>This query is equally fast with ArangoDB 2.5 and 2.6, no changes here.</p>
-
-<p>Let&rsquo;s ramp it up to using two subqueries, one for users with a <code>gender</code> attribute value
-of <code>male</code>, and one for users with <code>gender</code> attribute value <code>female</code>. No indexes were used
-for the extraction in 2.5 nor 2.6:</p>
-
-<p><code>plain example query with two subqueries
-RETURN [
-  (FOR u IN users FILTER u.gender == 'male' RETURN u),
-  (FOR u IN users FILTER u.gender == 'female' RETURN u)
-]
-</code></p>
-
-<p>The query takes 16.6 seconds to execute in 2.5, but only 2.95 seconds with ArangoDB 2.6.
-This 80 % reduction in execution time is due to ArangoDB 2.6 being a bit smarter about
-subqueries than 2.5 is.</p>
-
-<p>In the above query, the two subqueries are independent, so not only can they be executed in
-any order, but they also do not rely on each other&rsquo;s results. ArangoDB 2.6 will detect that
-and avoid copying variables and intermediate results into subqueries if they are actually not
-needed there. 2.5 copied all variables into subqueries unconditionally, even if variables
-were not needed there.</p>
-
-<p>In 2.6, any AQL query with multiple subqueries will benefit from this optimization. The
-performance improvements will be greater if subqueries late in the execution pipeline have a lot of
-intermediate results created in front of them, but do not rely on these intermediate results.</p>
-
-<p>Another nice example for a 2.6 speedup is extracting a single attribute per subquery, as is done
-for the <code>name</code> attribute in the following query:</p>
-
-<p><code>plain extracting a single attribute in two subqueries
-RETURN [
-  (FOR u IN users FILTER u.gender == 'male' RETURN u.name),
-  (FOR u IN users FILTER u.gender == 'female' RETURN u.name)
-]
-</code></p>
-
-<p>This takes 42 seconds to execute in 2.5, and only 0.86 seconds in 2.6. This is a more than
-95 % reduction in execution time. It is caused by a mix of factors, one of them again being
-the subquery optimization that avoids copying unneeded intermediate results.</p>
-
-<p>Enjoy!</p>
 ]]></content>
   </entry>
   

@@ -1,0 +1,473 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>Diffing Two Documents in AQL - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="I just stumbled upon a comment in the ArangoDB blog
+asking how to create a diff of two documents with AQL. Though there is no built-in AQL function &hellip;">
+  <meta name="keywords" content="ArangoDB, database, AQL, Diff">
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/05/26/diffing-two-documents-in-aql">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>{ "subject" : "ArangoDB", "tags": [ "multi-model", "nosql", "database" ] }</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Diffing Two Documents in AQL</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-05-26T11:08:31+02:00" pubdate data-updated="true">May 26<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>I just stumbled upon a <a href="https://www.arangodb.com/2015/04/aql-functions-improvements/">comment in the ArangoDB blog</a>
+asking how to create a diff of two documents with AQL.</p>
+
+<p>Though there is no built-in AQL function to diff two documents, it is easily possible to build your own like in
+the following query.</p>
+
+<!-- more -->
+
+
+
+
+<figure class='code'><figcaption><span>AQL code for diffing two documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>/* input document 1*/
+</span><span class='line'>LET doc1 = { 
+</span><span class='line'>  "foo" : "bar", 
+</span><span class='line'>  "a" : 1, 
+</span><span class='line'>  "b" : 2 
+</span><span class='line'>}
+</span><span class='line'>
+</span><span class='line'>/* input document 2 */
+</span><span class='line'>LET doc2 = { 
+</span><span class='line'>  "foo" : "baz", 
+</span><span class='line'>  "a" : 2, 
+</span><span class='line'>  "c" : 3 
+</span><span class='line'>}
+</span><span class='line'>
+</span><span class='line'>/* collect attributes present in doc1, but missing in doc2 */
+</span><span class='line'>LET missing = (
+</span><span class='line'>  FOR key IN ATTRIBUTES(doc1)
+</span><span class='line'>    FILTER ! HAS(doc2, key)
+</span><span class='line'>    RETURN {
+</span><span class='line'>      [ key ]: doc1[key]
+</span><span class='line'>    }
+</span><span class='line'>)
+</span><span class='line'>
+</span><span class='line'>/* collect attributes present in both docs, but that have different values */
+</span><span class='line'>LET changed = (
+</span><span class='line'>  FOR key IN ATTRIBUTES(doc1)
+</span><span class='line'>    FILTER HAS(doc2, key) && doc1[key] != doc2[key]
+</span><span class='line'>    RETURN {
+</span><span class='line'>      [ key ] : {
+</span><span class='line'>        old: doc1[key],
+</span><span class='line'>        new: doc2[key]
+</span><span class='line'>      }
+</span><span class='line'>    }
+</span><span class='line'>)
+</span><span class='line'>
+</span><span class='line'>/* collect attributes present in doc2, but missing in doc1 */
+</span><span class='line'>LET added = (
+</span><span class='line'>  FOR key IN ATTRIBUTES(doc2)
+</span><span class='line'>    FILTER ! HAS(doc1, key)
+</span><span class='line'>    RETURN {
+</span><span class='line'>      [ key ] : doc2[key]
+</span><span class='line'>    }
+</span><span class='line'>)
+</span><span class='line'>
+</span><span class='line'>/* return final result */
+</span><span class='line'>RETURN {
+</span><span class='line'>  "missing" : missing,
+</span><span class='line'>  "changed" : changed,
+</span><span class='line'>  "added" : added
+</span><span class='line'>}</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note: the query may look a bit lengthy, but much of that is due to formatting. A more terse
+version can be found below.</p>
+
+<p>The above query will return a document with three attributes:</p>
+
+<ul>
+<li><em>missing</em>: contains all attributes only present in first document (i.e. missing in second document)</li>
+<li><em>changed</em>: contains all attributes present in both documents that have different values</li>
+<li><em>added</em>: contains all attributes only present in second document (i.e. missing in first document)</li>
+</ul>
+
+
+<p>For the two example documents it will return:</p>
+
+<figure class='code'><figcaption><span>diff query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="nt">&quot;missing&quot;</span> <span class="p">:</span> <span class="p">[</span>
+</span><span class='line'>      <span class="p">{</span>
+</span><span class='line'>        <span class="nt">&quot;b&quot;</span> <span class="p">:</span> <span class="mi">2</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">],</span>
+</span><span class='line'>    <span class="nt">&quot;changed&quot;</span> <span class="p">:</span> <span class="p">[</span>
+</span><span class='line'>      <span class="p">{</span>
+</span><span class='line'>        <span class="nt">&quot;foo&quot;</span> <span class="p">:</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nt">&quot;old&quot;</span> <span class="p">:</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span>
+</span><span class='line'>          <span class="nt">&quot;new&quot;</span> <span class="p">:</span> <span class="s2">&quot;baz&quot;</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>      <span class="p">},</span>
+</span><span class='line'>      <span class="p">{</span>
+</span><span class='line'>        <span class="nt">&quot;a&quot;</span> <span class="p">:</span> <span class="p">{</span>
+</span><span class='line'>          <span class="nt">&quot;old&quot;</span> <span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'>          <span class="nt">&quot;new&quot;</span> <span class="p">:</span> <span class="mi">2</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">],</span>
+</span><span class='line'>    <span class="nt">&quot;added&quot;</span> <span class="p">:</span> <span class="p">[</span>
+</span><span class='line'>      <span class="p">{</span>
+</span><span class='line'>        <span class="nt">&quot;c&quot;</span> <span class="p">:</span> <span class="mi">3</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>    <span class="p">]</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>That output format was the first that came to my mind. It is of course possible to adjust the query so
+it produces a different output format.</p>
+
+<p>Following is a version of the same query that can be invoked from JavaScript easily. It passes the two
+documents as bind parameters and calls <code>db._query</code>. The query is now a one-liner (less readable but easier
+to copy&amp;paste):</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">bindVariables</span> <span class="o">=</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">doc1</span> <span class="o">:</span> <span class="p">{</span> <span class="s2">&quot;foo&quot;</span> <span class="o">:</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span> <span class="o">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;b&quot;</span> <span class="o">:</span> <span class="mi">2</span> <span class="p">},</span>
+</span><span class='line'>  <span class="nx">doc2</span> <span class="o">:</span> <span class="p">{</span> <span class="s2">&quot;foo&quot;</span> <span class="o">:</span> <span class="s2">&quot;baz&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span> <span class="o">:</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;c&quot;</span> <span class="o">:</span> <span class="mi">3</span> <span class="p">}</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s2">&quot;LET doc1 = @doc1, doc2 = @doc2, missing = (FOR key IN ATTRIBUTES(doc1) FILTER ! HAS(doc2, key) RETURN { [ key ]: doc1[key] }), changed = (FOR key IN ATTRIBUTES(doc1) FILTER HAS(doc2, key) &amp;&amp; doc1[key] != doc2[key] RETURN { [ key ] : { old: doc1[key], new: doc2[key] } }), added = (FOR key IN ATTRIBUTES(doc2) FILTER ! HAS(doc1, key) RETURN { [ key ] : doc2[key] }) RETURN { missing : missing, changed : changed, added : added }&quot;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">result</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">,</span> <span class="nx">bindVariables</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-05-26T11:08:31+02:00" pubdate data-updated="true">May 26<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/05/26/diffing-two-documents-in-aql/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/05/26/diffing-two-documents-in-aql/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/" title="Previous Post: The great AQL shootout: ArangoDB 2.5 vs 2.6">&laquo; The great AQL shootout: ArangoDB 2.5 vs 2.6</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/05/26/diffing-two-documents-in-aql/">Diffing Two Documents in AQL</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">The Great AQL Shootout: ArangoDB 2.5 vs 2.6</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/07/less-intrusive-linking/">Less Intrusive Linking</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/07/bulk-document-lookups/">Bulk Document Lookups</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/07/in-list-improvements/">IN-list Improvements</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/07/fulltext-index-enhancements/">Fulltext Index Enhancements</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (22)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (38)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (3)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (15)</a></li><li><a href='/blog/categories/php/'>PHP (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (27)</li><ul class="month_list"><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
