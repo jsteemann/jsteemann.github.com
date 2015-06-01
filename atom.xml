@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-26T11:37:48+02:00</updated>
+  <updated>2015-06-01T14:30:09+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,87 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[On Getting Unique Values]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/06/01/on-getting-unique-values/"/>
+    <updated>2015-06-01T13:27:13+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/06/01/on-getting-unique-values</id>
+    <content type="html"><![CDATA[<p>While paging through the issues in the <a href="https://github.com/arangodb/arangodb">ArangoDB issue tracker</a>
+I came across <a href="https://github.com/arangodb/arangodb/issues/987">issue #987</a>, titled
+<em>Trying to get distinct document attribute values from a large collection fails</em>.</p>
+
+<p>The issue was opened around 10 months ago when ArangoDB 2.2 was around. We improved AQL performance
+somewhat since then, so I was eager to see how the query would perform in ArangoDB 2.6, especially
+when comparing it to 2.2.</p>
+
+<!-- more -->
+
+
+<p>For reproduction I quickly put together some example data to run the query on:</p>
+
+<figure class='code'><figcaption><span>setting up example data</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">db</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb&quot;</span><span class="p">).</span><span class="nx">db</span><span class="p">;</span>
+</span><span class='line'><span class="kd">var</span> <span class="nx">c</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="mi">4</span> <span class="o">*</span> <span class="mi">1000</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">c</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">_key</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">value</span><span class="o">:</span> <span class="p">(</span><span class="nx">i</span> <span class="o">%</span> <span class="mi">100</span><span class="p">)</span> <span class="p">});</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">wal</span><span class="p">.</span><span class="nx">flush</span><span class="p">(</span><span class="kc">true</span><span class="p">,</span> <span class="kc">true</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This produces a collection named <code>test</code> with 4 million documents. Each document has a numeric <code>value</code>
+attribute, which in total has 100 unique values. I remembered from a conversation with the guy that
+opened the issue that the number of distinct values was 100 or even slightly lower. I didn&rsquo;t bother
+to create an index on the <code>value</code> attribute, which might have sped up the query.</p>
+
+<p>With data available, it was time to run the query and measure its execution time:</p>
+
+<figure class='code'><figcaption><span>running the query </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">time</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">time</span><span class="p">;</span>
+</span><span class='line'><span class="kd">var</span> <span class="nx">start</span> <span class="o">=</span> <span class="nx">time</span><span class="p">();</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="s2">&quot;FOR doc IN test COLLECT value = doc.value RETURN value&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="nx">time</span><span class="p">()</span> <span class="o">-</span> <span class="nx">start</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Running this in 2.2.7 took 3 minutes and 18 seconds before bursting with the following error message:</p>
+
+<figure class='code'><figcaption><span>2.2.7 error message</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>#
+</span><span class='line'># Fatal error in CALL_AND_RETRY_2
+</span><span class='line'># Allocation failed - process out of memory
+</span><span class='line'>#</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In the 2.2 branch AQL queries were fully transformed to JavaScript and executed using V8. Obviously
+that didn&rsquo;t work well with large collections. That was one of the reasons why version 2.3 saw a major
+rewrite of the AQL engine.</p>
+
+<p>As a consequence, running the query in 2.3 (2.3.5) worked fine. Execution took around 28 seconds.
+The same was true for 2.4 (2.4.8) and 2.5 (2.5.5).</p>
+
+<p>Finally, running the query in 2.6.0 completed in just 3.2 seconds.</p>
+
+<p>The reasons for the speedup are the optimizations done for <code>COLLECT</code> (see
+<a href="http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing with a hash table</a>, the
+<a href="http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql/">Return value optimization for AQL</a> and some
+minor optimizations within AQL that didn&rsquo;t get a pretty working title.</p>
+
+<p>Looks like in sum all the optimizations put into 2.6 really pay out.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Diffing Two Documents in AQL]]></title>
@@ -4268,195 +4349,6 @@ Another reason to use the strict mode.</p>
 <li><code>String.fromCodePoint(codePoint)</code></li>
 </ul>
 
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Improvements in 2.5]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25/"/>
-    <updated>2015-02-26T10:35:31+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25</id>
-    <content type="html"><![CDATA[<p>Contained in 2.5 are some small but useful AQL language improvements plus several AQL optimizer improvements.</p>
-
-<p>We are working on further AQL improvements for 2.5, but work is still ongoing.
-This post summarizes the improvements that are already completed and will be shipped with the initial ArangoDB
-2.5 release.</p>
-
-<!-- more -->
-
-
-<h1>Language improvements</h1>
-
-<h2>Dynamic attribute names</h2>
-
-<p>Often the need arises to dynamically name object attributes in return values.
-In AQL this was not directly possible so far, though there were some workarounds available to achieve about
-the same result. <a href="https://docs.arangodb.com/cookbook/UsingDynamicAttributeNames.html">This recipe</a> summarizes
-the options that are available to pre-ArangoDB 2.5 users.</p>
-
-<p>With ArangoDB 2.5, dynamic attribute names can be constructed much more easily and flexibly. Object
-attribute names in ArangoDB 2.5 can be specified using static string literals, bind parameters,
-and dynamic expressions.</p>
-
-<p>Dynamic expressions are most interesting, and to disambiguate them from other regular string literal attribute
-names, dynamic attribute names need to be enclosed in square brackets (<code>[</code> and <code>]</code>). I have written about
-that before in <a href="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/">this blog</a>.</p>
-
-<p>Here is an example query that uses the new syntax:</p>
-
-<figure class='code'><figcaption><span>example query using dynamic attribute names</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN [ 17, 23, 42, 83 ]
-</span><span class='line'>  RETURN { [ CONCAT('value-of-', i, ' * ', i) ] : i * i }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This will produce:</p>
-
-<figure class='code'><figcaption><span>query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;value-of-17 * 17&quot;</span> <span class="p">:</span> <span class="mi">289</span>
-</span><span class='line'>  <span class="p">},</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;value-of-23 * 23&quot;</span> <span class="p">:</span> <span class="mi">529</span>
-</span><span class='line'>  <span class="p">},</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;value-of-42 * 42&quot;</span> <span class="p">:</span> <span class="mi">1764</span>
-</span><span class='line'>  <span class="p">},</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;value-of-83 * 83&quot;</span> <span class="p">:</span> <span class="mi">6889</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Functions added</h2>
-
-<p>The following AQL functions have been added in 2.5:</p>
-
-<ul>
-<li><code>MD5(value)</code>: produces the MD5 hash of <code>value</code></li>
-<li><code>SHA1(value)</code>: produces the SHA1 hash of <code>value</code></li>
-<li><code>RANDOM_TOKEN(length)</code>: produces a pseudo-random string of the specified length.
- Such strings can be used for id or token generation. Tokens consist only of letters
- (lower and upper case) plus digits, so they are also URL-safe</li>
-</ul>
-
-
-<h1>Optimizer improvements</h1>
-
-<h2>Optimizer rules</h2>
-
-<p>The following AQL optimizer rules have been added in ArangoDB 2.5:</p>
-
-<ul>
-<li><p><code>propagate-constant-attributes</code></p>
-
-<p>This rule will look inside <code>FILTER</code> conditions for constant value equality comparisons,
-and insert the constant values in other places in <code>FILTER</code>s. For example, the rule will
-insert <code>42</code> instead of <code>i.value</code> in the second <code>FILTER</code> of the following query:</p>
-
-<pre><code>FOR i IN c1 
-  FOR j IN c2 
-    FILTER i.value == 42 
-    FILTER j.value == i.value 
-    RETURN 1
-</code></pre></li>
-<li><p><code>move-calculations-down</code></p>
-
-<p>This rule moves calculations down in the execution plan as far as possible. The intention
-is to move calculations beyond filters, in order to avoid calculations and computations
-for documents that will be filtered away anyway.</p>
-
-<p>If a query contains a lot of computations and a lot of documents will be skipped because
-of filters, this rule might provide a big benefit.</p>
-
-<p>A more detailed example is provided in
-<a href="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/">this post</a>.</p></li>
-</ul>
-
-
-<p>The already existing optimizer rule <code>use-index-for-sort</code> was also improved in the following way:</p>
-
-<ul>
-<li><p>the rule can now remove <code>SORT</code>s also in case a non-sorted index (i.e. a hash index) is used
-for an equality lookup and all sort attributes are covered by the index.</p></li>
-<li><p>the rule can also remove <code>SORT</code>s in case the sort critieria excludes the left-most index attributes,
-but the left-most index attributes are used in a <code>FILTER</code> for equality-only lookups.</p>
-
-<p>Here is an example that will use an existing skiplist index on [ <code>value1</code>, <code>value2</code> ] for sorting,
-removing the extra <code>SORT</code>:</p>
-
-<pre><code>FOR doc IN collection 
-  FILTER doc.value1 == 1 
-  SORT doc.value2 
-  RETURN doc
-</code></pre></li>
-</ul>
-
-
-<h2>Index usage</h2>
-
-<p>The AQL optimizer now supports <a href="https://www.arangodb.com/2015/02/24/sparse-indexes-in-arangodb">sparse indexes</a>,
-a feature added in 2.5.</p>
-
-<p>It will use them automatically in queries when appropriate and when safe. Sparse indexes do exclude certain
-documents purposely, so the optimizer always has to figure out whether it can use a sparse index to satisfy
-a given <code>FILTER</code> condition.</p>
-
-<p>The optimizer will also take into account index selectivity estimates when there are multiple index candidates.</p>
-
-<h2>Estimates</h2>
-
-<p>The optimizer estimates for the number of documents to be returned by a query or a subquery are more accurate
-now for several types of queries. For example, if the optimizer can use a primary key, an edge index, or a hash
-index in a given query part, it will use the index selectivity estimates for calculating the number of return
-documents.</p>
-
-<p>These estimates will be a lot more accurate than the previoulsy hard-coded filtering factors, and can lead to
-better optimizer decisions and reporting (because estimates are returned in <code>explain</code> results, too).</p>
-
-<h2>Memory savings</h2>
-
-<p>Finally, the optimizer will now detect if the data-modification part in a data-modification query
-can be executed in lockstep with the data-retrieval part of the same query. Previously, a data-modification
-query always executed its data-retrieval part first, and then executed its data-modification part.
-This could have resulted in big intermediate result sets which to retrieval part constructed in order
-to pass them to the modification part of the query.</p>
-
-<p>Here&rsquo;s an example query:</p>
-
-<figure class='code'><figcaption><span>data-modification query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN test
-</span><span class='line'>  INSERT doc INTO backup</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In the above query, the <code>FOR</code> loop is the retrieval part, and the <code>INSERT</code> is the modification part.
-The optimizer in 2.5 will check if the two parts of the query are independent, and if it turns out they are,
-will execute them in lockstep instead of sequentially.</p>
-
-<p>The execution in lockstep is not necessarily faster than sequential execution, but it can save lots of
-memory if the data-retrieval part constructed big intermediate result sets.</p>
-
-<h1>Miscellaneous changes</h1>
-
-<p>The AQL query execution statistics now also provide an attribute <code>filtered</code>. Its value indicates how many
-documents were filtered by <code>FilterNode</code>s in the AQL query. This can be used as an indicator for whether
-indexes should be added, and for how effective indexes are used for filtering.</p>
 ]]></content>
   </entry>
   

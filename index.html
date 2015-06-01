@@ -11,8 +11,9 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="I just stumbled upon a comment in the ArangoDB blog
-asking how to create a diff of two documents with AQL. Though there is no built-in AQL function &hellip;">
+  <meta name="description" content="While paging through the issues in the ArangoDB issue tracker
+I came across issue #987, titled
+Trying to get distinct document attribute values from &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -82,6 +83,53 @@ asking how to create a diff of two documents with AQL. Though there is no built-
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/06/01/on-getting-unique-values/">On Getting Unique Values</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-06-01T13:27:13+02:00" pubdate data-updated="true">Jun 1<span>st</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>While paging through the issues in the <a href="https://github.com/arangodb/arangodb">ArangoDB issue tracker</a>
+I came across <a href="https://github.com/arangodb/arangodb/issues/987">issue #987</a>, titled
+<em>Trying to get distinct document attribute values from a large collection fails</em>.</p>
+
+<p>The issue was opened around 10 months ago when ArangoDB 2.2 was around. We improved AQL performance
+somewhat since then, so I was eager to see how the query would perform in ArangoDB 2.6, especially
+when comparing it to 2.2.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/06/01/on-getting-unique-values/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -546,62 +594,6 @@ to provide data much faster than with an AQL query that will extract all documen
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/04/23/aql-functions-improvements/">AQL Functions Improvements</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-04-23T10:24:53+02:00" pubdate data-updated="true">Apr 23<span>rd</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>Waiting for a <code>git pull</code> to complete over an 8 KiB/s internet connection is boring.
-So I thought I&rsquo;d rather use the idle time and quickly write about some performance
-improvements for certain AQL functions that were recently completed and that will
-become available with ArangoDB 2.6.</p>
-
-<p>The improvements affect the following AQL functions:</p>
-
-<ul>
-<li><code>UNSET()</code>: remove specified attributes from an object/document</li>
-<li><code>KEEP()</code>: keep only specified attributes of an object/document</li>
-<li><code>MERGE()</code>: merge the attributes of multiple objects/documents</li>
-</ul>
-
-
-<p>This blog post shows a few example queries that will benefit from <strong>50 to more than 60 %
-reductions</strong> in query execution times due to the changes done to these functions.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/04/23/aql-functions-improvements/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -624,6 +616,10 @@ reductions</strong> in query execution times due to the changes done to these fu
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/06/01/on-getting-unique-values/">On Getting Unique Values</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/05/26/diffing-two-documents-in-aql/">Diffing Two Documents in AQL</a>
       </li>
     
@@ -643,10 +639,6 @@ reductions</strong> in query execution times due to the changes done to these fu
         <a href="/blog/2015/05/07/in-list-improvements/">IN-list Improvements</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/05/07/fulltext-index-enhancements/">Fulltext Index Enhancements</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -655,11 +647,11 @@ reductions</strong> in query execution times due to the changes done to these fu
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (22)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (38)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (3)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (15)</a></li><li><a href='/blog/categories/php/'>PHP (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (22)</a></li><li><a href='/blog/categories/aql/'>AQL, (1)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (38)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB, (1)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (3)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (6)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (16)</a></li><li><a href='/blog/categories/php/'>PHP (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (27)</li><ul class="month_list"><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (28)</li><ul class="month_list"><li class="month"><a href='/blog/2015/06/'>JUN (1)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

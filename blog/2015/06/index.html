@@ -7,13 +7,12 @@
   <meta charset="utf-8">
   <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
   <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
-  <title>Improvements for Data-modification Queries - J@ArangoDB</title>
+  <title>Archive: JUN 2015 - J@ArangoDB</title>
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="Data-modification queries were enhanced in ArangoDB 2.4 to be able to also return
-the inserted, update or removed documents. For example, the &hellip;">
-  <meta name="keywords" content="ArangoDB, database, AQL, data-modification queries">
+  <meta name="description" content="Archive: JUN 2015">
+  
 
   <!-- http://t.co/dKP3o1e -->
   <meta name="HandheldFriendly" content="True">
@@ -21,7 +20,7 @@ the inserted, update or removed documents. For example, the &hellip;">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries">
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/06">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
@@ -81,186 +80,45 @@ the inserted, update or removed documents. For example, the &hellip;">
   <div id="main">
     <div id="content">
       <div>
-<article class="hentry" role="article">
+<article role="article">
   
   <header>
-    
-      <h1 class="entry-title">Improvements for Data-modification Queries</h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-03-27T23:29:19+01:00" pubdate data-updated="true">Mar 27<span>th</span>, 2015</time>
-        
-      </p>
+    <h1 class="entry-title">Archive: JUN 2015</h1>
     
   </header>
+  
+  <div id="blog-archives" class="monthly">
 
 
-<div class="entry-content"><p>Data-modification queries were enhanced in ArangoDB 2.4 to be able to also return
-the inserted, update or removed documents.</p>
+<article>
+  
+<h1><a href="/blog/2015/06/01/on-getting-unique-values/">On Getting Unique Values</a></h1>
+<time datetime="2015-06-01T13:27:13+02:00" pubdate><span class='month'>Jun</span> <span class='day'>01</span> <span class='year'>2015</span></time>
 
-<p>For example, the following statement inserted a few documents and also returned
-them with all their attributes:</p>
-
-<figure class='code'><figcaption><span>AQL insert query returning documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN 1..10
-</span><span class='line'>  INSERT { value: i } IN test
-</span><span class='line'>  LET inserted = NEW
-</span><span class='line'>  RETURN inserted</span></code></pre></td></tr></table></div></figure>
+<footer>
+  <span class="categories">posted in <a class='category' href='/blog/categories/aql/'>AQL,</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB,</a>, <a class='category' href='/blog/categories/performance/'>Performance</a></span>
+</footer>
 
 
-<p>The syntax for returning documents from data-modification queries only supported
-the exact above format. Using a <code>LET</code> clause was required, and the <code>RETURN</code> clause
-was limited to returning the variable introduced by the <code>LET</code>.</p>
+</article>
 
-<p>These syntax restrictions have been lifted in the <code>devel</code> branch, which will become
-release 2.6 eventually. The changes make returning values from data-modification
-statements easier and also more flexible.</p>
-
-<!-- more -->
-
-
-<h2>Simpler syntax</h2>
-
-<p>For example, specifying a <code>LET</code> clause is not required anymore (though still fully
-supported). Instead, the <code>RETURN</code> clause can directly refer to the <code>NEW</code> pseudo-value,
-making the query shorter and easier to write:</p>
-
-<figure class='code'><figcaption><span>AQL insert query returning documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN 1..10
-</span><span class='line'>  INSERT { value: i } IN test
-</span><span class='line'>  RETURN NEW</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Projections</h2>
-
-<p>It is now also possible to return a projection instead of returning the entire documents.
-This can be used to reduce the amount of data returned by queries.</p>
-
-<p>For example, the following query will return just the keys of the inserted documents:</p>
-
-<figure class='code'><figcaption><span>AQL insert query returning a projection</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN 1..10
-</span><span class='line'>  INSERT { value: i } IN test
-</span><span class='line'>  RETURN NEW._key</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Using OLD and NEW in the same query</h2>
-
-<p>In previous versions, <code>UPDATE</code> and <code>REPLACE</code> statements could refer to <strong>either</strong>
-the <code>OLD</code> or the <code>NEW</code> pseudo-value, but not to both. 2.6 lifts that restriction, so
-now these queries can refer to both. One can utilize that to return both the previous
-and the updated revision:</p>
-
-<figure class='code'><figcaption><span>AQL update query returning old and new revisions</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN test 
-</span><span class='line'>  UPDATE doc WITH { value: 42 } IN test
-</span><span class='line'>  RETURN { old: OLD, new: NEW }</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Calculations with OLD or NEW</h2>
-
-<p>It is now also possible to run additional calculations with <code>LET</code> statements between
-the data-modification part and the final <code>RETURN</code>:</p>
-
-<figure class='code'><figcaption><span>AQL upsert query with some extra calculations</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>UPSERT { name: 'test' } INSERT { name: 'test' } UPDATE { } IN test
-</span><span class='line'>LET previousRevisionExisted = ! IS_NULL(OLD)
-</span><span class='line'>LET type = previousRevisionExisted ? 'update' : 'insert'
-</span><span class='line'>RETURN { _key: NEW._key, type: type }</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Restrictions</h2>
-
-<p>Still the following restrictions remain:</p>
-
-<ul>
-<li><p>a data-modification operation can optionally be followed by any number of <code>LET</code> clauses,
-and a final <code>RETURN</code> clause. No other operations (e.g. <code>FOR</code>, <code>SORT</code>, <code>COLLECT</code>) can be
-used after a data-modification operation</p></li>
-<li><p>calculations following a data-modification operation must not access data in collections,
-so using functions such as <code>GRAPH_TRAVERSAL</code> etc. is disallowed.</p></li>
-</ul>
-
-
-<p>The improvements are present in the <code>devel</code> branch and can be tested in there from now on.
-As usual, feedback is welcome!</p>
 </div>
 
-
-  <footer>
-    <p class="meta">
+  
+    <footer>
       
-  
-
-<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
-
       
-
-
-
-
-
-
-
-
+        <div class="sharing">
   
-
-
-<time datetime="2015-03-27T23:29:19+01:00" pubdate data-updated="true">Mar 27<span>th</span>, 2015</time>
-      
-
-<span class="categories">
-  
-    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>
-  
-</span>
-
-
-    </p>
-    
-      <div class="sharing">
-  
-  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries/" >Tweet</a>
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/06/index.html" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/06/index.html" >Tweet</a>
   
   
   
 </div>
 
-    
-    <p class="meta">
       
-        <a class="basic-alignment left" href="/blog/2015/03/27/preview-of-the-upsert-command/" title="Previous Post: Preview of the UPSERT command">&laquo; Preview of the UPSERT command</a>
-      
-      
-        <a class="basic-alignment right" href="/blog/2015/04/01/improvements-for-the-cursor-api/" title="Next Post: Improvements for the cursor API">Improvements for the cursor API &raquo;</a>
-      
-    </p>
-  </footer>
+    </footer>
+  
 </article>
 
 </div>

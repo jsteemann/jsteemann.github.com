@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-05-26T11:37:48+02:00</updated>
+  <updated>2015-06-01T14:30:09+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,75 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[On Getting Unique Values]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/06/01/on-getting-unique-values/"/>
+    <updated>2015-06-01T13:27:13+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/06/01/on-getting-unique-values</id>
+    <content type="html"><![CDATA[<p>While paging through the issues in the <a href="https://github.com/arangodb/arangodb">ArangoDB issue tracker</a>
+I came across <a href="https://github.com/arangodb/arangodb/issues/987">issue #987</a>, titled
+<em>Trying to get distinct document attribute values from a large collection fails</em>.</p>
+
+<p>The issue was opened around 10 months ago when ArangoDB 2.2 was around. We improved AQL performance
+somewhat since then, so I was eager to see how the query would perform in ArangoDB 2.6, especially
+when comparing it to 2.2.</p>
+
+<!-- more -->
+
+
+<p>For reproduction I quickly put together some example data to run the query on:
+<code>js setting up example data
+var db = require("org/arangodb").db;
+var c = db._create("test");
+for (var i = 0; i &lt; 4 * 1000 * 1000; ++i) {
+  c.save({ _key: "test" + i, value: (i % 100) });
+}
+require("internal").wal.flush(true, true);
+</code></p>
+
+<p>This produces a collection named <code>test</code> with 4 million documents. Each document has a numeric <code>value</code>
+attribute, which in total has 100 unique values. I remembered from a conversation with the guy that
+opened the issue that the number of distinct values was 100 or even slightly lower. I didn&rsquo;t bother
+to create an index on the <code>value</code> attribute, which might have sped up the query.</p>
+
+<p>With data available, it was time to run the query and measure its execution time:
+<code>js running the query
+var time = require("internal").time;
+var start = time();
+db._query("FOR doc IN test COLLECT value = doc.value RETURN value");
+time() - start;
+</code></p>
+
+<p>Running this in 2.2.7 took 3 minutes and 18 seconds before bursting with the following error message:</p>
+
+<p>```plain 2.2.7 error message
+#</p>
+
+<h1>Fatal error in CALL_AND_RETRY_2</h1>
+
+<h1>Allocation failed &ndash; process out of memory</h1>
+
+<p>#
+```</p>
+
+<p>In the 2.2 branch AQL queries were fully transformed to JavaScript and executed using V8. Obviously
+that didn&rsquo;t work well with large collections. That was one of the reasons why version 2.3 saw a major
+rewrite of the AQL engine.</p>
+
+<p>As a consequence, running the query in 2.3 (2.3.5) worked fine. Execution took around 28 seconds.
+The same was true for 2.4 (2.4.8) and 2.5 (2.5.5).</p>
+
+<p>Finally, running the query in 2.6.0 completed in just 3.2 seconds.</p>
+
+<p>The reasons for the speedup are the optimizations done for <code>COLLECT</code> (see
+<a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing with a hash table</a>, the
+<a href="/blog/2015/05/04/return-value-optimization-for-aql/">Return value optimization for AQL</a> and some
+minor optimizations within AQL that didn&rsquo;t get a pretty working title.</p>
+
+<p>Looks like in sum all the optimizations put into 2.6 really pay out.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[The Great AQL Shootout: ArangoDB 2.5 vs 2.6]]></title>
@@ -475,76 +544,6 @@ RETURN [
 the subquery optimization that avoids copying unneeded intermediate results.</p>
 
 <p>Enjoy!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Return Value Optimization for AQL]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql/"/>
-    <updated>2015-05-04T10:32:43+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql</id>
-    <content type="html"><![CDATA[<p>While in search for further AQL query optimizations last week, we found that intermediate AQL
-query results were copied one time too often in some cases. Precisely, the data that a query&rsquo;s
-<code>ReturnNode</code> will return to the caller was copied into the <code>ReturnNode</code>&rsquo;s own register. With
-<code>ReturnNode</code>s never modifying their input data, this demanded for something that is called
-<em>return-value optimization</em> in compilers.</p>
-
-<p>2.6 will now optimize away these copies in many cases, and this post shows which performance
-benefits can be expected due to the optimization.</p>
-
-<!-- more -->
-
-
-<p>The effect of the optimization can be demonstrated easily with a few simple AQL queries.
-Let&rsquo;s start with a query that simply returns all 100,000 documents from a collection <code>users</code>:
-<code>FOR u IN users RETURN u</code> (the source data for the collection can be found <a href="/downloads/code/users-100000.json.tar.gz">here</a>).</p>
-
-<p>This query&rsquo;s execution plan is already straight-forward and simple:</p>
-
-<p><img src="/downloads/screenshots/return.png"></p>
-
-<p>So where&rsquo;s the problem?</p>
-
-<p>The <code>ReturnNode</code> in this query (and other queries too) will copy its input data into its own output
-register, only to finally hand the results to the query&rsquo;s caller. This copying is most often unnecessary
-as the <code>ReturnNode</code> will not modify its input. So the idea was to get rid of the copying action and
-tell the query&rsquo;s calling code in which (now different) register to look for the results.</p>
-
-<p>Optimizing away the copying inside the <code>ReturnNode</code> made the query run faster already.
-The same query now returns the 100,000 documents in 0.24 to 0.26 seconds, compared to 0.27 to 0.30 s
-before applying the optimization.</p>
-
-<p>Returning just an attribute of each document shows about the same improvement rates. The execution
-times of the query <code>FOR u IN users RETURN u._key</code> drop to between 0.13 and 0.14 seconds with the
-optimization, from initially between 0.15 and 0.17 seconds.</p>
-
-<p>Another example query, <code>FOR i IN 1..1000000 RETURN i</code>, now runs in 0.58 to 0.61 seconds with
-the optimization, compared to between 0.77 and 0.81 seconds without it.</p>
-
-<p>These absolute figures may not look overly impressive, but they indicate relative improvements of
-between 10 and 25 %, which is quite nice. This is effectively saved CPU time that can now be used
-for something more productive.</p>
-
-<p>Of course the performance improvements may not be that high for every imaginable AQL query.
-Though the optimization may be active in most AQL queries, its effect will only be measurable
-for queries that return a significant number of documents/values. Otherwise the share of the
-<code>ReturnNode</code>&rsquo;s work in the query&rsquo;s overall computations may be too low to have any effect.
-Additionally, the more work a query spends in performing other operations (e.g. filtering,
-sorting, collecting), the less relevant will be the overall effect of the optimized <code>ReturnNode</code>.
-Finally, when query results need to be shipped from the server to the client over a network,
-the relative effect of the optimization may diminish further.</p>
-
-<p>So your mileage may vary. But the optimization will not do any harm, and together with some
-other query optimizations already finished for 2.6 it will contribute to many AQL queries
-running faster than before.</p>
-
-<p>AQL queries will benefit from the optimization automatically in ArangoDB 2.6, without requiring
-any adjustments to the query string, the server configuration etc. The optimizer will automatically
-apply the optimization for the main-level <code>ReturnNode</code> of every AQL query.</p>
-
-<p>On a side note: the optimization will not be shown in the list of applied optimizer rules for the
-query. This is because the optimization is performed in some different place in the query
-executor, after applying the optimizer rules.</p>
 ]]></content>
   </entry>
   
