@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Foxx | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/foxx/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-06-01T14:30:09+02:00</updated>
+  <updated>2015-06-01T14:55:56+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -1012,7 +1012,8 @@ binary data in Foxx actions. The example app allows uploading files to the serve
 The server will then list these files and allows downloading them again.</p>
 
 <p>The application has no CSS at all. Its only purpose is to demo the server-side code.
-The application can be downloaded <a href="/downloads/code/filelist-app.tar.gz">here</a>.</p>
+The application can be downloaded <a href="/downloads/code/filelist.zip">here</a>. An older
+version of the application (compatible with 2.3) can be found <a href="/downloads/code/filelist-app.tar.gz">here</a>.</p>
 
 <p>Please note that the example application requires ArangoDB 2.3, which is currently
 in development.</p>
