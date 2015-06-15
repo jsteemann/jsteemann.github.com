@@ -34,7 +34,7 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/</loc>
-        <lastmod>2015-05-20T23:01:27+02:00</lastmod>
+        <lastmod>2015-06-03T17:34:34+02:00</lastmod>
     </url>
     <url>
         <loc>
@@ -46,7 +46,7 @@
         <loc>
             http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/
         </loc>
-        <lastmod>2015-05-21T00:30:44+02:00</lastmod>
+        <lastmod>2015-06-03T17:17:02+02:00</lastmod>
     </url>
     <url>
         <loc>
@@ -164,7 +164,7 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table/</loc>
-        <lastmod>2015-05-20T22:56:52+02:00</lastmod>
+        <lastmod>2015-06-15T15:37:52+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements/</loc>
@@ -212,15 +212,21 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/06/01/on-getting-unique-values/</loc>
-        <lastmod>2015-06-01T14:29:58+02:00</lastmod>
+        <lastmod>2015-06-15T18:37:13+02:00</lastmod>
+    </url>
+    <url>
+        <loc>
+            http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access/
+        </loc>
+        <lastmod>2015-06-15T18:37:03+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/about/</loc>
-        <lastmod>2015-06-01T14:55:39+02:00</lastmod>
+        <lastmod>2015-06-15T18:37:13+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2015-06-01T14:55:39+02:00</lastmod>
+        <lastmod>2015-06-15T18:37:13+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -228,6 +234,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2015-06-01T14:55:39+02:00</lastmod>
+        <lastmod>2015-06-15T18:37:13+02:00</lastmod>
     </url>
 </urlset>

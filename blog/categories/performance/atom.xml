@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-06-01T14:55:56+02:00</updated>
+  <updated>2015-06-15T18:38:09+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,148 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Speeding Up Array/object Literal Access]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access/"/>
+    <updated>2015-06-15T15:56:27+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access</id>
+    <content type="html"><![CDATA[<p>Last week some further optimization slipped into 2.6. The optimization can
+provide significant speedups in AQL queries using huge array/object bind parameters
+and passing them into V8-based functions.</p>
+
+<!-- more -->
+
+
+<p>It started with an ArangoDB user reporting a specific query to run unexpectedly slow.
+The part of the query that caused the problem was simple and looked like this:</p>
+
+<p><code>plain problematic query
+FOR doc IN collection
+  FILTER doc.attribute == @value
+  RETURN TRANSLATE(doc.from, translations, 0)
+</code></p>
+
+<p>In the original query, <code>translations</code> was a big, constant object literal. Think of
+something like the following, but with a lot more values:</p>
+
+<p><code>json example translations value
+{
+  "p1" : 1,
+  "p2" : 2,
+  "p3" : 40,
+  "p4" : 9,
+  "p5" : 12
+}
+</code></p>
+
+<p>The translations were used for replacing an attribute value in existing documents
+with a lookup table computed outside the AQL query.</p>
+
+<p>The number of values in the <code>translations</code> object was varying from query to query,
+with no upper bound on the number of values. It was possible that the query was
+running with 50,000 lookup values in the <code>translations</code> object.</p>
+
+<p>When trying to reproduce the problem, we expected that the query would get at worst
+<em>linearly</em> slower with an increasing number of lookup values. But in reality, the
+following <em>non-linear</em> execution times were observed when increasing the number of
+lookup values:</p>
+
+<p>```plain execution times for varying input sizes, without optimization</p>
+
+<h1>of values |  execution time</h1>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</p>
+
+<pre><code>      1 |        0.6111 s
+      2 |        0.6078 s  
+      4 |        0.6021 s
+      8 |        0.6160 s
+     16 |        0.6925 s
+     32 |        0.7107 s
+     64 |        0.7677 s
+    128 |        0.8576 s
+    256 |        1.0544 s
+    512 |        1.4579 s
+   1024 |        8.8303 s
+   2048 |       17.3674 s
+   4096 |       35.3109 s
+   8192 |       74.9161 s
+  16384 |      145.0837 s
+  32768 |      361.9870 s
+  65536 |      880.4995 s
+</code></pre>
+
+<p>```</p>
+
+<p>(note: all values stated above are wall-clock times for running the query with a
+FILTER condition matching 50,000 documents &ndash; i.e. the <code>TRANSLATE()</code> expression was
+executed 50,000 times per query)</p>
+
+<p>With small objects passed in <code>translate</code>, the execution times only increased slowly
+even when object sizes were doubled. The <code>TRANSLATE()</code> expression&rsquo;s share of the
+overall query execution time was still low for small objects, even when doubling
+their sizes. However, it got pretty bad for objects with 1,024 members already, and
+from that point on, execution times more than doubled if object sizes got doubled.</p>
+
+<p>The <code>TRANSLATE()</code> function itself has O(1) complexity, so we could rule it out as
+the problem cause. However, <code>TRANSLATE()</code> is V8-based, and it turned out that there
+was a problem when the number of values in the <code>translations</code> object increased from
+1022 to 1023. At that particular threshold, execution time quadrupled.</p>
+
+<p>At 1023 object members, V8 seems to change the internal object format, which probably
+requires rearranging the object data internally. V8 has several <em>internal</em> types for
+representing JavaScript objects, and converting between them is not free.</p>
+
+<p>The obvious optimization opportunity for this case was to create the <code>translations</code>
+object value just once as a V8 object, and reuse the same object when calling the
+<code>TRANSLATE()</code> function repeatedly. This avoids repeated creation and destruction of
+the V8 objects used in function calls, and as a side effect may also lead to less garbage
+values being accumulated when functions are called repeatedly.</p>
+
+<p>The optimization is possible here because the <code>translations</code> object is an object literal
+and thus constant. It will also work for array literals and bind parameters (which
+are also treated as literals once their values are known).</p>
+
+<p>Here are the execution time for running the <code>TRANSLATE()</code> on 50,000 documents with the
+modification:</p>
+
+<p>```plain execution times, with optimization</p>
+
+<h1>of values |  execution time</h1>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</p>
+
+<pre><code>      1 |        0.6251 s
+      2 |        0.6302 s  
+      4 |        0.6138 s
+      8 |        0.6141 s
+     16 |        0.6685 s
+     32 |        0.6232 s
+     64 |        0.6204 s
+    128 |        0.6326 s
+    256 |        0.6460 s
+    512 |        0.6275 s
+   1024 |        0.6639 s
+   2048 |        0.6345 s
+   4096 |        0.6554 s
+   8192 |        0.6789 s
+  16384 |        0.7569 s
+  32768 |        0.7636 s
+  65536 |        1.0173 s
+</code></pre>
+
+<p>```</p>
+
+<p>Looks like this is going to scale way better.</p>
+
+<p>The optimization is disabled for big array/objects which are non-constant (e.g. a variable
+or the result of an expression), or for parameters passed into user-defined AQL functions.
+Enabling it for user-defined AQL functions is not safe because in theory these might
+modify their arguments (and function arguments are passed by reference &ndash; passing them
+by value would also defeat the purpose of the optimization).</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[On Getting Unique Values]]></title>
@@ -474,76 +616,6 @@ execution times of 90 % and more percent.</p>
 <p>Please note that longer IN-lists will still make a the query run longer than when
 using shorter IN-lists. This is expected because longer IN-lists require more comparisons to
 be made and will lead (in the above example) to more documents being returned.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Subquery Optimizations]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations/"/>
-    <updated>2015-05-04T13:26:00+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations</id>
-    <content type="html"><![CDATA[<p>This is another post demonstrating some of the AQL query performance improvements
-that can be expected in ArangoDB 2.6. Specifically, this post is about an optimization
-for subqueries. AQL queries with multiple subqueries will likely benefit from it.</p>
-
-<!-- more -->
-
-
-<p>The following example queries use the same <code>users</code> collection with 100,000 documents
-that was used in the <a href="/blog/2015/05/04/return-value-optimization-for-aql/">previous post about return value optimizations</a>.
-Again, the source data for the collection can be found <a href="/downloads/code/users-100000.json.tar.gz">here</a>.</p>
-
-<p>We&rsquo;ll start with a query that uses a single subquery extracting all users from the
-collection into a flat result array:</p>
-
-<p><code>plain example query with single subquery
-RETURN [
-  (FOR u IN users RETURN u)
-]
-</code></p>
-
-<p>This query is equally fast with ArangoDB 2.5 and 2.6, no changes here.</p>
-
-<p>Let&rsquo;s ramp it up to using two subqueries, one for users with a <code>gender</code> attribute value
-of <code>male</code>, and one for users with <code>gender</code> attribute value <code>female</code>. No indexes were used
-for the extraction in 2.5 nor 2.6:</p>
-
-<p><code>plain example query with two subqueries
-RETURN [
-  (FOR u IN users FILTER u.gender == 'male' RETURN u),
-  (FOR u IN users FILTER u.gender == 'female' RETURN u)
-]
-</code></p>
-
-<p>The query takes 16.6 seconds to execute in 2.5, but only 2.95 seconds with ArangoDB 2.6.
-This 80 % reduction in execution time is due to ArangoDB 2.6 being a bit smarter about
-subqueries than 2.5 is.</p>
-
-<p>In the above query, the two subqueries are independent, so not only can they be executed in
-any order, but they also do not rely on each other&rsquo;s results. ArangoDB 2.6 will detect that
-and avoid copying variables and intermediate results into subqueries if they are actually not
-needed there. 2.5 copied all variables into subqueries unconditionally, even if variables
-were not needed there.</p>
-
-<p>In 2.6, any AQL query with multiple subqueries will benefit from this optimization. The
-performance improvements will be greater if subqueries late in the execution pipeline have a lot of
-intermediate results created in front of them, but do not rely on these intermediate results.</p>
-
-<p>Another nice example for a 2.6 speedup is extracting a single attribute per subquery, as is done
-for the <code>name</code> attribute in the following query:</p>
-
-<p><code>plain extracting a single attribute in two subqueries
-RETURN [
-  (FOR u IN users FILTER u.gender == 'male' RETURN u.name),
-  (FOR u IN users FILTER u.gender == 'female' RETURN u.name)
-]
-</code></p>
-
-<p>This takes 42 seconds to execute in 2.5, and only 0.86 seconds in 2.6. This is a more than
-95 % reduction in execution time. It is caused by a mix of factors, one of them again being
-the subquery optimization that avoids copying unneeded intermediate results.</p>
-
-<p>Enjoy!</p>
 ]]></content>
   </entry>
   

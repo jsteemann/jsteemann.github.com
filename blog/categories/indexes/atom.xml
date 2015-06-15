@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Indexes | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/indexes/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-06-01T14:55:56+02:00</updated>
+  <updated>2015-06-15T18:38:09+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -453,7 +453,7 @@ plan.nodes.filter(function(node) {
 is irrelevant to the user, the user can provide a hint to the optimizer to remove the
 post-<code>COLLECT</code> sort.</p>
 
-<p>This can be achieved by simplying appending a <code>SORT null</code> to the original <code>COLLECT</code> statement.
+<p>This can be achieved by simply appending a <code>SORT null</code> to the original <code>COLLECT</code> statement.
 Here we can see that this removes the post-<code>COLLECT</code> sort:</p>
 
 <p><img src="/downloads/screenshots/collect-nosort.png"></p>

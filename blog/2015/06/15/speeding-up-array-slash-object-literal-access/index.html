@@ -1,0 +1,429 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>Speeding Up Array/object Literal Access - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="Last week some further optimization slipped into 2.6. The optimization can
+provide significant speedups in AQL queries using huge array/object bind &hellip;">
+  <meta name="keywords" content="ArangoDB, database, AQL, Performance, V8, JavaScript">
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>{ "subject" : "ArangoDB", "tags": [ "multi-model", "nosql", "database" ] }</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Speeding Up Array/object Literal Access</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-06-15T15:56:27+02:00" pubdate data-updated="true">Jun 15<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>Last week some further optimization slipped into 2.6. The optimization can
+provide significant speedups in AQL queries using huge array/object bind parameters
+and passing them into V8-based functions.</p>
+
+<!-- more -->
+
+
+<p>It started with an ArangoDB user reporting a specific query to run unexpectedly slow.
+The part of the query that caused the problem was simple and looked like this:</p>
+
+<figure class='code'><figcaption><span>problematic query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  FILTER doc.attribute == @value
+</span><span class='line'>  RETURN TRANSLATE(doc.from, translations, 0)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In the original query, <code>translations</code> was a big, constant object literal. Think of
+something like the following, but with a lot more values:</p>
+
+<figure class='code'><figcaption><span>example translations value</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span>
+</span><span class='line'>  <span class="nt">&quot;p1&quot;</span> <span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">&quot;p2&quot;</span> <span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">&quot;p3&quot;</span> <span class="p">:</span> <span class="mi">40</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">&quot;p4&quot;</span> <span class="p">:</span> <span class="mi">9</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">&quot;p5&quot;</span> <span class="p">:</span> <span class="mi">12</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The translations were used for replacing an attribute value in existing documents
+with a lookup table computed outside the AQL query.</p>
+
+<p>The number of values in the <code>translations</code> object was varying from query to query,
+with no upper bound on the number of values. It was possible that the query was
+running with 50,000 lookup values in the <code>translations</code> object.</p>
+
+<p>When trying to reproduce the problem, we expected that the query would get at worst
+<em>linearly</em> slower with an increasing number of lookup values. But in reality, the
+following <em>non-linear</em> execution times were observed when increasing the number of
+lookup values:</p>
+
+<figure class='code'><figcaption><span>execution times for varying input sizes, without optimization</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># of values |  execution time
+</span><span class='line'>------------+----------------
+</span><span class='line'>          1 |        0.6111 s
+</span><span class='line'>          2 |        0.6078 s  
+</span><span class='line'>          4 |        0.6021 s
+</span><span class='line'>          8 |        0.6160 s
+</span><span class='line'>         16 |        0.6925 s
+</span><span class='line'>         32 |        0.7107 s
+</span><span class='line'>         64 |        0.7677 s
+</span><span class='line'>        128 |        0.8576 s
+</span><span class='line'>        256 |        1.0544 s
+</span><span class='line'>        512 |        1.4579 s
+</span><span class='line'>       1024 |        8.8303 s
+</span><span class='line'>       2048 |       17.3674 s
+</span><span class='line'>       4096 |       35.3109 s
+</span><span class='line'>       8192 |       74.9161 s
+</span><span class='line'>      16384 |      145.0837 s
+</span><span class='line'>      32768 |      361.9870 s
+</span><span class='line'>      65536 |      880.4995 s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>(note: all values stated above are wall-clock times for running the query with a
+FILTER condition matching 50,000 documents &ndash; i.e. the <code>TRANSLATE()</code> expression was
+executed 50,000 times per query)</p>
+
+<p>With small objects passed in <code>translate</code>, the execution times only increased slowly
+even when object sizes were doubled. The <code>TRANSLATE()</code> expression&rsquo;s share of the
+overall query execution time was still low for small objects, even when doubling
+their sizes. However, it got pretty bad for objects with 1,024 members already, and
+from that point on, execution times more than doubled if object sizes got doubled.</p>
+
+<p>The <code>TRANSLATE()</code> function itself has O(1) complexity, so we could rule it out as
+the problem cause. However, <code>TRANSLATE()</code> is V8-based, and it turned out that there
+was a problem when the number of values in the <code>translations</code> object increased from
+1022 to 1023. At that particular threshold, execution time quadrupled.</p>
+
+<p>At 1023 object members, V8 seems to change the internal object format, which probably
+requires rearranging the object data internally. V8 has several <em>internal</em> types for
+representing JavaScript objects, and converting between them is not free.</p>
+
+<p>The obvious optimization opportunity for this case was to create the <code>translations</code>
+object value just once as a V8 object, and reuse the same object when calling the
+<code>TRANSLATE()</code> function repeatedly. This avoids repeated creation and destruction of
+the V8 objects used in function calls, and as a side effect may also lead to less garbage
+values being accumulated when functions are called repeatedly.</p>
+
+<p>The optimization is possible here because the <code>translations</code> object is an object literal
+and thus constant. It will also work for array literals and bind parameters (which
+are also treated as literals once their values are known).</p>
+
+<p>Here are the execution time for running the <code>TRANSLATE()</code> on 50,000 documents with the
+modification:</p>
+
+<figure class='code'><figcaption><span>execution times, with optimization</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># of values |  execution time
+</span><span class='line'>------------+----------------
+</span><span class='line'>          1 |        0.6251 s
+</span><span class='line'>          2 |        0.6302 s  
+</span><span class='line'>          4 |        0.6138 s
+</span><span class='line'>          8 |        0.6141 s
+</span><span class='line'>         16 |        0.6685 s
+</span><span class='line'>         32 |        0.6232 s
+</span><span class='line'>         64 |        0.6204 s
+</span><span class='line'>        128 |        0.6326 s
+</span><span class='line'>        256 |        0.6460 s
+</span><span class='line'>        512 |        0.6275 s
+</span><span class='line'>       1024 |        0.6639 s
+</span><span class='line'>       2048 |        0.6345 s
+</span><span class='line'>       4096 |        0.6554 s
+</span><span class='line'>       8192 |        0.6789 s
+</span><span class='line'>      16384 |        0.7569 s
+</span><span class='line'>      32768 |        0.7636 s
+</span><span class='line'>      65536 |        1.0173 s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Looks like this is going to scale way better.</p>
+
+<p>The optimization is disabled for big array/objects which are non-constant (e.g. a variable
+or the result of an expression), or for parameters passed into user-defined AQL functions.
+Enabling it for user-defined AQL functions is not safe because in theory these might
+modify their arguments (and function arguments are passed by reference &ndash; passing them
+by value would also defeat the purpose of the optimization).</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-06-15T15:56:27+02:00" pubdate data-updated="true">Jun 15<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/javascript/'>JavaScript</a>, <a class='category' href='/blog/categories/performance/'>Performance</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/06/01/on-getting-unique-values/" title="Previous Post: On getting unique values">&laquo; On getting unique values</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/06/15/speeding-up-array-slash-object-literal-access/">Speeding Up Array/object Literal Access</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/06/01/on-getting-unique-values/">On Getting Unique Values</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/26/diffing-two-documents-in-aql/">Diffing Two Documents in AQL</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">The Great AQL Shootout: ArangoDB 2.5 vs 2.6</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/07/less-intrusive-linking/">Less Intrusive Linking</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/07/bulk-document-lookups/">Bulk Document Lookups</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (24)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (40)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (3)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (7)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/performance/'>Performance (17)</a></li><li><a href='/blog/categories/php/'>PHP (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (29)</li><ul class="month_list"><li class="month"><a href='/blog/2015/06/'>JUN (2)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

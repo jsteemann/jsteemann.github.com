@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-06-01T14:55:56+02:00</updated>
+  <updated>2015-06-15T18:38:09+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,183 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Speeding Up Array/object Literal Access]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access/"/>
+    <updated>2015-06-15T15:56:27+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access</id>
+    <content type="html"><![CDATA[<p>Last week some further optimization slipped into 2.6. The optimization can
+provide significant speedups in AQL queries using huge array/object bind parameters
+and passing them into V8-based functions.</p>
+
+<!-- more -->
+
+
+<p>It started with an ArangoDB user reporting a specific query to run unexpectedly slow.
+The part of the query that caused the problem was simple and looked like this:</p>
+
+<figure class='code'><figcaption><span>problematic query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  FILTER doc.attribute == @value
+</span><span class='line'>  RETURN TRANSLATE(doc.from, translations, 0)</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In the original query, <code>translations</code> was a big, constant object literal. Think of
+something like the following, but with a lot more values:</p>
+
+<figure class='code'><figcaption><span>example translations value</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span>
+</span><span class='line'>  <span class="nt">&quot;p1&quot;</span> <span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">&quot;p2&quot;</span> <span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">&quot;p3&quot;</span> <span class="p">:</span> <span class="mi">40</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">&quot;p4&quot;</span> <span class="p">:</span> <span class="mi">9</span><span class="p">,</span>
+</span><span class='line'>  <span class="nt">&quot;p5&quot;</span> <span class="p">:</span> <span class="mi">12</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The translations were used for replacing an attribute value in existing documents
+with a lookup table computed outside the AQL query.</p>
+
+<p>The number of values in the <code>translations</code> object was varying from query to query,
+with no upper bound on the number of values. It was possible that the query was
+running with 50,000 lookup values in the <code>translations</code> object.</p>
+
+<p>When trying to reproduce the problem, we expected that the query would get at worst
+<em>linearly</em> slower with an increasing number of lookup values. But in reality, the
+following <em>non-linear</em> execution times were observed when increasing the number of
+lookup values:</p>
+
+<figure class='code'><figcaption><span>execution times for varying input sizes, without optimization</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># of values |  execution time
+</span><span class='line'>------------+----------------
+</span><span class='line'>          1 |        0.6111 s
+</span><span class='line'>          2 |        0.6078 s  
+</span><span class='line'>          4 |        0.6021 s
+</span><span class='line'>          8 |        0.6160 s
+</span><span class='line'>         16 |        0.6925 s
+</span><span class='line'>         32 |        0.7107 s
+</span><span class='line'>         64 |        0.7677 s
+</span><span class='line'>        128 |        0.8576 s
+</span><span class='line'>        256 |        1.0544 s
+</span><span class='line'>        512 |        1.4579 s
+</span><span class='line'>       1024 |        8.8303 s
+</span><span class='line'>       2048 |       17.3674 s
+</span><span class='line'>       4096 |       35.3109 s
+</span><span class='line'>       8192 |       74.9161 s
+</span><span class='line'>      16384 |      145.0837 s
+</span><span class='line'>      32768 |      361.9870 s
+</span><span class='line'>      65536 |      880.4995 s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>(note: all values stated above are wall-clock times for running the query with a
+FILTER condition matching 50,000 documents &ndash; i.e. the <code>TRANSLATE()</code> expression was
+executed 50,000 times per query)</p>
+
+<p>With small objects passed in <code>translate</code>, the execution times only increased slowly
+even when object sizes were doubled. The <code>TRANSLATE()</code> expression&rsquo;s share of the
+overall query execution time was still low for small objects, even when doubling
+their sizes. However, it got pretty bad for objects with 1,024 members already, and
+from that point on, execution times more than doubled if object sizes got doubled.</p>
+
+<p>The <code>TRANSLATE()</code> function itself has O(1) complexity, so we could rule it out as
+the problem cause. However, <code>TRANSLATE()</code> is V8-based, and it turned out that there
+was a problem when the number of values in the <code>translations</code> object increased from
+1022 to 1023. At that particular threshold, execution time quadrupled.</p>
+
+<p>At 1023 object members, V8 seems to change the internal object format, which probably
+requires rearranging the object data internally. V8 has several <em>internal</em> types for
+representing JavaScript objects, and converting between them is not free.</p>
+
+<p>The obvious optimization opportunity for this case was to create the <code>translations</code>
+object value just once as a V8 object, and reuse the same object when calling the
+<code>TRANSLATE()</code> function repeatedly. This avoids repeated creation and destruction of
+the V8 objects used in function calls, and as a side effect may also lead to less garbage
+values being accumulated when functions are called repeatedly.</p>
+
+<p>The optimization is possible here because the <code>translations</code> object is an object literal
+and thus constant. It will also work for array literals and bind parameters (which
+are also treated as literals once their values are known).</p>
+
+<p>Here are the execution time for running the <code>TRANSLATE()</code> on 50,000 documents with the
+modification:</p>
+
+<figure class='code'><figcaption><span>execution times, with optimization</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'># of values |  execution time
+</span><span class='line'>------------+----------------
+</span><span class='line'>          1 |        0.6251 s
+</span><span class='line'>          2 |        0.6302 s  
+</span><span class='line'>          4 |        0.6138 s
+</span><span class='line'>          8 |        0.6141 s
+</span><span class='line'>         16 |        0.6685 s
+</span><span class='line'>         32 |        0.6232 s
+</span><span class='line'>         64 |        0.6204 s
+</span><span class='line'>        128 |        0.6326 s
+</span><span class='line'>        256 |        0.6460 s
+</span><span class='line'>        512 |        0.6275 s
+</span><span class='line'>       1024 |        0.6639 s
+</span><span class='line'>       2048 |        0.6345 s
+</span><span class='line'>       4096 |        0.6554 s
+</span><span class='line'>       8192 |        0.6789 s
+</span><span class='line'>      16384 |        0.7569 s
+</span><span class='line'>      32768 |        0.7636 s
+</span><span class='line'>      65536 |        1.0173 s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Looks like this is going to scale way better.</p>
+
+<p>The optimization is disabled for big array/objects which are non-constant (e.g. a variable
+or the result of an expression), or for parameters passed into user-defined AQL functions.
+Enabling it for user-defined AQL functions is not safe because in theory these might
+modify their arguments (and function arguments are passed by reference &ndash; passing them
+by value would also defeat the purpose of the optimization).</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[On Getting Unique Values]]></title>
@@ -2277,7 +2454,7 @@ query already:</p>
 is irrelevant to the user, the user can provide a hint to the optimizer to remove the
 post-<code>COLLECT</code> sort.</p>
 
-<p>This can be achieved by simplying appending a <code>SORT null</code> to the original <code>COLLECT</code> statement.
+<p>This can be achieved by simply appending a <code>SORT null</code> to the original <code>COLLECT</code> statement.
 Here we can see that this removes the post-<code>COLLECT</code> sort:</p>
 
 <p><img src="http://jsteemann.github.io/downloads/screenshots/collect-nosort.png"></p>
@@ -4022,333 +4199,6 @@ As mentioned before, it should be possible to run the queries for other reposito
 
 
 <p>Enjoy!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[More ES6 Features]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/02/26/more-es6-features/"/>
-    <updated>2015-02-26T12:00:46+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/02/26/more-es6-features</id>
-    <content type="html"><![CDATA[<p>ArangoDB 2.5 comes with an upgraded version of V8, Google&rsquo;s open source JavaScript engine.</p>
-
-<p>The built-in version of V8 has been upgraded from 3.29.54 to 3.31.74.1.</p>
-
-<p>In addition to several already usable ES6 features (detailed in
-<a href="https://jsteemann.github.io/blog/2014/12/19/using-es6-features-in-arangodb/">this blog</a>,
-the following ES6 features are activated in ArangoDB 2.5 by default:</p>
-
-<ul>
-<li>iterators and generators</li>
-<li>template strings</li>
-<li>enhanced object literals</li>
-<li>enhanced numeric literals</li>
-<li>block scoping with <code>let</code> and constant variables using <code>const</code></li>
-<li>additional String methods (such as <code>startsWith</code>, <code>repeat</code> etc.)</li>
-</ul>
-
-
-<p>The above features are available in ArangoDB 2.5, and can now be used for scripting purposes
-in the ArangoShell and in server-side Foxx actions inside the database.</p>
-
-<p>This blog post briefly explains the features provides some quick examples for using them.</p>
-
-<!-- more -->
-
-
-<h2>Iterators and generators</h2>
-
-<p>Iterator and generator support was optional in 2.4, but is turned on by default since 2.5.</p>
-
-<p>For everyone who is not familiar with generators in JavaScript, here&rsquo;s how they work:</p>
-
-<p>Generators are special functions tagged with an asterisk (<code>*</code>). Values are returned to the
-caller using the <code>yield</code> keyword:</p>
-
-<figure class='code'><figcaption><span>a simple generator that generates two values                                                            </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span><span class="o">*</span> <span class="nx">generate</span> <span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">yield</span> <span class="mi">23</span><span class="p">;</span>
-</span><span class='line'>  <span class="nx">yield</span> <span class="mi">42</span><span class="p">;</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Calling the function with initialize/reset the generator. Calling the <code>next()</code> method on
-the generator&rsquo;s initial call return value produces the next sequence element. The element
-is returned in a <code>value</code> attribute. The <code>done</code> attribute indicates whether the sequence
-has come to an end:</p>
-
-<figure class='code'><figcaption><span>invoking the generator</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">generator</span> <span class="o">=</span> <span class="nx">generate</span><span class="p">();</span>
-</span><span class='line'><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">generator</span><span class="p">.</span><span class="nx">next</span><span class="p">());</span>  <span class="cm">/* { &quot;value&quot; : 23, &quot;done&quot; : false } */</span>
-</span><span class='line'><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">generator</span><span class="p">.</span><span class="nx">next</span><span class="p">());</span>  <span class="cm">/* { &quot;value&quot; : 42, &quot;done&quot; : false } */</span>
-</span><span class='line'><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">generator</span><span class="p">.</span><span class="nx">next</span><span class="p">());</span>  <span class="cm">/* { &quot;value&quot; : undefined, &quot;done&quot; : true } */</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p></p>
-
-<p>Sequences produced by generators can also be consumed via a <code>for...of</code> loop:</p>
-
-<figure class='code'><figcaption><span>consuming all values from a generator function</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">generator</span> <span class="o">=</span> <span class="nx">generate</span><span class="p">();</span>
-</span><span class='line'>
-</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">value</span> <span class="nx">of</span> <span class="nx">generator</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">value</span><span class="p">);</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In general, every object that is iteratable can be consumed using the <code>of</code> operator.
-Some built-in objects provide pre-defined iterators (e.g. <code>Map.keys()</code> or <code>Map.values()</code>),
-but you can also create iterators for your own objects:</p>
-
-<figure class='code'><figcaption><span>creating an iterator for an object</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">Sentence</span> <span class="p">(</span><span class="nx">text</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">this</span><span class="p">.</span><span class="nx">text</span> <span class="o">=</span> <span class="nx">text</span><span class="p">;</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="nx">Sentence</span><span class="p">.</span><span class="nx">prototype</span><span class="p">[</span><span class="nx">Symbol</span><span class="p">.</span><span class="nx">iterator</span><span class="p">]</span> <span class="o">=</span> <span class="kd">function</span><span class="o">*</span><span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">regex</span> <span class="o">=</span> <span class="sr">/\S+/g</span><span class="p">;</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">text</span> <span class="o">=</span> <span class="k">this</span><span class="p">.</span><span class="nx">text</span><span class="p">;</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">match</span><span class="p">;</span>
-</span><span class='line'>  <span class="k">while</span> <span class="p">(</span><span class="nx">match</span> <span class="o">=</span> <span class="nx">regex</span><span class="p">.</span><span class="nx">exec</span><span class="p">(</span><span class="nx">text</span><span class="p">))</span> <span class="p">{</span>
-</span><span class='line'>    <span class="nx">yield</span> <span class="nx">match</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">};</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">var</span> <span class="nx">sentence</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Sentence</span><span class="p">(</span><span class="s2">&quot;The quick brown fox jumped over the lazy dog&quot;</span><span class="p">);</span>
-</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">word</span> <span class="nx">of</span> <span class="nx">sentence</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">word</span><span class="p">);</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Template strings</h2>
-
-<p>I know there are query string generators and such, but for the sake of the example, let&rsquo;s assume you
-wanted to write a query string in JavaScript. You might end up with something like this:</p>
-
-<figure class='code'><figcaption><span>multi-line query string</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span>
-</span><span class='line'>  <span class="s1">&#39;FOR doc IN users\n&#39;</span> <span class="o">+</span>
-</span><span class='line'>  <span class="s1">&#39;  FILTER doc.name == @name\n&#39;</span> <span class="o">+</span>
-</span><span class='line'>  <span class="s1">&#39;  RETURN doc\n&#39;</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This is hardly legible, and it is also very prone to errors.</p>
-
-<p>ES6 template strings provide a way to define multi-line string literals in a much easier and simpler way.
-Here&rsquo;s how to do it (note the backticks instead of the regular string quotes):</p>
-
-<figure class='code'><figcaption><span>using a multi-line template string</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span> <span class="err">`</span>
-</span><span class='line'><span class="nx">FOR</span> <span class="nx">doc</span> <span class="nx">IN</span> <span class="nx">users</span>
-</span><span class='line'>  <span class="nx">FILTER</span> <span class="nx">doc</span><span class="p">.</span><span class="nx">name</span> <span class="o">==</span> <span class="err">@</span><span class="nx">name</span>
-</span><span class='line'>  <span class="nx">RETURN</span> <span class="nx">doc</span>
-</span><span class='line'><span class="err">`</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Template strings also support value substitution, so you could even write something like this, too:</p>
-
-<figure class='code'><figcaption><span>value substitution in template strings</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">name</span> <span class="o">=</span> <span class="s2">&quot;AQL injection attempt \&quot; OR true OR \&quot;&quot;</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span> <span class="err">`</span>
-</span><span class='line'><span class="nx">FOR</span> <span class="nx">doc</span> <span class="nx">IN</span> <span class="nx">users</span>
-</span><span class='line'>  <span class="nx">FILTER</span> <span class="nx">doc</span><span class="p">.</span><span class="nx">name</span> <span class="o">==</span> <span class="nx">$</span><span class="p">{</span><span class="nx">JSON</span><span class="p">.</span><span class="nx">stringify</span><span class="p">(</span><span class="nx">name</span><span class="p">)}</span>
-</span><span class='line'>  <span class="nx">RETURN</span> <span class="nx">doc</span>
-</span><span class='line'><span class="err">`</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p></p>
-
-<p>Note that while value substitution in template strings in convenient, you still have to be careful with
-user-generated values. Otherwise you might be subject to value injection attacks, as you would be with
-every other form of improper user value handling.</p>
-
-<h2>Enhanced object literals</h2>
-
-<p>Save some time when definining objects:</p>
-
-<figure class='code'><figcaption><span>using enhanced object literals</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">name</span> <span class="o">=</span> <span class="s2">&quot;foobar&quot;</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="nx">myObject</span> <span class="o">=</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">type</span> <span class="o">:</span> <span class="s2">&quot;myType&quot;</span><span class="p">,</span>   <span class="cm">/* always worked */</span>
-</span><span class='line'>  <span class="nx">name</span><span class="p">,</span>              <span class="cm">/* same as &quot;name&quot; : name */</span>
-</span><span class='line'>  <span class="nx">save</span> <span class="p">()</span> <span class="p">{</span>          <span class="cm">/* same as &quot;save&quot; : function () ... */</span>
-</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;save called!&quot;</span><span class="p">);</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">};</span>
-</span><span class='line'>
-</span><span class='line'><span class="p">{</span>
-</span><span class='line'>  <span class="s2">&quot;type&quot;</span> <span class="o">:</span> <span class="s2">&quot;myType&quot;</span><span class="p">,</span>
-</span><span class='line'>  <span class="s2">&quot;name&quot;</span> <span class="o">:</span> <span class="s2">&quot;foobar&quot;</span><span class="p">,</span>
-</span><span class='line'>  <span class="s2">&quot;save&quot;</span> <span class="o">:</span> <span class="p">[</span><span class="nb">Function</span> <span class="s2">&quot;console.log(&quot;</span><span class="nx">save</span> <span class="nx">called</span><span class="o">!</span><span class="s2">&quot;);&quot;</span> <span class="p">...]</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>As can be seen above, enhanced object literal declarations can save some typing and reduce redundancies
-in the code. Unfortunately we still cannot use object key names generated from expressions:</p>
-
-<figure class='code'><figcaption><span>does not work yet</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">myObject</span> <span class="o">=</span> <span class="p">{</span>
-</span><span class='line'>  <span class="p">[</span> <span class="s2">&quot;foo&quot;</span> <span class="o">+</span> <span class="nx">bar</span><span class="s2">&quot; ] : &quot;</span><span class="nx">foobar</span><span class="err">&quot;</span>
-</span><span class='line'><span class="p">};</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Enhanced numeric literals</h2>
-
-<p>Numeric values can now be specified in binary or octal if required:</p>
-
-<figure class='code'><figcaption><span>numeric literals                                                                                        </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">life</span> <span class="o">=</span> <span class="mi">0</span><span class="nx">b101010</span><span class="p">;</span>          <span class="cm">/* binary, 42 in decimal */</span>
-</span><span class='line'><span class="kd">var</span> <span class="nx">filePermissions</span> <span class="o">=</span> <span class="mi">0</span><span class="nx">o777</span><span class="p">;</span>  <span class="cm">/* octal, 511 in decimal */</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p></p>
-
-<h2>Block scoping</h2>
-
-<p>As a mostly C++ programmer, I am always puzzled about the scoping of JavaScript variables.
-In the following example, variable <code>x</code> does not only live inside the curly brackets block in which
-it was declared, but also afterwards:</p>
-
-<figure class='code'><figcaption><span>numeric literals                                                                                        </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">work</span> <span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="kd">var</span> <span class="nx">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="k">return</span> <span class="nx">x</span><span class="p">;</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The reason is that the curly brackets around <code>var x = 1;</code> are not a scope at all in traditional
-JavaScript. This sucks, because variables can linger around in programs longer than necessary,
-leading to unwanted side-effects.</p>
-
-<p>With block-level scopes, this can be fixed. To use it, introduce variables not with the <code>var</code>
-keyword, but with <code>let</code>. <code>let</code> only works in strict mode, so make sure your function or module
-uses it.</p>
-
-<p>Now, with block-level scoping, the above snippet looks like this:</p>
-
-<figure class='code'><figcaption><span>numeric literals                                                                                        </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">work</span> <span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="s2">&quot;use strict&quot;</span><span class="p">;</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="kd">let</span> <span class="nx">x</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>  <span class="k">return</span> <span class="nx">x</span><span class="p">;</span>
-</span><span class='line'><span class="p">};</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>And it will actually produce an error when trying to access variable <code>x</code> in the <code>return</code> statement.
-The reason is that the life of <code>x</code> was over as soon as its scope was left. The scope of variable <code>x</code> is
-now only the one with the <code>let</code> declaration inside the curly brackets.</p>
-
-<p>Someone else said &ldquo;<em>let is the new var</em>&rdquo;, and I think there&rsquo;s not much to add.</p>
-
-<p>Additionally, the <code>const</code> keyword can be used to define a read-only variables. Trying to re-define a
-constant will produce an error in strict mode (the desired behavior), and do nothing in non-strict mode.
-Another reason to use the strict mode.</p>
-
-<h2>Additional String methods</h2>
-
-<p><code>String</code> objects now provide extra built-in methods:</p>
-
-<ul>
-<li><code>string.startsWith(what)</code></li>
-<li><code>string.endsWith(what)</code></li>
-<li><code>string.includes(what)</code></li>
-<li><code>string.repeat(count)</code></li>
-<li><code>string.normalize(method)</code></li>
-<li><code>string.codePointAt(position)</code></li>
-</ul>
-
-
-<p>There is also an extra &ldquo;static&rdquo; method:</p>
-
-<ul>
-<li><code>String.fromCodePoint(codePoint)</code></li>
-</ul>
-
 ]]></content>
   </entry>
   

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Category: AQL, | J@ArangoDB]]></title>
+  <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-06-01T14:55:56+02:00</updated>
+  <updated>2015-06-15T18:38:09+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,148 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Speeding Up Array/object Literal Access]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access/"/>
+    <updated>2015-06-15T15:56:27+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access</id>
+    <content type="html"><![CDATA[<p>Last week some further optimization slipped into 2.6. The optimization can
+provide significant speedups in AQL queries using huge array/object bind parameters
+and passing them into V8-based functions.</p>
+
+<!-- more -->
+
+
+<p>It started with an ArangoDB user reporting a specific query to run unexpectedly slow.
+The part of the query that caused the problem was simple and looked like this:</p>
+
+<p><code>plain problematic query
+FOR doc IN collection
+  FILTER doc.attribute == @value
+  RETURN TRANSLATE(doc.from, translations, 0)
+</code></p>
+
+<p>In the original query, <code>translations</code> was a big, constant object literal. Think of
+something like the following, but with a lot more values:</p>
+
+<p><code>json example translations value
+{
+  "p1" : 1,
+  "p2" : 2,
+  "p3" : 40,
+  "p4" : 9,
+  "p5" : 12
+}
+</code></p>
+
+<p>The translations were used for replacing an attribute value in existing documents
+with a lookup table computed outside the AQL query.</p>
+
+<p>The number of values in the <code>translations</code> object was varying from query to query,
+with no upper bound on the number of values. It was possible that the query was
+running with 50,000 lookup values in the <code>translations</code> object.</p>
+
+<p>When trying to reproduce the problem, we expected that the query would get at worst
+<em>linearly</em> slower with an increasing number of lookup values. But in reality, the
+following <em>non-linear</em> execution times were observed when increasing the number of
+lookup values:</p>
+
+<p>```plain execution times for varying input sizes, without optimization</p>
+
+<h1>of values |  execution time</h1>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</p>
+
+<pre><code>      1 |        0.6111 s
+      2 |        0.6078 s  
+      4 |        0.6021 s
+      8 |        0.6160 s
+     16 |        0.6925 s
+     32 |        0.7107 s
+     64 |        0.7677 s
+    128 |        0.8576 s
+    256 |        1.0544 s
+    512 |        1.4579 s
+   1024 |        8.8303 s
+   2048 |       17.3674 s
+   4096 |       35.3109 s
+   8192 |       74.9161 s
+  16384 |      145.0837 s
+  32768 |      361.9870 s
+  65536 |      880.4995 s
+</code></pre>
+
+<p>```</p>
+
+<p>(note: all values stated above are wall-clock times for running the query with a
+FILTER condition matching 50,000 documents &ndash; i.e. the <code>TRANSLATE()</code> expression was
+executed 50,000 times per query)</p>
+
+<p>With small objects passed in <code>translate</code>, the execution times only increased slowly
+even when object sizes were doubled. The <code>TRANSLATE()</code> expression&rsquo;s share of the
+overall query execution time was still low for small objects, even when doubling
+their sizes. However, it got pretty bad for objects with 1,024 members already, and
+from that point on, execution times more than doubled if object sizes got doubled.</p>
+
+<p>The <code>TRANSLATE()</code> function itself has O(1) complexity, so we could rule it out as
+the problem cause. However, <code>TRANSLATE()</code> is V8-based, and it turned out that there
+was a problem when the number of values in the <code>translations</code> object increased from
+1022 to 1023. At that particular threshold, execution time quadrupled.</p>
+
+<p>At 1023 object members, V8 seems to change the internal object format, which probably
+requires rearranging the object data internally. V8 has several <em>internal</em> types for
+representing JavaScript objects, and converting between them is not free.</p>
+
+<p>The obvious optimization opportunity for this case was to create the <code>translations</code>
+object value just once as a V8 object, and reuse the same object when calling the
+<code>TRANSLATE()</code> function repeatedly. This avoids repeated creation and destruction of
+the V8 objects used in function calls, and as a side effect may also lead to less garbage
+values being accumulated when functions are called repeatedly.</p>
+
+<p>The optimization is possible here because the <code>translations</code> object is an object literal
+and thus constant. It will also work for array literals and bind parameters (which
+are also treated as literals once their values are known).</p>
+
+<p>Here are the execution time for running the <code>TRANSLATE()</code> on 50,000 documents with the
+modification:</p>
+
+<p>```plain execution times, with optimization</p>
+
+<h1>of values |  execution time</h1>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</p>
+
+<pre><code>      1 |        0.6251 s
+      2 |        0.6302 s  
+      4 |        0.6138 s
+      8 |        0.6141 s
+     16 |        0.6685 s
+     32 |        0.6232 s
+     64 |        0.6204 s
+    128 |        0.6326 s
+    256 |        0.6460 s
+    512 |        0.6275 s
+   1024 |        0.6639 s
+   2048 |        0.6345 s
+   4096 |        0.6554 s
+   8192 |        0.6789 s
+  16384 |        0.7569 s
+  32768 |        0.7636 s
+  65536 |        1.0173 s
+</code></pre>
+
+<p>```</p>
+
+<p>Looks like this is going to scale way better.</p>
+
+<p>The optimization is disabled for big array/objects which are non-constant (e.g. a variable
+or the result of an expression), or for parameters passed into user-defined AQL functions.
+Enabling it for user-defined AQL functions is not safe because in theory these might
+modify their arguments (and function arguments are passed by reference &ndash; passing them
+by value would also defeat the purpose of the optimization).</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[On Getting Unique Values]]></title>
@@ -79,6 +221,452 @@ The same was true for 2.4 (2.4.8) and 2.5 (2.5.5).</p>
 minor optimizations within AQL that didn&rsquo;t get a pretty working title.</p>
 
 <p>Looks like in sum all the optimizations put into 2.6 really pay out.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Diffing Two Documents in AQL]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/26/diffing-two-documents-in-aql/"/>
+    <updated>2015-05-26T11:08:31+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/26/diffing-two-documents-in-aql</id>
+    <content type="html"><![CDATA[<p>I just stumbled upon a <a href="https://www.arangodb.com/2015/04/aql-functions-improvements/">comment in the ArangoDB blog</a>
+asking how to create a diff of two documents with AQL.</p>
+
+<p>Though there is no built-in AQL function to diff two documents, it is easily possible to build your own like in
+the following query.</p>
+
+<!-- more -->
+
+
+<p>```plain AQL code for diffing two documents
+/<em> input document 1</em>/
+LET doc1 = {
+  &ldquo;foo&rdquo; : &ldquo;bar&rdquo;,
+  &ldquo;a&rdquo; : 1,
+  &ldquo;b&rdquo; : 2
+}</p>
+
+<p>/<em> input document 2 </em>/
+LET doc2 = {
+  &ldquo;foo&rdquo; : &ldquo;baz&rdquo;,
+  &ldquo;a&rdquo; : 2,
+  &ldquo;c&rdquo; : 3
+}</p>
+
+<p>/<em> collect attributes present in doc1, but missing in doc2 </em>/
+LET missing = (
+  FOR key IN ATTRIBUTES(doc1)</p>
+
+<pre><code>FILTER ! HAS(doc2, key)
+RETURN {
+  [ key ]: doc1[key]
+}
+</code></pre>
+
+<p>)</p>
+
+<p>/<em> collect attributes present in both docs, but that have different values </em>/
+LET changed = (
+  FOR key IN ATTRIBUTES(doc1)</p>
+
+<pre><code>FILTER HAS(doc2, key) &amp;&amp; doc1[key] != doc2[key]
+RETURN {
+  [ key ] : {
+    old: doc1[key],
+    new: doc2[key]
+  }
+}
+</code></pre>
+
+<p>)</p>
+
+<p>/<em> collect attributes present in doc2, but missing in doc1 </em>/
+LET added = (
+  FOR key IN ATTRIBUTES(doc2)</p>
+
+<pre><code>FILTER ! HAS(doc1, key)
+RETURN {
+  [ key ] : doc2[key]
+}
+</code></pre>
+
+<p>)</p>
+
+<p>/<em> return final result </em>/
+RETURN {
+  &ldquo;missing&rdquo; : missing,
+  &ldquo;changed&rdquo; : changed,
+  &ldquo;added&rdquo; : added
+}
+```</p>
+
+<p>Note: the query may look a bit lengthy, but much of that is due to formatting. A more terse
+version can be found below.</p>
+
+<p>The above query will return a document with three attributes:</p>
+
+<ul>
+<li><em>missing</em>: contains all attributes only present in first document (i.e. missing in second document)</li>
+<li><em>changed</em>: contains all attributes present in both documents that have different values</li>
+<li><em>added</em>: contains all attributes only present in second document (i.e. missing in first document)</li>
+</ul>
+
+
+<p>For the two example documents it will return:
+```json diff query result
+[
+  {</p>
+
+<pre><code>"missing" : [ 
+  { 
+    "b" : 2 
+  } 
+], 
+"changed" : [ 
+  { 
+    "foo" : { 
+      "old" : "bar", 
+      "new" : "baz" 
+    } 
+  }, 
+  { 
+    "a" : { 
+      "old" : 1, 
+      "new" : 2 
+    } 
+  } 
+], 
+"added" : [ 
+  { 
+    "c" : 3 
+  } 
+] 
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<p>That output format was the first that came to my mind. It is of course possible to adjust the query so
+it produces a different output format.</p>
+
+<p>Following is a version of the same query that can be invoked from JavaScript easily. It passes the two
+documents as bind parameters and calls <code>db._query</code>. The query is now a one-liner (less readable but easier
+to copy&amp;paste):</p>
+
+<p>```js
+bindVariables = {
+  doc1 : { &ldquo;foo&rdquo; : &ldquo;bar&rdquo;, &ldquo;a&rdquo; : 1, &ldquo;b&rdquo; : 2 },
+  doc2 : { &ldquo;foo&rdquo; : &ldquo;baz&rdquo;, &ldquo;a&rdquo; : 2, &ldquo;c&rdquo; : 3 }
+};</p>
+
+<p>query = &ldquo;LET doc1 = @doc1, doc2 = @doc2, missing = (FOR key IN ATTRIBUTES(doc1) FILTER ! HAS(doc2, key) RETURN { [ key ]: doc1[key] }), changed = (FOR key IN ATTRIBUTES(doc1) FILTER HAS(doc2, key) &amp;&amp; doc1[key] != doc2[key] RETURN { [ key ] : { old: doc1[key], new: doc2[key] } }), added = (FOR key IN ATTRIBUTES(doc2) FILTER ! HAS(doc1, key) RETURN { [ key ] : doc2[key] }) RETURN { missing : missing, changed : changed, added : added }&rdquo;;</p>
+
+<p>result = db._query(query, bindVariables).toArray();
+```</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[The Great AQL Shootout: ArangoDB 2.5 vs 2.6]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/"/>
+    <updated>2015-05-20T18:04:04+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26</id>
+    <content type="html"><![CDATA[<p>We are currently preparing ArangoDB 2.6 for release. A lot of work has been put into this release,
+and I really hope we can ship a first 2.6 release soon.</p>
+
+<p>To keep you hanging on in the meantime, I put together some performance tests results from 2.6.
+The tests I ran compared AQL query execution times in 2.6 and 2.5.</p>
+
+<p>The results look quite promising: <strong>2.6 outperformed 2.5 for all tested queries</strong>, mostly by
+factors of 2 to 5. A few dedicated AQL features in the tests got boosted even more, resulting in
+query execution time reductions of 90 % and more.
+Finally, the tests also revealed a dedicated case for which 2.6 provides a several hundredfold speedup.</p>
+
+<p>Also good news is that not a single of the test queries ran slower in 2.6 than in 2.5.</p>
+
+<!-- more -->
+
+
+<h1>What was tested?</h1>
+
+<p>The tests execute several read-only AQL queries on datasets of different sizes and measure the
+query execution times. The tests were conducted in both ArangoDB 2.5 (2.5.4, the current stable version)
+and 2.6 (2.6.0-alpha2, the upcoming version), so the results of the two ArangoDB versions can be compared.</p>
+
+<p>Though the tests do not cover every possible type of AQL operation, feature and function, they still do
+cover a wide range of features, e.g. lookups, joins, COLLECT operations, sorting, subqueries,
+and some AQL functions. Overall, the test suite contains 33 different cases.</p>
+
+<p>All queries were run on datasets of three different sizes to validate that the results are relevant
+for datasets of various sizes. The dataset sizes are 10,000 documents, 100,000 documents, and 1,000,000
+documents. Each query was repeated a few times so outliers in execution time can be identified.</p>
+
+<p>There is full disclosure of the test methodology and the test script below, so anyone interested
+can repeat the tests locally and verify the results.</p>
+
+<h1>Test results</h1>
+
+<p>The combined test results from 2.5 and 2.6 can be found in this
+<a href="/downloads/code/arango-25-26-shootout-results.pdf">PDF file</a>.
+There is also an <em>ods</em> version of the same file <a href="/downloads/code/arango-25-26-shootout-results.ods">here</a>.
+A description of the columns and test cases used in these files can be found further below.</p>
+
+<p>For the detail-loving folks, here are the raw results for both versions in isolation:
+<a href="/downloads/code/arango-25-26-shootout-results-25.txt">2.5</a>,
+<a href="/downloads/code/arango-25-26-shootout-results-26.txt">2.6</a>.</p>
+
+<p>The results show that ArangoDB 2.6 was consistently faster for <strong>all</strong> AQL queries included in the
+tests.</p>
+
+<p>The queries that improved most in 2.6 over 2.5 include:</p>
+
+<ul>
+<li><code>FILTER</code> conditions: simple <code>FILTER</code> conditions as used in the tests are 3 to 5 times faster</li>
+<li>simple joins using the primary index (<code>_key</code> attribute), hash index or skiplist index are
+2 to 3.5 times faster</li>
+<li>sorting on a string attribute is 2.5 to 3 times faster</li>
+<li>extracting the <code>_key</code> or other top-level attributes from documents is 4 to 5 times faster</li>
+<li><code>COLLECT</code> statements: simple <code>COLLECT</code> statements like the ones in the tests are 7 to 15 times
+faster</li>
+<li>looking up documents using <code>IN</code> lists with a substantial amount of values contained in the <code>IN</code>
+list is 250 to 700 times faster</li>
+</ul>
+
+
+<p>The one thing that did not change much when comparing 2.6 with 2.5 is iterating over a collection
+and returning all its documents unmodified. The speedups observed for this type of query are between
+18 and 25 %, which is the lowest speedup measured by the tests. Still 18 to 25 % seem okay
+as a free take-away.</p>
+
+<p>Speedups were observed for all three test dataset sizes alike. In some cases, the speedups
+varied a bit with the dataset sizes, but it was still in the same ballpark for all three datasets.
+The conclusion is thus that the speedups did not depend much on the dataset sizes.</p>
+
+<h1>Reasons for speedups</h1>
+
+<p>There are several reasons why the 2.6 performance is better than in previous versions. The main
+reason is that we spent much time optimizing some of the crtical AQL code paths. Then we also
+worked on optimizations for specific features, which are used by some of the tested queries.</p>
+
+<p>If you&rsquo;re interested in the details, here they are:</p>
+
+<ul>
+<li><a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing with a hash table</a></li>
+<li><a href="/blog/2015/04/23/aql-functions-improvements/">AQL functions improvements</a></li>
+<li><a href="/blog/2015/05/04/subquery-optimizations/">Subquery optimizations</a></li>
+<li><a href="/blog/2015/05/04/return-value-optimization-for-aql/">Return value optimization for AQL</a></li>
+<li><a href="/blog/2015/05/07/in-list-improvements/">IN-list improvements</a></li>
+</ul>
+
+
+<p>Additionally, UTF-8 string comparisons were boosted by the upgrade from ICU 52 to ICU 54. The
+latter version contains a rewritten and much faster UTF-8-aware strcmp, which we heavily rely on.</p>
+
+<h1>Test methodology</h1>
+
+<p>Each query was run five times on each dataset, so execution time outliers can be identified. The
+results contain the minimum, maximum and average execution times for each query.</p>
+
+<p>Queries were run in isolation on an otherwise idle server. The queries were all run inside the
+server, so there was no HTTP/network traffic involved for shipping query results (note: this
+was also <a href="/blog/2015/04/01/improvements-for-the-cursor-api/">vastly improved in 2.6</a> but this is
+not the subject of this post).</p>
+
+<p>All tests were run on my local machine, which has 4 cores, 8 CPUs (though the number of CPUs will
+not matter for any of the tests), 12 GB of physical memory, a Linux 3.16 kernel and an Ubuntu 15
+OS. All datasets fit into the main memory, so tests were not I/O-bound.</p>
+
+<p>The ArangoDB versions tested were 2.5.4 and 2.6.0-alpha2. Both versions were hand-compiled with
+g++ 4.9.1 with options <code>CC='gcc' CXX='g++' CFLAGS='-O3 -Wall' CXXFLAGS='-O3 -Wall'</code>.</p>
+
+<p>The complete test script, including the setup of the test data, is contained in
+<a href="/downloads/code/arango-25-26-shootout-script.js">this file</a>. It can be run inside <em>arangod</em> by
+typing the following in the server console:</p>
+
+<p><code>js running the tests inside arangod
+require("internal").load("/path/to/arango-25-26-shootout-script.js");
+</code></p>
+
+<p>Note that this needs an <em>arangod</em> started with option <code>--console</code>. Also note that running the
+script will only test the current <em>arangod</em> instance, so the script needs to be run once in a
+2.5 instance and once in 2.6.</p>
+
+<p>Running the script will set up the test collections, run all queries on them (you will need some
+patience for this) and finally print a table like the following:</p>
+
+<p>```plain excerpt from test results</p>
+
+<h2>test name                     | collection  |    runs |     min (s) |     max (s) |     avg (s)</h2>
+
+<p>collect-number                | 10k         |       5 |      0.0760 |      0.1638 |      0.0943
+collect-number                | 100k        |       5 |      0.8697 |      0.8966 |      0.8803
+collect-number                | 1000k       |       5 |     10.4320 |     10.6597 |     10.5314
+collect-string                | 10k         |       5 |      0.1211 |      0.1319 |      0.1250
+collect-string                | 100k        |       5 |      1.5406 |      1.5974 |      1.5641
+collect-string                | 1000k       |       5 |     19.0708 |     19.0966 |     19.0825
+collect-count-number          | 10k         |       5 |      0.0763 |      0.0792 |      0.0778
+```</p>
+
+<p>These result columns have the following meanings:</p>
+
+<ul>
+<li><em>test name</em>: name of test</li>
+<li><em>collection</em>: name of collection. <em>10k</em> is a collection with 10,000 documents, <em>100k</em> contains
+ 100,000 documents, and <em>1000k</em> contains 1,000,000 documents.</li>
+<li><em>runs</em>: number of times the query was run</li>
+<li><em>min (s)</em>: minimum query execution time (in seconds)</li>
+<li><em>max (s)</em>: maximum query execution time (in seconds)</li>
+<li><em>avg (s)</em>: average query execution time (in seconds)</li>
+</ul>
+
+
+<h1>Test data</h1>
+
+<p>The test datasets for the three collections are filled with artifical data. Test documents are
+created like this:</p>
+
+<p><code>js test document creation
+collection.insert({
+  _key: "test" + i,
+  value1: i,
+  value2: "test" + i,
+  value3: i,
+  value4: "test" + i,
+  value5: i,
+  value6: "test" + i,
+  value7: i % g,
+  value8: "test" + (i % g)
+});
+</code></p>
+
+<p>Each document has a <code>_key</code> attribute and 8 other attributes, <code>value1</code> to <code>value8</code>.</p>
+
+<p><code>value1</code>, <code>value3</code>, <code>value5</code> and <code>value7</code> are numeric attributes, the other attributes contain
+string values. The attributes <code>value1</code> to <code>value6</code> contain unique values. The attributes <code>value7</code>
+and <code>value8</code> contain repeating values. They are used for <code>COLLECT</code> queries.</p>
+
+<p><code>value1</code> and <code>value2</code> are each indexed with a hash index. <code>value3</code> and <code>value4</code> are each indexed with
+a skiplist index. <code>value5</code> to <code>value8</code> are not indexed. This way queries can be run on the same values,
+but with different indexes and even without indexes.</p>
+
+<h1>Test cases</h1>
+
+<p>The test cases cover the following queries:</p>
+
+<ul>
+<li><em>collect-number</em> and <em>collect-string</em>: run <code>COLLECT</code> on a repeating attribute, which is either
+numeric or a string</li>
+<li><em>collect-count-number</em> and <em>collect-count-string</em>: ditto, but also calculate the group lengths
+using <code>WITH COUNT INTO</code></li>
+<li><em>subquery</em>: run a single-document subquery for each document of the original collection</li>
+<li><em>concat</em>: for each document in the collection, concat the document <code>_key</code> attribute with another
+ document attribute using <code>CONCAT()</code></li>
+<li><em>merge</em>: for each document in the collection, merge the document with another object using <code>MERGE()</code></li>
+<li><em>keep</em>: for each document in the collection, remove all but a few named attributes from it using
+<code>KEEP()</code></li>
+<li><em>unset</em>: for each document in the collection, remove a few named attributes from it using <code>UNSET()</code></li>
+<li><em>min-number</em> and <em>min-string</em>: return the minimum value of a specific attribute from all documents in
+ the collection, which is either numeric or a string. This uses <code>MIN()</code></li>
+<li><em>max-number</em> and <em>max-string</em>: ditto, but using <code>MAX()</code></li>
+<li><em>sort-number</em> and <em>sort-string</em>: sort all documents in the collection by a non-indexed attribute,
+ which is either numeric or a string</li>
+<li><em>filter-number</em> and <em>filter-string</em>: filter all documents in the collection using a non-indexed attribute,
+ which is either numeric or a string</li>
+<li><em>extract-doc</em>: return all documents in the collection unmodified</li>
+<li><em>extract-key</em>: return the <code>_key</code> attribute of all documents in the collection</li>
+<li><em>extract-number</em> and <em>extract-string</em>: return an attribute from all documents in the collection,
+ which is either numeric or a string</li>
+<li><em>join-key</em>: for each document in the collection, perform a join on the <code>_key</code> attribute on the collection
+ itself (i.e. <code>FOR c1 IN @@c FOR c2 IN @@c FILTER c1._key == c2._key RETURN c1</code>)</li>
+<li><em>join-id</em>: ditto, but perform the join using the <code>_id</code> attribute</li>
+<li><em>join-hash-number</em> and <em>join-hash-string</em>: ditto, but join using a hash index on a numeric or string
+ attribute</li>
+<li><em>join-skiplist-number</em> and <em>join-skiplist-string</em>: ditto, but join using a skiplist index on a numeric or
+ string attribute</li>
+<li><em>lookup-key</em>, <em>lookup-hash-number</em>, <em>lookup-hash-string</em>, <em>lookup-skiplist-number</em>, <em>lookup-skiplist-string</em>:
+ compile an IN-list of 10,000 lookup values and search these 10,000 documents in the collection using
+ either the primary index (<code>_key</code> attribute), a hash index or a skiplist index. The latter two are tested
+ on numeric and string attributes.</li>
+</ul>
+
+
+<p>Further implementation details can be checked in the <a href="/downloads/code/arango-25-26-shootout-script.js">test script</a>.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[IN-list Improvements]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/05/07/in-list-improvements/"/>
+    <updated>2015-05-07T16:46:30+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/05/07/in-list-improvements</id>
+    <content type="html"><![CDATA[<p>We have worked on many AQL optimizations for ArangoDB 2.6.</p>
+
+<p>As a side effect of one of these optimizations, some cases involving the handling
+of large IN-lists have become much faster than before. Large IN-lists are normally
+used when comparing attribute or index values against some big array of lookup values
+or keys provided by the application.</p>
+
+<!-- more -->
+
+
+<p>Let&rsquo;s quickly create and populate a collection named <code>keys</code> so that we can use some
+IN-list queries on it later on:</p>
+
+<p>```js setting up example data
+db._create(&ldquo;keys&rdquo;);</p>
+
+<p>// insert 100k documents with some defined keys into the collection
+for (var i = 0; i &lt; 100000; ++i) {
+  db.keys.insert({ _key: &ldquo;test&rdquo; + i });
+}
+```</p>
+
+<p>And here is a query to all find documents with one of the provided keys <code>test0</code> to <code>test999</code>.
+The IN-list here contains 1,000 values:</p>
+
+<p><code>js using an IN-list with 1,000 values
+var keys = [ ];
+var n = 1000;
+for (var i = 0; i &lt; n; ++i) {
+  keys.push("test" + i);
+}
+db._query("FOR doc IN keys FILTER doc._key IN @keys RETURN doc", { keys: keys }); });
+</code></p>
+
+<p>When invoked from the ArangoShell, this takes around 0.6 seconds to complete with ArangoDB 2.5.</p>
+
+<p>Increasing the length of the IN-list from 1,000 to 5,000 values makes this run in around 15 seconds.
+With an IN-list of 10,000 values, this already takes more than 60 seconds to complete in 2.5.</p>
+
+<p>Obviously longer IN-lists weren&rsquo;t handled terribly efficiently in 2.5, and should be avoided there
+if possible.</p>
+
+<p>I am glad this has been fixed in 2.6. Following is a comparison of the above query for different
+IN-list sizes, run on both ArangoDB 2.5 and 2.6.</p>
+
+<p>```plain 2.5 and 2.6 with different IN-list sizes</p>
+
+<h1>of IN-list values    Execution time (2.5)   Execution time (2.6)</h1>
+
+<hr />
+
+<pre><code>          1,000                  0.67 s                 0.03 s
+          5,000                 15.34 s                 0.12 s
+         10,000                 63.48 s                 0.20 s
+         50,000                   n/a                   0.81 s
+        100,000                   n/a                   1.60 s
+</code></pre>
+
+<p>```</p>
+
+<p>Looks like 2.6 handles longer IN-lists way better than 2.5! The above figures suggest that execution
+times now scale about linearly with the number of IN-list values. This also leads to reductions in query
+execution times of 90 % and more percent.</p>
+
+<p>Please note that longer IN-lists will still make a the query run longer than when
+using shorter IN-lists. This is expected because longer IN-lists require more comparisons to
+be made and will lead (in the above example) to more documents being returned.</p>
 ]]></content>
   </entry>
   

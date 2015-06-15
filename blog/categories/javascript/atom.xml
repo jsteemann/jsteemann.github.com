@@ -4,7 +4,7 @@
   <title><![CDATA[Category: JavaScript | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/javascript/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-06-01T14:55:56+02:00</updated>
+  <updated>2015-06-15T18:38:09+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,148 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Speeding Up Array/object Literal Access]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access/"/>
+    <updated>2015-06-15T15:56:27+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access</id>
+    <content type="html"><![CDATA[<p>Last week some further optimization slipped into 2.6. The optimization can
+provide significant speedups in AQL queries using huge array/object bind parameters
+and passing them into V8-based functions.</p>
+
+<!-- more -->
+
+
+<p>It started with an ArangoDB user reporting a specific query to run unexpectedly slow.
+The part of the query that caused the problem was simple and looked like this:</p>
+
+<p><code>plain problematic query
+FOR doc IN collection
+  FILTER doc.attribute == @value
+  RETURN TRANSLATE(doc.from, translations, 0)
+</code></p>
+
+<p>In the original query, <code>translations</code> was a big, constant object literal. Think of
+something like the following, but with a lot more values:</p>
+
+<p><code>json example translations value
+{
+  "p1" : 1,
+  "p2" : 2,
+  "p3" : 40,
+  "p4" : 9,
+  "p5" : 12
+}
+</code></p>
+
+<p>The translations were used for replacing an attribute value in existing documents
+with a lookup table computed outside the AQL query.</p>
+
+<p>The number of values in the <code>translations</code> object was varying from query to query,
+with no upper bound on the number of values. It was possible that the query was
+running with 50,000 lookup values in the <code>translations</code> object.</p>
+
+<p>When trying to reproduce the problem, we expected that the query would get at worst
+<em>linearly</em> slower with an increasing number of lookup values. But in reality, the
+following <em>non-linear</em> execution times were observed when increasing the number of
+lookup values:</p>
+
+<p>```plain execution times for varying input sizes, without optimization</p>
+
+<h1>of values |  execution time</h1>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</p>
+
+<pre><code>      1 |        0.6111 s
+      2 |        0.6078 s  
+      4 |        0.6021 s
+      8 |        0.6160 s
+     16 |        0.6925 s
+     32 |        0.7107 s
+     64 |        0.7677 s
+    128 |        0.8576 s
+    256 |        1.0544 s
+    512 |        1.4579 s
+   1024 |        8.8303 s
+   2048 |       17.3674 s
+   4096 |       35.3109 s
+   8192 |       74.9161 s
+  16384 |      145.0837 s
+  32768 |      361.9870 s
+  65536 |      880.4995 s
+</code></pre>
+
+<p>```</p>
+
+<p>(note: all values stated above are wall-clock times for running the query with a
+FILTER condition matching 50,000 documents &ndash; i.e. the <code>TRANSLATE()</code> expression was
+executed 50,000 times per query)</p>
+
+<p>With small objects passed in <code>translate</code>, the execution times only increased slowly
+even when object sizes were doubled. The <code>TRANSLATE()</code> expression&rsquo;s share of the
+overall query execution time was still low for small objects, even when doubling
+their sizes. However, it got pretty bad for objects with 1,024 members already, and
+from that point on, execution times more than doubled if object sizes got doubled.</p>
+
+<p>The <code>TRANSLATE()</code> function itself has O(1) complexity, so we could rule it out as
+the problem cause. However, <code>TRANSLATE()</code> is V8-based, and it turned out that there
+was a problem when the number of values in the <code>translations</code> object increased from
+1022 to 1023. At that particular threshold, execution time quadrupled.</p>
+
+<p>At 1023 object members, V8 seems to change the internal object format, which probably
+requires rearranging the object data internally. V8 has several <em>internal</em> types for
+representing JavaScript objects, and converting between them is not free.</p>
+
+<p>The obvious optimization opportunity for this case was to create the <code>translations</code>
+object value just once as a V8 object, and reuse the same object when calling the
+<code>TRANSLATE()</code> function repeatedly. This avoids repeated creation and destruction of
+the V8 objects used in function calls, and as a side effect may also lead to less garbage
+values being accumulated when functions are called repeatedly.</p>
+
+<p>The optimization is possible here because the <code>translations</code> object is an object literal
+and thus constant. It will also work for array literals and bind parameters (which
+are also treated as literals once their values are known).</p>
+
+<p>Here are the execution time for running the <code>TRANSLATE()</code> on 50,000 documents with the
+modification:</p>
+
+<p>```plain execution times, with optimization</p>
+
+<h1>of values |  execution time</h1>
+
+<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</p>
+
+<pre><code>      1 |        0.6251 s
+      2 |        0.6302 s  
+      4 |        0.6138 s
+      8 |        0.6141 s
+     16 |        0.6685 s
+     32 |        0.6232 s
+     64 |        0.6204 s
+    128 |        0.6326 s
+    256 |        0.6460 s
+    512 |        0.6275 s
+   1024 |        0.6639 s
+   2048 |        0.6345 s
+   4096 |        0.6554 s
+   8192 |        0.6789 s
+  16384 |        0.7569 s
+  32768 |        0.7636 s
+  65536 |        1.0173 s
+</code></pre>
+
+<p>```</p>
+
+<p>Looks like this is going to scale way better.</p>
+
+<p>The optimization is disabled for big array/objects which are non-constant (e.g. a variable
+or the result of an expression), or for parameters passed into user-defined AQL functions.
+Enabling it for user-defined AQL functions is not safe because in theory these might
+modify their arguments (and function arguments are passed by reference &ndash; passing them
+by value would also defeat the purpose of the optimization).</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[More ES6 Features]]></title>
@@ -1142,189 +1284,6 @@ version of the application (compatible with 2.3) can be found <a href="/download
 
 <p>Please note that the example application requires ArangoDB 2.3, which is currently
 in development.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Understanding Where Operations Are Executed]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed/"/>
-    <updated>2014-08-30T22:38:42+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed</id>
-    <content type="html"><![CDATA[<p>I recently had to deal with some data processing operation that took
-about 20 minutes to complete. When looking into this, I found that the
-easiest and most beneficial change to the whole setup was to make the
-operation a <em>server-side</em> operation instead of executing it <em>client-side</em>.</p>
-
-<p>This change reduced the operation&rsquo;s total execution time to a few seconds.</p>
-
-<!-- more -->
-
-
-<p>I can&rsquo;t show the original processing task here, so I&rsquo;ll start with a
-contrived example. Imagine the following <em>for</em> loop inserting 100K documents
-into a collection named <code>test</code>:
-<code>js inserting 100k documents
-for (i = 0; i &lt; 100000; ++i) {
-  db.test.save({ value: i });
-}
-</code>
-Now we only need a client application to execute the operation. As I don&rsquo;t
-have a presentable client application right now, I will use the ArangoShell as
-my client application.</p>
-
-<h2>What&rsquo;s in a for loop?</h2>
-
-<p>Running the above <em>for</em> loop inside the ArangoShell will lead to the loop being
-executed inside the <em>arangosh</em> process.</p>
-
-<p>In order to save a document in the collection, arangosh (our client) must make a
-call to the ArangoDB server. This means issuing an HTTP POST request
-to the server&rsquo;s REST API at <code>/_api/document/?collection=test</code>.
-The server process will receive this request, insert the document, and
-respond with an HTTP status code 201 or 202 to our client.
-The client will then continue the loop until all documents have been inserted.</p>
-
-<p>Now it&rsquo;s easy to see that the simple 3-line loop will issue 100,000 HTTP requests
-in total. This means lots of data being pushed through the network stack(s).
-It is pretty easy to imagine that this will come at a cost.</p>
-
-<p>If we instead execute the above loop directly inside the ArangoDB server, we
-can get rid of all the network overhead. The server has no need to send HTTP
-calls to itself. It can simply execute the 100K inserts and is then done.
-We therefore assume the loop to run somewhat faster when executed server-side.</p>
-
-<p>A quick test on a crap laptop produced the following execution times for running
-the loops:</p>
-
-<ul>
-<li>server-side execution (arangod): 1.34 seconds</li>
-<li>client-side execution (arangosh): 17.32 seconds</li>
-</ul>
-
-
-<p><strong>Ouch</strong>. It looks like the client-server request-response overhead matters.</p>
-
-<p>The following sections deal with how to get rid of some or even all the
-client-server ping pong.</p>
-
-<h2>Graph traversals</h2>
-
-<p>The above <em>for</em> loop example was contrived, but imagine running
-a client-side graph traversal instead. In fact, the original problem mentioned
-in the introduction has been a graph traversal.</p>
-
-<p>The problem of a graph traversal is that is often iterative and highly
-dynamic. Decisions are made during the traversal as nodes are encountered,
-leading to dynamic inclusion or exclusion etc. This means that it makes sense to
-process nodes and edges only when needed, at the point when they are visited.</p>
-
-<p>Even if the client can employ some sort of caching for already visited
-nodes, the client still needs to ask the server about each visited
-node&rsquo;s connections at least once. Otherwise it could not follow them.</p>
-
-<p>This normally means lots of requests and responses. Compare this to the
-<em>single</em> request-response alternative in which a client kicks off a server-side
-traversal, and finally receives the overal result once it is assembled.</p>
-
-<p><strong>Conclusion</strong>: traversals on anything but very small graphs should be run server-side.
-A server-side action (see below) is a good way to do this. Please note that
-running a server-side traversal does not mean giving up flexibility and
-control flow functionality. Server-side traversals remain highly configurable
-through custom JavaScript functions that allow implementation of user-defined
-business logic.</p>
-
-<h2>AQL queries</h2>
-
-<p>We won&rsquo;t have your application send a series of 100,000 individual
-insert statements to the relational database of our choice. We already
-know from the past that this is going to be rather slow, so we have
-learned to avoid this. In the relational context, we rather use SQL queries
-that create or modify many rows in one go, e.g. an <code>INSERT INTO ... SELECT ...</code>,
-bulk inserts etc.</p>
-
-<p>ArangoDB is no different. In general, you should try to avoid issuing lots
-of individual queries to the database from a client application. Instead and if
-the queries look alike, try converting multiple individual operations into a
-single AQL query. This will already save a lot of network overhead.</p>
-
-<p>AQL provides multi-document operations to insert, update, and remove data. An
-overview is given <a href="http://docs.arangodb.org/Aql/DataModification.html">here</a>.</p>
-
-<p>The above 100K inserts from the contrived example can easily be transformed
-into this single AQL query:
-<code>
-FOR i IN 1..100000 INSERT { value: i } INTO test
-</code></p>
-
-<h2>Bulk imports</h2>
-
-<p>For importing larger amounts of documents from files, there is the specialized
-<a href="http://docs.arangodb.org/Arangoimp/README.html">arangoimp</a> import tool. It can
-load data from JSON and CSV files into ArangoDB. The tool is shipped with
-ArangoDB.</p>
-
-<p>ArangoDB also provides a REST API for <a href="http://docs.arangodb.org/HttpBulkImports/README.html">bulk imports</a>
-of documents.</p>
-
-<h2>Joins</h2>
-
-<p>A special note about <em>joins</em>: the fact that several NoSQL databases do not
-provide join functionality has driven some people to emulate join functionality
-on the client-side, in their applications.</p>
-
-<p>This can be a recipe for disaster: client-side join implementation might lead
-to horrendous amounts of queries that might need to be sent to the database for
-fetching all the records. More than that, if data are queried individually,
-the overall result may lack consistency. By the way, the same is true for
-fetching referenced or linked documents.</p>
-
-<p>ArangoDB provides join functionality via AQL queries. Additionally, AQL queries
-can be used to fetch other documents with the original documents. Note that
-ArangoDB has no way of defining references or links between documents, but
-still AQL allows combining arbitrary documents in one query.</p>
-
-<p>In almost all cases it make more sense to use an AQL query that performs
-joins or reference-fetching server-side and close to the data than having to
-deal with that on the application-side of things.</p>
-
-<p>AQL joins are described <a href="http://docs.arangodb.org/AqlExamples/Join.html">here</a>.</p>
-
-<h2>Server-side actions</h2>
-
-<p>With <em>stored procedures</em>, relational databases provide another way for an
-application to trigger the execution of a large amount of queries. Stored
-procedures are executed server-side, too, so they allow avoiding a lot of
-request-response ping pong between the application and the database, at least
-for defined tasks. Additionally, stored procedures provide control flow
-functionality, which can also be handy when operations depend on each other.</p>
-
-<p>Coming back to ArangoDB: complex data-processing tasks that need to execute
-multiple operations or need control flow functionality might benefit if
-converted from multiple application-side operations into a single server-side
-action.</p>
-
-<p>Server-side actions run inside the ArangoDB server, closer to the data, and
-can be much faster than a series of client-side operations.
-A server-side action is called with just one HTTP request from the application,
-so it may lead to saving lots of request-response cycles and reduction in
-network overhead. Apart from that, server-side actions in ArangoDB can employ
-transactions and provide the necessary control over isolation and atomicity
-when executing a series of operations.</p>
-
-<p>Business logic and control flow functionality can be integrated
-easily because server-side actions in ArangoDB are JavaScript functions,
-with all of the language&rsquo;s programming features being available.</p>
-
-<p>But there&rsquo;s even more to it: a single server-side operation can be written
-to put together its result in a format most convenient for the client
-application. This can also lead to better encapsulation, because all an
-application needs to know about a server-side action is its API or contract.
-Any internals of the action can be hidden from the client application. Overall,
-this supports a service-oriented approach.</p>
-
-<p>To learn more about how to write server-side actions, please have a look
-at ArangoDB&rsquo;s <a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a>. It is all
-about making server-side actions available via REST APIs.</p>
 ]]></content>
   </entry>
   
