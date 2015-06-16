@@ -4,7 +4,7 @@
   <title><![CDATA[Category: PHP | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/php/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-06-15T18:39:54+02:00</updated>
+  <updated>2015-06-17T00:59:10+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,315 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Parsing PHP Arrays With PHP]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/06/16/parsing-php-arrays-with-php/"/>
+    <updated>2015-06-16T23:37:48+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/06/16/parsing-php-arrays-with-php</id>
+    <content type="html"><![CDATA[<p>By accident I found <a href="http://stackoverflow.com/questions/30877671/how-i-can-convert-a-string-format-array-to-array-type-in-php">this StackOverflow question</a>
+about how to convert a PHP string with array data into an actual PHP array variable.</p>
+
+<p>For example, if your application gets this string from somewhere:</p>
+
+<p><code>php example string data
+$string = "array(array('aaa','bbb','ccc','ddd'),array('AAA','BBB','CCC','DDD'))";
+</code></p>
+
+<p>How do you convert this into a PHP array variable so you can access the individual
+array elements? This is what we want to be able to do:</p>
+
+<p><code>php
+$result = magicallyConvertStringToArray($string);
+var_dump($result[0][0]);  // should be 'aaa'
+</code></p>
+
+<!-- more -->
+
+
+<p>The obvious solution #1 of course is to agree on another data exchange format (e.g. JSON)
+and simply use that. PHP has built-in functions for <a href="http://www.php.net/manual/en/function.json-encode.php">JSON stringification</a>
+and <a href="http://www.php.net/manual/en/function.json-decode.php">JSON parsing</a>.</p>
+
+<h2>Eval?</h2>
+
+<p>But what if the data format really has to stay like this and you cannot change it?
+Then the obvious simple solution would be to <code>eval()</code> the string and capture the result
+in a new variable.</p>
+
+<p>Voila le array:</p>
+
+<p><code>php using eval
+$result = eval($string);
+var_dump($result[0][0]);  // 'aaa'
+</code></p>
+
+<p>But everyone knows that <code>eval</code> is evil and should be avoided wherever possible &ndash; especially when
+being run on strings fetched from remote data sources.</p>
+
+<h2>Writing a PHP data parser in PHP</h2>
+
+<p>Remembering that PHP has a built-in tokenizer for PHP code, we could also make use of
+this and write a small parser for PHP array data.
+Note that I wouldn&rsquo;t recommend writing your own parser if there are other options. But it&rsquo;s
+a last resort, and for the task at hand it should be relatively easy.</p>
+
+<p>This is because we&rsquo;ll only have to deal with arbitrarily nested arrays and some scalar value
+types (strings, numbers, bool, null). We don&rsquo;t expect to see serialized object instances in our
+data. And, not to forget, PHP comes with a built-in tokenizer for PHP code, and we&rsquo;ll let
+it do most of the work.</p>
+
+<p>Before the string can be parsed, it must be turned into PHP code. This can be achieved
+by prepending <code>&lt;?php</code> to it (otherwise the tokenizer would interpret the string as an HTML
+string). We can then use PHP&rsquo;s <code>token_get_all()</code> function to tokenize the string contents for us.</p>
+
+<p>We can immediately remove all T_WHITESPACE tokens from the list of tokens, because whitespace
+is irrelevant for our parsing. For easier handling of tokens, we let a class <code>Tokens</code> handle
+the tokens. This class provides functions for matching, consuming and peeking into tokens:</p>
+
+<p>```php class for managing the tokens
+// class to manage tokens
+class Tokens {
+  private $tokens;</p>
+
+<p>  public function __construct ($code) {</p>
+
+<pre><code>// construct PHP code from string and tokenize it
+$tokens = token_get_all("&lt;?php " . $code);
+// kick out whitespace tokens
+$this-&gt;tokens = array_filter($tokens, function ($token) { 
+  return (! is_array($token) || $token[0] !== T_WHITESPACE);
+});
+// remove start token (&lt;?php)
+$this-&gt;pop();
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function done () {</p>
+
+<pre><code>return count($this-&gt;tokens) === 0;
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function pop () {</p>
+
+<pre><code>// consume the token and return it
+if ($this-&gt;done()) {
+  throw new Exception("already at end of tokens!");
+}
+return array_shift($this-&gt;tokens);
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function peek () {</p>
+
+<pre><code>// return next token, don't consume it
+if ($this-&gt;done()) {
+  throw new Exception("already at end of tokens!");
+}
+return $this-&gt;tokens[0];
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function doesMatch ($what) {</p>
+
+<pre><code>$token = $this-&gt;peek();
+
+if (is_string($what) &amp;&amp; ! is_array($token) &amp;&amp; $token === $what) {
+  return true;
+}
+if (is_int($what) &amp;&amp; is_array($token) &amp;&amp; $token[0] === $what) {
+  return true;
+}
+return false;
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function forceMatch ($what) {</p>
+
+<pre><code>if (! $this-&gt;doesMatch($what)) {
+  if (is_int($what)) {
+    throw new Exception("unexpected token - expecting " . token_name($what));
+  }
+  throw new Exception("unexpected token - expecting " . $what);
+}
+// consume the token
+$this-&gt;pop();
+</code></pre>
+
+<p>  }
+}
+```</p>
+
+<p>With all the tokenization being done, we need a parser that understands the meaning
+of the individual tokens and puts them together in a meaningful way. Here&rsquo;s a parser
+class that can handle simple PHP arrays, string values, int, double and boolean values
+plus <code>null</code>:</p>
+
+<p>```php simple parser class
+// parser for simple PHP arrays
+class Parser {
+  private static $CONSTANTS = array(</p>
+
+<pre><code>"null" =&gt; null, 
+"true" =&gt; true, 
+"false" =&gt; false
+</code></pre>
+
+<p>  );</p>
+
+<p>  private $tokens;</p>
+
+<p>  public function __construct(Tokens $tokens) {</p>
+
+<pre><code>$this-&gt;tokens = $tokens;
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function parseValue () {</p>
+
+<pre><code>if ($this-&gt;tokens-&gt;doesMatch(T_CONSTANT_ENCAPSED_STRING)) {
+  // strings
+  $token = $this-&gt;tokens-&gt;pop();
+  return stripslashes(substr($token[1], 1, -1));
+}
+
+if ($this-&gt;tokens-&gt;doesMatch(T_STRING)) {
+  // built-in string literals: null, false, true
+  $token = $this-&gt;tokens-&gt;pop();
+  $value = strtolower($token[1]);
+  if (array_key_exists($value, self::$CONSTANTS)) {
+    return self::$CONSTANTS[$value];
+  }
+  throw new Exception("unexpected string literal " . $token[1]);
+}
+
+// the rest...
+// we expect a number here
+$uminus = 1;
+
+if ($this-&gt;tokens-&gt;doesMatch("-")) {
+  // unary minus
+  $this-&gt;tokens-&gt;forceMatch("-");
+  $uminus = -1;
+}
+
+if ($this-&gt;tokens-&gt;doesMatch(T_LNUMBER)) {
+  // long number
+  $value = $this-&gt;tokens-&gt;pop();
+  return $uminus * (int) $value[1];
+}
+if ($this-&gt;tokens-&gt;doesMatch(T_DNUMBER)) {
+  // double number
+  $value = $this-&gt;tokens-&gt;pop();
+  return $uminus * (double) $value[1];
+}
+
+throw new Exception("unexpected value token");
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function parseArray () {</p>
+
+<pre><code>$found = 0;
+$result = array();
+
+$this-&gt;tokens-&gt;forceMatch(T_ARRAY);
+$this-&gt;tokens-&gt;forceMatch("(");
+
+while (true) {
+  if ($this-&gt;tokens-&gt;doesMatch(")")) {
+    // reached the end of the array
+    $this-&gt;tokens-&gt;forceMatch(")");
+    break;
+  }
+
+  if ($found &gt; 0) {
+    // we must see a comma following the first element
+    $this-&gt;tokens-&gt;forceMatch(",");
+  }
+
+  if ($this-&gt;tokens-&gt;doesMatch(T_ARRAY)) {
+    // nested array
+    $result[] = $this-&gt;parseArray();
+  }
+  else if ($this-&gt;tokens-&gt;doesMatch(T_CONSTANT_ENCAPSED_STRING)) {
+    // string
+    $string = $this-&gt;parseValue();
+    if ($this-&gt;tokens-&gt;doesMatch(T_DOUBLE_ARROW)) {
+      // array key (key =&gt; value)
+      $this-&gt;tokens-&gt;pop();
+      $result[$string] = $this-&gt;parseValue();
+    }
+    else {
+      // simple string
+      $result[] = $string;
+    }
+  }
+  else {
+    $result[] = $this-&gt;parseValue();
+  }
+
+  ++$found;
+}
+return $result;
+</code></pre>
+
+<p>  }
+}
+```</p>
+
+<p>And finally we need some code to invoke the parser:</p>
+
+<p>```php parser invokation
+// here&rsquo;s our test string (with intentionally wild usage of whitespace)
+$string = &ldquo; array (\"test\&rdquo; => \&ldquo;someValue\&rdquo;,
+  array\n(&lsquo;aaa&rsquo;, &lsquo;bbb&rsquo;, &lsquo;ccc&rsquo;, array(&lsquo;ddd&rsquo;)),
+array(&lsquo;AAA&rsquo;, &lsquo;BBB&rsquo;,&lsquo;CCC&rsquo;,&lsquo;DDD&rsquo;, null,1, 2, 3,-4, -42.99, -4e32, true, false))&ldquo;;</p>
+
+<p>$tokens = new Tokens($string);
+$parser = new Parser($tokens);
+$result = $parser->parseArray();</p>
+
+<p>// check if the parser matched the whole string or if there&rsquo;s something left at the end
+if (! $tokens->done()) {
+  throw new Exception(&ldquo;still tokens left after parsing&rdquo;);
+}</p>
+
+<p>var_dump(&ldquo;RESULT: &rdquo;, $result);
+```</p>
+
+<p>This will give us the data in a ready-to-use PHP variable <code>$result</code>, with all the
+nested data structures being built correctly.</p>
+
+<p>A few things to note:</p>
+
+<ul>
+<li><p>Parsing PHP data with PHP is quite easy because PHP already comes with a tokenizer
+for PHP. Parsing a different language with PHP is quite harder, as we would have to
+write a language-specific tokenizer first!</p></li>
+<li><p>The above code was quickly put together for demonstration purposes. I am pretty sure
+it will not cover all cases. Apart from that, it was written to be intuitive and not
+to be efficient (i.e. instead modifying the <code>tokens</code> array in place with <code>array_shift()</code>,
+we would rather leave that array constant and work with an index into it).</p></li>
+<li><p>For more complex grammars than this simple one, don&rsquo;t go with hand-written parsers
+but use a parser generator. I am not sure what parser generators are available in the
+PHP world, but in C and C++ most people will go with <a href="http://www.gnu.org/software/bison/">GNU Bison</a>
+and <a href="http://flex.sourceforge.net/">Flex</a>.</p></li>
+<li><p>Writing your own parsers is error-prone even with a parser generator, so <strong>don&rsquo;t do
+it if you don&rsquo;t have to</strong>. If you can, use a widely supported data format such as JSON
+instead and let <code>json_decode()</code> do all the heavy lifting for you.</p></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Exporting Data for Offline Processing]]></title>

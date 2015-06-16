@@ -1,0 +1,711 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>Parsing PHP Arrays With PHP - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="By accident I found this StackOverflow question
+about how to convert a PHP string with array data into an actual PHP array variable. For example, if &hellip;">
+  <meta name="keywords" content="PHP, parsing">
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/06/16/parsing-php-arrays-with-php">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>{ "subject" : "ArangoDB", "tags": [ "multi-model", "nosql", "database" ] }</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Parsing PHP Arrays With PHP</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-06-16T23:37:48+02:00" pubdate data-updated="true">Jun 16<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>By accident I found <a href="http://stackoverflow.com/questions/30877671/how-i-can-convert-a-string-format-array-to-array-type-in-php">this StackOverflow question</a>
+about how to convert a PHP string with array data into an actual PHP array variable.</p>
+
+<p>For example, if your application gets this string from somewhere:</p>
+
+<figure class='code'><figcaption><span>example string data</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="nv">$string</span> <span class="o">=</span> <span class="s2">&quot;array(array(&#39;aaa&#39;,&#39;bbb&#39;,&#39;ccc&#39;,&#39;ddd&#39;),array(&#39;AAA&#39;,&#39;BBB&#39;,&#39;CCC&#39;,&#39;DDD&#39;))&quot;</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>How do you convert this into a PHP array variable so you can access the individual
+array elements? This is what we want to be able to do:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="nv">$result</span> <span class="o">=</span> <span class="nx">magicallyConvertStringToArray</span><span class="p">(</span><span class="nv">$string</span><span class="p">);</span>
+</span><span class='line'><span class="nb">var_dump</span><span class="p">(</span><span class="nv">$result</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]);</span>  <span class="c1">// should be &#39;aaa&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<!-- more -->
+
+
+<p>The obvious solution #1 of course is to agree on another data exchange format (e.g. JSON)
+and simply use that. PHP has built-in functions for <a href="http://www.php.net/manual/en/function.json-encode.php">JSON stringification</a>
+and <a href="http://www.php.net/manual/en/function.json-decode.php">JSON parsing</a>.</p>
+
+<h2>Eval?</h2>
+
+<p>But what if the data format really has to stay like this and you cannot change it?
+Then the obvious simple solution would be to <code>eval()</code> the string and capture the result
+in a new variable.</p>
+
+<p>Voila le array:</p>
+
+<figure class='code'><figcaption><span>using eval</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="nv">$result</span> <span class="o">=</span> <span class="k">eval</span><span class="p">(</span><span class="nv">$string</span><span class="p">);</span>
+</span><span class='line'><span class="nb">var_dump</span><span class="p">(</span><span class="nv">$result</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]);</span>  <span class="c1">// &#39;aaa&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>But everyone knows that <code>eval</code> is evil and should be avoided wherever possible &ndash; especially when
+being run on strings fetched from remote data sources.</p>
+
+<h2>Writing a PHP data parser in PHP</h2>
+
+<p>Remembering that PHP has a built-in tokenizer for PHP code, we could also make use of
+this and write a small parser for PHP array data.
+Note that I wouldn&rsquo;t recommend writing your own parser if there are other options. But it&rsquo;s
+a last resort, and for the task at hand it should be relatively easy.</p>
+
+<p>This is because we&rsquo;ll only have to deal with arbitrarily nested arrays and some scalar value
+types (strings, numbers, bool, null). We don&rsquo;t expect to see serialized object instances in our
+data. And, not to forget, PHP comes with a built-in tokenizer for PHP code, and we&rsquo;ll let
+it do most of the work.</p>
+
+<p>Before the string can be parsed, it must be turned into PHP code. This can be achieved
+by prepending <code>&lt;?php</code> to it (otherwise the tokenizer would interpret the string as an HTML
+string). We can then use PHP&rsquo;s <code>token_get_all()</code> function to tokenize the string contents for us.</p>
+
+<p>We can immediately remove all T_WHITESPACE tokens from the list of tokens, because whitespace
+is irrelevant for our parsing. For easier handling of tokens, we let a class <code>Tokens</code> handle
+the tokens. This class provides functions for matching, consuming and peeking into tokens:</p>
+
+<figure class='code'><figcaption><span>class for managing the tokens</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="c1">// class to manage tokens</span>
+</span><span class='line'><span class="k">class</span> <span class="nc">Tokens</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">private</span> <span class="nv">$tokens</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">__construct</span> <span class="p">(</span><span class="nv">$code</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1">// construct PHP code from string and tokenize it</span>
+</span><span class='line'>    <span class="nv">$tokens</span> <span class="o">=</span> <span class="nb">token_get_all</span><span class="p">(</span><span class="s2">&quot;&lt;?php &quot;</span> <span class="o">.</span> <span class="nv">$code</span><span class="p">);</span>
+</span><span class='line'>    <span class="c1">// kick out whitespace tokens</span>
+</span><span class='line'>    <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span> <span class="o">=</span> <span class="nb">array_filter</span><span class="p">(</span><span class="nv">$tokens</span><span class="p">,</span> <span class="k">function</span> <span class="p">(</span><span class="nv">$token</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span> <span class="p">(</span><span class="o">!</span> <span class="nb">is_array</span><span class="p">(</span><span class="nv">$token</span><span class="p">)</span> <span class="o">||</span> <span class="nv">$token</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!==</span> <span class="nx">T_WHITESPACE</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">});</span>
+</span><span class='line'>    <span class="c1">// remove start token (&lt;?php)</span>
+</span><span class='line'>    <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">done</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">return</span> <span class="nb">count</span><span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="p">)</span> <span class="o">===</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">pop</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1">// consume the token and return it</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">done</span><span class="p">())</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;already at end of tokens!&quot;</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="nb">array_shift</span><span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">peek</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1">// return next token, don&#39;t consume it</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">done</span><span class="p">())</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;already at end of tokens!&quot;</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">doesMatch</span> <span class="p">(</span><span class="nv">$what</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nv">$token</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">peek</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nb">is_string</span><span class="p">(</span><span class="nv">$what</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="o">!</span> <span class="nb">is_array</span><span class="p">(</span><span class="nv">$token</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="nv">$token</span> <span class="o">===</span> <span class="nv">$what</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span> <span class="k">true</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nb">is_int</span><span class="p">(</span><span class="nv">$what</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="nb">is_array</span><span class="p">(</span><span class="nv">$token</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="nv">$token</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">===</span> <span class="nv">$what</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span> <span class="k">true</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="k">false</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">forceMatch</span> <span class="p">(</span><span class="nv">$what</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nv">$what</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">if</span> <span class="p">(</span><span class="nb">is_int</span><span class="p">(</span><span class="nv">$what</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;unexpected token - expecting &quot;</span> <span class="o">.</span> <span class="nb">token_name</span><span class="p">(</span><span class="nv">$what</span><span class="p">));</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>      <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;unexpected token - expecting &quot;</span> <span class="o">.</span> <span class="nv">$what</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="c1">// consume the token</span>
+</span><span class='line'>    <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>With all the tokenization being done, we need a parser that understands the meaning
+of the individual tokens and puts them together in a meaningful way. Here&rsquo;s a parser
+class that can handle simple PHP arrays, string values, int, double and boolean values
+plus <code>null</code>:</p>
+
+<figure class='code'><figcaption><span>simple parser class</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+<span class='line-number'>78</span>
+<span class='line-number'>79</span>
+<span class='line-number'>80</span>
+<span class='line-number'>81</span>
+<span class='line-number'>82</span>
+<span class='line-number'>83</span>
+<span class='line-number'>84</span>
+<span class='line-number'>85</span>
+<span class='line-number'>86</span>
+<span class='line-number'>87</span>
+<span class='line-number'>88</span>
+<span class='line-number'>89</span>
+<span class='line-number'>90</span>
+<span class='line-number'>91</span>
+<span class='line-number'>92</span>
+<span class='line-number'>93</span>
+<span class='line-number'>94</span>
+<span class='line-number'>95</span>
+<span class='line-number'>96</span>
+<span class='line-number'>97</span>
+<span class='line-number'>98</span>
+<span class='line-number'>99</span>
+<span class='line-number'>100</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="c1">// parser for simple PHP arrays</span>
+</span><span class='line'><span class="k">class</span> <span class="nc">Parser</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">private</span> <span class="k">static</span> <span class="nv">$CONSTANTS</span> <span class="o">=</span> <span class="k">array</span><span class="p">(</span>
+</span><span class='line'>    <span class="s2">&quot;null&quot;</span> <span class="o">=&gt;</span> <span class="k">null</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;true&quot;</span> <span class="o">=&gt;</span> <span class="k">true</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;false&quot;</span> <span class="o">=&gt;</span> <span class="k">false</span>
+</span><span class='line'>  <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">private</span> <span class="nv">$tokens</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">__construct</span><span class="p">(</span><span class="nx">Tokens</span> <span class="nv">$tokens</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span> <span class="o">=</span> <span class="nv">$tokens</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">parseValue</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_CONSTANT_ENCAPSED_STRING</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// strings</span>
+</span><span class='line'>      <span class="nv">$token</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>      <span class="k">return</span> <span class="nb">stripslashes</span><span class="p">(</span><span class="nx">substr</span><span class="p">(</span><span class="nv">$token</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">));</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_STRING</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// built-in string literals: null, false, true</span>
+</span><span class='line'>      <span class="nv">$token</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>      <span class="nv">$value</span> <span class="o">=</span> <span class="nx">strtolower</span><span class="p">(</span><span class="nv">$token</span><span class="p">[</span><span class="mi">1</span><span class="p">]);</span>
+</span><span class='line'>      <span class="k">if</span> <span class="p">(</span><span class="nb">array_key_exists</span><span class="p">(</span><span class="nv">$value</span><span class="p">,</span> <span class="nx">self</span><span class="o">::</span><span class="nv">$CONSTANTS</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">return</span> <span class="nx">self</span><span class="o">::</span><span class="nv">$CONSTANTS</span><span class="p">[</span><span class="nv">$value</span><span class="p">];</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>      <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;unexpected string literal &quot;</span> <span class="o">.</span> <span class="nv">$token</span><span class="p">[</span><span class="mi">1</span><span class="p">]);</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// the rest...</span>
+</span><span class='line'>    <span class="c1">// we expect a number here</span>
+</span><span class='line'>    <span class="nv">$uminus</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// unary minus</span>
+</span><span class='line'>      <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">forceMatch</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">);</span>
+</span><span class='line'>      <span class="nv">$uminus</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_LNUMBER</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// long number</span>
+</span><span class='line'>      <span class="nv">$value</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>      <span class="k">return</span> <span class="nv">$uminus</span> <span class="o">*</span> <span class="p">(</span><span class="nx">int</span><span class="p">)</span> <span class="nv">$value</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_DNUMBER</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// double number</span>
+</span><span class='line'>      <span class="nv">$value</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>      <span class="k">return</span> <span class="nv">$uminus</span> <span class="o">*</span> <span class="p">(</span><span class="nx">double</span><span class="p">)</span> <span class="nv">$value</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;unexpected value token&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">parseArray</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nv">$found</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>    <span class="nv">$result</span> <span class="o">=</span> <span class="k">array</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">forceMatch</span><span class="p">(</span><span class="nx">T_ARRAY</span><span class="p">);</span>
+</span><span class='line'>    <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">forceMatch</span><span class="p">(</span><span class="s2">&quot;(&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">while</span> <span class="p">(</span><span class="k">true</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="s2">&quot;)&quot;</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>        <span class="c1">// reached the end of the array</span>
+</span><span class='line'>        <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">forceMatch</span><span class="p">(</span><span class="s2">&quot;)&quot;</span><span class="p">);</span>
+</span><span class='line'>        <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="k">if</span> <span class="p">(</span><span class="nv">$found</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="c1">// we must see a comma following the first element</span>
+</span><span class='line'>        <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">forceMatch</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">);</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_ARRAY</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>        <span class="c1">// nested array</span>
+</span><span class='line'>        <span class="nv">$result</span><span class="p">[]</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">parseArray</span><span class="p">();</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>      <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_CONSTANT_ENCAPSED_STRING</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>        <span class="c1">// string</span>
+</span><span class='line'>        <span class="nv">$string</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">parseValue</span><span class="p">();</span>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_DOUBLE_ARROW</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>          <span class="c1">// array key (key =&gt; value)</span>
+</span><span class='line'>          <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>          <span class="nv">$result</span><span class="p">[</span><span class="nv">$string</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">parseValue</span><span class="p">();</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>        <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>          <span class="c1">// simple string</span>
+</span><span class='line'>          <span class="nv">$result</span><span class="p">[]</span> <span class="o">=</span> <span class="nv">$string</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>      <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nv">$result</span><span class="p">[]</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">parseValue</span><span class="p">();</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="o">++</span><span class="nv">$found</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="nv">$result</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And finally we need some code to invoke the parser:</p>
+
+<figure class='code'><figcaption><span>parser invokation </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="c1">// here&#39;s our test string (with intentionally wild usage of whitespace)</span>
+</span><span class='line'><span class="nv">$string</span> <span class="o">=</span> <span class="s2">&quot; array (</span><span class="se">\&quot;</span><span class="s2">test</span><span class="se">\&quot;</span><span class="s2"> =&gt; </span><span class="se">\&quot;</span><span class="s2">someValue</span><span class="se">\&quot;</span><span class="s2">, </span>
+</span><span class='line'><span class="s2">  array</span><span class="se">\n</span><span class="s2">(&#39;aaa&#39;, &#39;bbb&#39;, &#39;ccc&#39;, array(&#39;ddd&#39;)), </span>
+</span><span class='line'><span class="s2">array(&#39;AAA&#39;, &#39;BBB&#39;,&#39;CCC&#39;,&#39;DDD&#39;, null,1, 2, 3,-4, -42.99, -4e32, true, false))&quot;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$tokens</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Tokens</span><span class="p">(</span><span class="nv">$string</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$parser</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Parser</span><span class="p">(</span><span class="nv">$tokens</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$result</span> <span class="o">=</span> <span class="nv">$parser</span><span class="o">-&gt;</span><span class="na">parseArray</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// check if the parser matched the whole string or if there&#39;s something left at the end</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="nv">$tokens</span><span class="o">-&gt;</span><span class="na">done</span><span class="p">())</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;still tokens left after parsing&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nb">var_dump</span><span class="p">(</span><span class="s2">&quot;RESULT: &quot;</span><span class="p">,</span> <span class="nv">$result</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will give us the data in a ready-to-use PHP variable <code>$result</code>, with all the
+nested data structures being built correctly.</p>
+
+<p>A few things to note:</p>
+
+<ul>
+<li><p>Parsing PHP data with PHP is quite easy because PHP already comes with a tokenizer
+for PHP. Parsing a different language with PHP is quite harder, as we would have to
+write a language-specific tokenizer first!</p></li>
+<li><p>The above code was quickly put together for demonstration purposes. I am pretty sure
+it will not cover all cases. Apart from that, it was written to be intuitive and not
+to be efficient (i.e. instead modifying the <code>tokens</code> array in place with <code>array_shift()</code>,
+we would rather leave that array constant and work with an index into it).</p></li>
+<li><p>For more complex grammars than this simple one, don&rsquo;t go with hand-written parsers
+but use a parser generator. I am not sure what parser generators are available in the
+PHP world, but in C and C++ most people will go with <a href="http://www.gnu.org/software/bison/">GNU Bison</a>
+and <a href="http://flex.sourceforge.net/">Flex</a>.</p></li>
+<li><p>Writing your own parsers is error-prone even with a parser generator, so <strong>don&rsquo;t do
+it if you don&rsquo;t have to</strong>. If you can, use a widely supported data format such as JSON
+instead and let <code>json_decode()</code> do all the heavy lifting for you.</p></li>
+</ul>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-06-16T23:37:48+02:00" pubdate data-updated="true">Jun 16<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/php/'>PHP</a>, <a class='category' href='/blog/categories/parsing/'>Parsing</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/06/16/parsing-php-arrays-with-php/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/06/16/parsing-php-arrays-with-php/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/06/15/speeding-up-array-slash-object-literal-access/" title="Previous Post: Speeding up array/object literal access">&laquo; Speeding up array/object literal access</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/06/16/parsing-php-arrays-with-php/">Parsing PHP Arrays With PHP</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/06/15/speeding-up-array-slash-object-literal-access/">Speeding Up Array/object Literal Access</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/06/01/on-getting-unique-values/">On Getting Unique Values</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/26/diffing-two-documents-in-aql/">Diffing Two Documents in AQL</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">The Great AQL Shootout: ArangoDB 2.5 vs 2.6</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/07/less-intrusive-linking/">Less Intrusive Linking</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (24)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (40)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (3)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (7)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (1)</a></li><li><a href='/blog/categories/performance/'>Performance (17)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (30)</li><ul class="month_list"><li class="month"><a href='/blog/2015/06/'>JUN (3)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

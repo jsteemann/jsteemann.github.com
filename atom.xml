@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-06-15T18:39:54+02:00</updated>
+  <updated>2015-06-17T00:59:10+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,465 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Parsing PHP Arrays With PHP]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/06/16/parsing-php-arrays-with-php/"/>
+    <updated>2015-06-16T23:37:48+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/06/16/parsing-php-arrays-with-php</id>
+    <content type="html"><![CDATA[<p>By accident I found <a href="http://stackoverflow.com/questions/30877671/how-i-can-convert-a-string-format-array-to-array-type-in-php">this StackOverflow question</a>
+about how to convert a PHP string with array data into an actual PHP array variable.</p>
+
+<p>For example, if your application gets this string from somewhere:</p>
+
+<figure class='code'><figcaption><span>example string data</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="nv">$string</span> <span class="o">=</span> <span class="s2">&quot;array(array(&#39;aaa&#39;,&#39;bbb&#39;,&#39;ccc&#39;,&#39;ddd&#39;),array(&#39;AAA&#39;,&#39;BBB&#39;,&#39;CCC&#39;,&#39;DDD&#39;))&quot;</span><span class="p">;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>How do you convert this into a PHP array variable so you can access the individual
+array elements? This is what we want to be able to do:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="nv">$result</span> <span class="o">=</span> <span class="nx">magicallyConvertStringToArray</span><span class="p">(</span><span class="nv">$string</span><span class="p">);</span>
+</span><span class='line'><span class="nb">var_dump</span><span class="p">(</span><span class="nv">$result</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]);</span>  <span class="c1">// should be &#39;aaa&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<!-- more -->
+
+
+<p>The obvious solution #1 of course is to agree on another data exchange format (e.g. JSON)
+and simply use that. PHP has built-in functions for <a href="http://www.php.net/manual/en/function.json-encode.php">JSON stringification</a>
+and <a href="http://www.php.net/manual/en/function.json-decode.php">JSON parsing</a>.</p>
+
+<h2>Eval?</h2>
+
+<p>But what if the data format really has to stay like this and you cannot change it?
+Then the obvious simple solution would be to <code>eval()</code> the string and capture the result
+in a new variable.</p>
+
+<p>Voila le array:</p>
+
+<figure class='code'><figcaption><span>using eval</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="nv">$result</span> <span class="o">=</span> <span class="k">eval</span><span class="p">(</span><span class="nv">$string</span><span class="p">);</span>
+</span><span class='line'><span class="nb">var_dump</span><span class="p">(</span><span class="nv">$result</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]);</span>  <span class="c1">// &#39;aaa&#39;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>But everyone knows that <code>eval</code> is evil and should be avoided wherever possible &ndash; especially when
+being run on strings fetched from remote data sources.</p>
+
+<h2>Writing a PHP data parser in PHP</h2>
+
+<p>Remembering that PHP has a built-in tokenizer for PHP code, we could also make use of
+this and write a small parser for PHP array data.
+Note that I wouldn&rsquo;t recommend writing your own parser if there are other options. But it&rsquo;s
+a last resort, and for the task at hand it should be relatively easy.</p>
+
+<p>This is because we&rsquo;ll only have to deal with arbitrarily nested arrays and some scalar value
+types (strings, numbers, bool, null). We don&rsquo;t expect to see serialized object instances in our
+data. And, not to forget, PHP comes with a built-in tokenizer for PHP code, and we&rsquo;ll let
+it do most of the work.</p>
+
+<p>Before the string can be parsed, it must be turned into PHP code. This can be achieved
+by prepending <code>&lt;?php</code> to it (otherwise the tokenizer would interpret the string as an HTML
+string). We can then use PHP&rsquo;s <code>token_get_all()</code> function to tokenize the string contents for us.</p>
+
+<p>We can immediately remove all T_WHITESPACE tokens from the list of tokens, because whitespace
+is irrelevant for our parsing. For easier handling of tokens, we let a class <code>Tokens</code> handle
+the tokens. This class provides functions for matching, consuming and peeking into tokens:</p>
+
+<figure class='code'><figcaption><span>class for managing the tokens</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="c1">// class to manage tokens</span>
+</span><span class='line'><span class="k">class</span> <span class="nc">Tokens</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">private</span> <span class="nv">$tokens</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">__construct</span> <span class="p">(</span><span class="nv">$code</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1">// construct PHP code from string and tokenize it</span>
+</span><span class='line'>    <span class="nv">$tokens</span> <span class="o">=</span> <span class="nb">token_get_all</span><span class="p">(</span><span class="s2">&quot;&lt;?php &quot;</span> <span class="o">.</span> <span class="nv">$code</span><span class="p">);</span>
+</span><span class='line'>    <span class="c1">// kick out whitespace tokens</span>
+</span><span class='line'>    <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span> <span class="o">=</span> <span class="nb">array_filter</span><span class="p">(</span><span class="nv">$tokens</span><span class="p">,</span> <span class="k">function</span> <span class="p">(</span><span class="nv">$token</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span> <span class="p">(</span><span class="o">!</span> <span class="nb">is_array</span><span class="p">(</span><span class="nv">$token</span><span class="p">)</span> <span class="o">||</span> <span class="nv">$token</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">!==</span> <span class="nx">T_WHITESPACE</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">});</span>
+</span><span class='line'>    <span class="c1">// remove start token (&lt;?php)</span>
+</span><span class='line'>    <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">done</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">return</span> <span class="nb">count</span><span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="p">)</span> <span class="o">===</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">pop</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1">// consume the token and return it</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">done</span><span class="p">())</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;already at end of tokens!&quot;</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="nb">array_shift</span><span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">peek</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1">// return next token, don&#39;t consume it</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">done</span><span class="p">())</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;already at end of tokens!&quot;</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="p">[</span><span class="mi">0</span><span class="p">];</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">doesMatch</span> <span class="p">(</span><span class="nv">$what</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nv">$token</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">peek</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nb">is_string</span><span class="p">(</span><span class="nv">$what</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="o">!</span> <span class="nb">is_array</span><span class="p">(</span><span class="nv">$token</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="nv">$token</span> <span class="o">===</span> <span class="nv">$what</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span> <span class="k">true</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nb">is_int</span><span class="p">(</span><span class="nv">$what</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="nb">is_array</span><span class="p">(</span><span class="nv">$token</span><span class="p">)</span> <span class="o">&amp;&amp;</span> <span class="nv">$token</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">===</span> <span class="nv">$what</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">return</span> <span class="k">true</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="k">false</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">forceMatch</span> <span class="p">(</span><span class="nv">$what</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nv">$what</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">if</span> <span class="p">(</span><span class="nb">is_int</span><span class="p">(</span><span class="nv">$what</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;unexpected token - expecting &quot;</span> <span class="o">.</span> <span class="nb">token_name</span><span class="p">(</span><span class="nv">$what</span><span class="p">));</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>      <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;unexpected token - expecting &quot;</span> <span class="o">.</span> <span class="nv">$what</span><span class="p">);</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="c1">// consume the token</span>
+</span><span class='line'>    <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>With all the tokenization being done, we need a parser that understands the meaning
+of the individual tokens and puts them together in a meaningful way. Here&rsquo;s a parser
+class that can handle simple PHP arrays, string values, int, double and boolean values
+plus <code>null</code>:</p>
+
+<figure class='code'><figcaption><span>simple parser class</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+<span class='line-number'>51</span>
+<span class='line-number'>52</span>
+<span class='line-number'>53</span>
+<span class='line-number'>54</span>
+<span class='line-number'>55</span>
+<span class='line-number'>56</span>
+<span class='line-number'>57</span>
+<span class='line-number'>58</span>
+<span class='line-number'>59</span>
+<span class='line-number'>60</span>
+<span class='line-number'>61</span>
+<span class='line-number'>62</span>
+<span class='line-number'>63</span>
+<span class='line-number'>64</span>
+<span class='line-number'>65</span>
+<span class='line-number'>66</span>
+<span class='line-number'>67</span>
+<span class='line-number'>68</span>
+<span class='line-number'>69</span>
+<span class='line-number'>70</span>
+<span class='line-number'>71</span>
+<span class='line-number'>72</span>
+<span class='line-number'>73</span>
+<span class='line-number'>74</span>
+<span class='line-number'>75</span>
+<span class='line-number'>76</span>
+<span class='line-number'>77</span>
+<span class='line-number'>78</span>
+<span class='line-number'>79</span>
+<span class='line-number'>80</span>
+<span class='line-number'>81</span>
+<span class='line-number'>82</span>
+<span class='line-number'>83</span>
+<span class='line-number'>84</span>
+<span class='line-number'>85</span>
+<span class='line-number'>86</span>
+<span class='line-number'>87</span>
+<span class='line-number'>88</span>
+<span class='line-number'>89</span>
+<span class='line-number'>90</span>
+<span class='line-number'>91</span>
+<span class='line-number'>92</span>
+<span class='line-number'>93</span>
+<span class='line-number'>94</span>
+<span class='line-number'>95</span>
+<span class='line-number'>96</span>
+<span class='line-number'>97</span>
+<span class='line-number'>98</span>
+<span class='line-number'>99</span>
+<span class='line-number'>100</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="c1">// parser for simple PHP arrays</span>
+</span><span class='line'><span class="k">class</span> <span class="nc">Parser</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">private</span> <span class="k">static</span> <span class="nv">$CONSTANTS</span> <span class="o">=</span> <span class="k">array</span><span class="p">(</span>
+</span><span class='line'>    <span class="s2">&quot;null&quot;</span> <span class="o">=&gt;</span> <span class="k">null</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;true&quot;</span> <span class="o">=&gt;</span> <span class="k">true</span><span class="p">,</span>
+</span><span class='line'>    <span class="s2">&quot;false&quot;</span> <span class="o">=&gt;</span> <span class="k">false</span>
+</span><span class='line'>  <span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">private</span> <span class="nv">$tokens</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">__construct</span><span class="p">(</span><span class="nx">Tokens</span> <span class="nv">$tokens</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span> <span class="o">=</span> <span class="nv">$tokens</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">parseValue</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_CONSTANT_ENCAPSED_STRING</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// strings</span>
+</span><span class='line'>      <span class="nv">$token</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>      <span class="k">return</span> <span class="nb">stripslashes</span><span class="p">(</span><span class="nx">substr</span><span class="p">(</span><span class="nv">$token</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">));</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_STRING</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// built-in string literals: null, false, true</span>
+</span><span class='line'>      <span class="nv">$token</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>      <span class="nv">$value</span> <span class="o">=</span> <span class="nx">strtolower</span><span class="p">(</span><span class="nv">$token</span><span class="p">[</span><span class="mi">1</span><span class="p">]);</span>
+</span><span class='line'>      <span class="k">if</span> <span class="p">(</span><span class="nb">array_key_exists</span><span class="p">(</span><span class="nv">$value</span><span class="p">,</span> <span class="nx">self</span><span class="o">::</span><span class="nv">$CONSTANTS</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>        <span class="k">return</span> <span class="nx">self</span><span class="o">::</span><span class="nv">$CONSTANTS</span><span class="p">[</span><span class="nv">$value</span><span class="p">];</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>      <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;unexpected string literal &quot;</span> <span class="o">.</span> <span class="nv">$token</span><span class="p">[</span><span class="mi">1</span><span class="p">]);</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="c1">// the rest...</span>
+</span><span class='line'>    <span class="c1">// we expect a number here</span>
+</span><span class='line'>    <span class="nv">$uminus</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// unary minus</span>
+</span><span class='line'>      <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">forceMatch</span><span class="p">(</span><span class="s2">&quot;-&quot;</span><span class="p">);</span>
+</span><span class='line'>      <span class="nv">$uminus</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_LNUMBER</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// long number</span>
+</span><span class='line'>      <span class="nv">$value</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>      <span class="k">return</span> <span class="nv">$uminus</span> <span class="o">*</span> <span class="p">(</span><span class="nx">int</span><span class="p">)</span> <span class="nv">$value</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_DNUMBER</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>      <span class="c1">// double number</span>
+</span><span class='line'>      <span class="nv">$value</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>      <span class="k">return</span> <span class="nv">$uminus</span> <span class="o">*</span> <span class="p">(</span><span class="nx">double</span><span class="p">)</span> <span class="nv">$value</span><span class="p">[</span><span class="mi">1</span><span class="p">];</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;unexpected value token&quot;</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">public</span> <span class="k">function</span> <span class="nf">parseArray</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nv">$found</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>    <span class="nv">$result</span> <span class="o">=</span> <span class="k">array</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">forceMatch</span><span class="p">(</span><span class="nx">T_ARRAY</span><span class="p">);</span>
+</span><span class='line'>    <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">forceMatch</span><span class="p">(</span><span class="s2">&quot;(&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="k">while</span> <span class="p">(</span><span class="k">true</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>      <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="s2">&quot;)&quot;</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>        <span class="c1">// reached the end of the array</span>
+</span><span class='line'>        <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">forceMatch</span><span class="p">(</span><span class="s2">&quot;)&quot;</span><span class="p">);</span>
+</span><span class='line'>        <span class="k">break</span><span class="p">;</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="k">if</span> <span class="p">(</span><span class="nv">$found</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>        <span class="c1">// we must see a comma following the first element</span>
+</span><span class='line'>        <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">forceMatch</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">);</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_ARRAY</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>        <span class="c1">// nested array</span>
+</span><span class='line'>        <span class="nv">$result</span><span class="p">[]</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">parseArray</span><span class="p">();</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>      <span class="k">else</span> <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_CONSTANT_ENCAPSED_STRING</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>        <span class="c1">// string</span>
+</span><span class='line'>        <span class="nv">$string</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">parseValue</span><span class="p">();</span>
+</span><span class='line'>        <span class="k">if</span> <span class="p">(</span><span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">doesMatch</span><span class="p">(</span><span class="nx">T_DOUBLE_ARROW</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>          <span class="c1">// array key (key =&gt; value)</span>
+</span><span class='line'>          <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">tokens</span><span class="o">-&gt;</span><span class="na">pop</span><span class="p">();</span>
+</span><span class='line'>          <span class="nv">$result</span><span class="p">[</span><span class="nv">$string</span><span class="p">]</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">parseValue</span><span class="p">();</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>        <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>          <span class="c1">// simple string</span>
+</span><span class='line'>          <span class="nv">$result</span><span class="p">[]</span> <span class="o">=</span> <span class="nv">$string</span><span class="p">;</span>
+</span><span class='line'>        <span class="p">}</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>      <span class="k">else</span> <span class="p">{</span>
+</span><span class='line'>        <span class="nv">$result</span><span class="p">[]</span> <span class="o">=</span> <span class="nv">$this</span><span class="o">-&gt;</span><span class="na">parseValue</span><span class="p">();</span>
+</span><span class='line'>      <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>      <span class="o">++</span><span class="nv">$found</span><span class="p">;</span>
+</span><span class='line'>    <span class="p">}</span>
+</span><span class='line'>    <span class="k">return</span> <span class="nv">$result</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And finally we need some code to invoke the parser:</p>
+
+<figure class='code'><figcaption><span>parser invokation </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="c1">// here&#39;s our test string (with intentionally wild usage of whitespace)</span>
+</span><span class='line'><span class="nv">$string</span> <span class="o">=</span> <span class="s2">&quot; array (</span><span class="se">\&quot;</span><span class="s2">test</span><span class="se">\&quot;</span><span class="s2"> =&gt; </span><span class="se">\&quot;</span><span class="s2">someValue</span><span class="se">\&quot;</span><span class="s2">, </span>
+</span><span class='line'><span class="s2">  array</span><span class="se">\n</span><span class="s2">(&#39;aaa&#39;, &#39;bbb&#39;, &#39;ccc&#39;, array(&#39;ddd&#39;)), </span>
+</span><span class='line'><span class="s2">array(&#39;AAA&#39;, &#39;BBB&#39;,&#39;CCC&#39;,&#39;DDD&#39;, null,1, 2, 3,-4, -42.99, -4e32, true, false))&quot;</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="nv">$tokens</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Tokens</span><span class="p">(</span><span class="nv">$string</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$parser</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Parser</span><span class="p">(</span><span class="nv">$tokens</span><span class="p">);</span>
+</span><span class='line'><span class="nv">$result</span> <span class="o">=</span> <span class="nv">$parser</span><span class="o">-&gt;</span><span class="na">parseArray</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// check if the parser matched the whole string or if there&#39;s something left at the end</span>
+</span><span class='line'><span class="k">if</span> <span class="p">(</span><span class="o">!</span> <span class="nv">$tokens</span><span class="o">-&gt;</span><span class="na">done</span><span class="p">())</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">throw</span> <span class="k">new</span> <span class="nx">Exception</span><span class="p">(</span><span class="s2">&quot;still tokens left after parsing&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nb">var_dump</span><span class="p">(</span><span class="s2">&quot;RESULT: &quot;</span><span class="p">,</span> <span class="nv">$result</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will give us the data in a ready-to-use PHP variable <code>$result</code>, with all the
+nested data structures being built correctly.</p>
+
+<p>A few things to note:</p>
+
+<ul>
+<li><p>Parsing PHP data with PHP is quite easy because PHP already comes with a tokenizer
+for PHP. Parsing a different language with PHP is quite harder, as we would have to
+write a language-specific tokenizer first!</p></li>
+<li><p>The above code was quickly put together for demonstration purposes. I am pretty sure
+it will not cover all cases. Apart from that, it was written to be intuitive and not
+to be efficient (i.e. instead modifying the <code>tokens</code> array in place with <code>array_shift()</code>,
+we would rather leave that array constant and work with an index into it).</p></li>
+<li><p>For more complex grammars than this simple one, don&rsquo;t go with hand-written parsers
+but use a parser generator. I am not sure what parser generators are available in the
+PHP world, but in C and C++ most people will go with <a href="http://www.gnu.org/software/bison/">GNU Bison</a>
+and <a href="http://flex.sourceforge.net/">Flex</a>.</p></li>
+<li><p>Writing your own parsers is error-prone even with a parser generator, so <strong>don&rsquo;t do
+it if you don&rsquo;t have to</strong>. If you can, use a widely supported data format such as JSON
+instead and let <code>json_decode()</code> do all the heavy lifting for you.</p></li>
+</ul>
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Speeding Up Array/object Literal Access]]></title>
@@ -4032,173 +4491,6 @@ to use the <code>UPSERT</code> command for inserts&hellip;</p>
 <p><code>UPSERT</code> is currently available in the <code>devel</code> branch of ArangoDB. This branch
 will eventually become release 2.6. Until then, everyone is welcome to try it out and
 provide feedback.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Analyzing Git Commits With ArangoDB]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb/"/>
-    <updated>2015-03-11T12:37:58+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/03/11/analyzing-git-commits-with-arangodb</id>
-    <content type="html"><![CDATA[<p>I often find myself searching for certain commits using <code>git log</code> and friends. While I really love
-the power and flexibility that come with the git and other Unix command-line tools, sometimes it can be more
-convenient to use a database to filter and aggregate commit data.</p>
-
-<p>I gave it a quick try yesterday and imported the commit history of ArangoDB&rsquo;s Git repository into ArangoDB
-and ran some queries on the data. While the query results for our repository may not be interesting for everyone,
-I think it is still worth sharing what I did. Even though I didn&rsquo;t try it, I think the overall procedure is
-applicable with any other Git repository.</p>
-
-<!-- more -->
-
-
-<h2>Converting the Git history to JSON</h2>
-
-<p>The way to extract history and commit data from a local repository is to use <code>git log</code>. Though its output
-is greatly customizable, it does not provide an out-of-the-box solution for producing JSON. So I wrote a simple
-wrapper script (in PHP) around it. The script can be found <a href="https://gist.github.com/jsteemann/65ef221646449713b2c5">here</a>.</p>
-
-<p>Here&rsquo;s how to run it:</p>
-
-<figure class='code'><figcaption><span>converting the git history to JSON</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">cd </span>path/to/local/git-repository
-</span><span class='line'>wget https://gist.githubusercontent.com/jsteemann/65ef221646449713b2c5/raw/fef22c729e01dd0777b378ac1e17e951ea47c7dd/git-log-to-json.php
-</span><span class='line'>php git-log-to-json.php &gt; arango-commits-master-201503.json
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The script may run a few minutes on bigger repositories such as ours. In the end, it should produce a JSON
-file named <code>arango-commits-master-201503.json</code>.</p>
-
-<p>I have also uploaded the JSON file <a href="http://jsteemann.github.io/downloads/code/arango-commits-master-201503.json">here</a>. Note that the
-file only contains commits from the <code>master</code> branch and not all commits done in ArangoDB in total.</p>
-
-<h2>Importing the commits into ArangoDB</h2>
-
-<p>The simplest way to get the commits into ArangoDB is to use <code>arangoimp</code>:</p>
-
-<figure class='code'><figcaption><span>importing the commits into ArangoDB</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangoimp                                   <span class="se">\</span>
-</span><span class='line'>  --collection commits                      <span class="se">\</span>
-</span><span class='line'>  --create-collection <span class="nb">true</span>                  <span class="se">\</span>
-</span><span class='line'>  --file arango-commits-master-201503.json  <span class="se">\</span>
-</span><span class='line'>  --overwrite <span class="nb">true</span>                          <span class="se">\</span>
-</span><span class='line'>  --batch-size 32000000
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This should have imported all the commits into a collection <code>commits</code> in the default database.</p>
-
-<h2>Querying the commit logs</h2>
-
-<p>Following are a few example queries that I ran on the data from the ArangoShell.
-As mentioned before, it should be possible to run the queries for other repositories&#8217; data.</p>
-
-<figure class='code'><figcaption><span>getting all contributors</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits COLLECT author = commit.author.name RETURN author&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>retrieving the total number of commits</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits COLLECT WITH COUNT INTO count RETURN count&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>retrieving the number of commits by contributor</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits COLLECT author = commit.author.name WITH COUNT INTO count RETURN { author: author, count: count }&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>retrieving the tagged commits </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits FILTER commit.tag != null SORT commit.date RETURN KEEP(commit, [ &quot;date&quot;, &quot;message&quot;, &quot;tag&quot; ])&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>retrieving number of commits per year </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits COLLECT year = DATE_YEAR(commit.date) WITH COUNT INTO count RETURN { year: year, count: count }&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>retrieving number of commits per month / year </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date)  WITH COUNT INTO count RETURN { month: CONCAT(year, &quot;/&quot;, month), count: count }&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>retrieving number of commits per weekday</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits COLLECT day = DATE_DAYOFWEEK(commit.date) WITH COUNT INTO count RETURN { day: TRANSLATE(day, { &quot;0&quot;: &quot;Sunday&quot;, &quot;1&quot;: &quot;Monday&quot;, &quot;2&quot;: &quot;Tuesday&quot;, &quot;3&quot;: &quot;Wednesday&quot;, &quot;4&quot;: &quot;Thursday&quot;, &quot;5&quot;: &quot;Friday&quot;, &quot;6&quot;: &quot;Saturday&quot; }), count: count }&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>retrieving commits with string &#8220;issue #&#8221; in commit message </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits FILTER LIKE(commit.message, &quot;%issue #%&quot;) SORT commit.date DESC LIMIT 10 RETURN UNSET(commit, &quot;files&quot;)&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>retrieving number of commits related to Foxx</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits FILTER LIKE(LOWER(commit.message), &quot;%foxx%&quot;) COLLECT year = DATE_YEAR(commit.date), month = DATE_MONTH(commit.date) WITH COUNT INTO count RETURN { month: CONCAT(year, &quot;/&quot;, month), count: count }&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>retrieving commits that touched the most files</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits LET count = LENGTH(commit.files || []) SORT count DESC LIMIT 10 RETURN MERGE(UNSET(commit, &quot;files&quot;), { files: count })&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>retrieving files modified most often</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s1">&#39;FOR commit IN commits FOR filename IN commit.files || [] COLLECT file = filename WITH COUNT INTO count SORT count DESC LIMIT 10 RETURN { file: file, count: count }&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Enjoy!</p>
 ]]></content>
   </entry>
   
