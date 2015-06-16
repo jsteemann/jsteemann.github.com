@@ -133,7 +133,7 @@ array elements? This is what we want to be able to do:</p>
 <!-- more -->
 
 
-<p>The obvious solution #1 of course is to agree on another data exchange format (e.g. JSON)
+<p>The obvious solution #1 is to agree on another data exchange format (e.g. JSON)
 and simply use that. PHP has built-in functions for <a href="http://www.php.net/manual/en/function.json-encode.php">JSON stringification</a>
 and <a href="http://www.php.net/manual/en/function.json-decode.php">JSON parsing</a>.</p>
 
@@ -550,7 +550,7 @@ write a language-specific tokenizer first!</p></li>
 it will not cover all cases. Apart from that, it was written to be intuitive and not
 to be efficient (i.e. instead modifying the <code>tokens</code> array in place with <code>array_shift()</code>,
 we would rather leave that array constant and work with an index into it).</p></li>
-<li><p>For more complex grammars than this simple one, don&rsquo;t go with hand-written parsers
+<li><p>For grammars more complex than this simple one, don&rsquo;t go with hand-written parsers
 but use a parser generator. I am not sure what parser generators are available in the
 PHP world, but in C and C++ most people will go with <a href="http://www.gnu.org/software/bison/">GNU Bison</a>
 and <a href="http://flex.sourceforge.net/">Flex</a>.</p></li>

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: PHP | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/php/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-06-17T01:06:06+02:00</updated>
+  <updated>2015-06-17T01:10:32+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -40,7 +40,7 @@ var_dump($result[0][0]);  // should be 'aaa'
 <!-- more -->
 
 
-<p>The obvious solution #1 of course is to agree on another data exchange format (e.g. JSON)
+<p>The obvious solution #1 is to agree on another data exchange format (e.g. JSON)
 and simply use that. PHP has built-in functions for <a href="http://www.php.net/manual/en/function.json-encode.php">JSON stringification</a>
 and <a href="http://www.php.net/manual/en/function.json-decode.php">JSON parsing</a>.</p>
 
@@ -312,7 +312,7 @@ write a language-specific tokenizer first!</p></li>
 it will not cover all cases. Apart from that, it was written to be intuitive and not
 to be efficient (i.e. instead modifying the <code>tokens</code> array in place with <code>array_shift()</code>,
 we would rather leave that array constant and work with an index into it).</p></li>
-<li><p>For more complex grammars than this simple one, don&rsquo;t go with hand-written parsers
+<li><p>For grammars more complex than this simple one, don&rsquo;t go with hand-written parsers
 but use a parser generator. I am not sure what parser generators are available in the
 PHP world, but in C and C++ most people will go with <a href="http://www.gnu.org/software/bison/">GNU Bison</a>
 and <a href="http://flex.sourceforge.net/">Flex</a>.</p></li>
