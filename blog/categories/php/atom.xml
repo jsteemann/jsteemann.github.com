@@ -4,7 +4,7 @@
   <title><![CDATA[Category: PHP | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/php/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-06-17T00:59:10+02:00</updated>
+  <updated>2015-06-17T01:06:06+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -34,6 +34,8 @@ array elements? This is what we want to be able to do:</p>
 $result = magicallyConvertStringToArray($string);
 var_dump($result[0][0]);  // should be 'aaa'
 </code></p>
+
+<p>How do we get to our variable?</p>
 
 <!-- more -->
 
