@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-06-17T01:10:32+02:00</updated>
+  <updated>2015-06-17T17:07:30+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,247 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[AQL Improvements for 2.7]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/06/17/aql-improvements-for-27/"/>
+    <updated>2015-06-17T12:35:16+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/06/17/aql-improvements-for-27</id>
+    <content type="html"><![CDATA[<p>With ArangoDB 2.6 being in beta already, it&rsquo;s time to look at some
+features scheduled for 2.7. Today I&rsquo;ll showcase a few AQL parser
+improvements that are present in the <code>devel</code> branch already, which will
+be the foundation for the 2.7 release.</p>
+
+<!-- more -->
+
+
+<h2>Star operator</h2>
+
+<p>The already existing star operator (<code>[*]</code>) is much more flexible in 2.7
+than in previous ArangoDB versions. It now allows filtering the values it
+iterates over, and optional projections.</p>
+
+<p>These features will be demonstrated using the following example member data:</p>
+
+<figure class='code'><figcaption><span>example data for queries</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;sir alfred&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">60</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;lettuce&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span> <span class="p">]</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;mozquito&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">15</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;skateboards&quot;</span><span class="p">,</span> <span class="s2">&quot;music&quot;</span> <span class="p">]</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;murphy&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">28</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;juice&quot;</span><span class="p">,</span> <span class="s2">&quot;tarts&quot;</span><span class="p">,</span> <span class="s2">&quot;cakes&quot;</span> <span class="p">]</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;helga&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">52</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;home&quot;</span><span class="p">,</span> <span class="s2">&quot;garden&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span> <span class="s2">&quot;cakes&quot;</span> <span class="p">]</span> <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To return all members with an age of 40 or higher and that also like tortoises,
+we can now combine the star operator with an inline <code>FILTER</code> expression:</p>
+
+<figure class='code'><figcaption><span>star operator with inline FILTER</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The inline <code>FILTER</code> expression has access to the current array element via the
+pseudo-variable <code>CURRENT</code>. The <code>FILTER</code> expression can thus access the element&rsquo;s
+attributes and sub-attributes, and also use them in function expressions.</p>
+
+<p>The above query will return only two array members as expected:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;sir alfred&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">60</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;lettuce&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span> <span class="p">]</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;helga&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">52</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;home&quot;</span><span class="p">,</span> <span class="s2">&quot;garden&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span> <span class="s2">&quot;cakes&quot;</span> <span class="p">]</span> <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>It&rsquo;s also possible to extract just a specific sub-attribute of each result value:</p>
+
+<figure class='code'><figcaption><span>extracting just a sub-attribute</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes].name</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will return:</p>
+
+<figure class='code'><figcaption><span>query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="s2">&quot;sir alfred&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;helga&quot;</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If we don&rsquo;t want to return the whole match but a single attribute is not enough, the
+star operator can be used in combination with arbitrary projections, too.</p>
+
+<p>The following query extracts the matching members a <code>FILTER</code> as above, but now only
+returns each member&rsquo;s <code>age</code> attribute and the number of values in the member&rsquo;s <code>likes</code>
+attribute:</p>
+
+<figure class='code'><figcaption><span>extracting with a FILTER and a projection</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes RETURN { 
+</span><span class='line'>  name: CURRENT.name, 
+</span><span class='line'>  likes: LENGTH(CURRENT.likes) 
+</span><span class='line'>}]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will produce the following result:</p>
+
+<figure class='code'><figcaption><span>query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;sir alfred&quot;</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="mi">2</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;helga&quot;</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="mi">4</span> <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If only a certain number of values is required, the star operator can be combined
+with a <code>LIMIT</code> clause, too. This is useful for testing whether at least one of the
+array members satisfies a <code>FILTER</code> condition:</p>
+
+<figure class='code'><figcaption><span>limiting the number of results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER "garden" IN CURRENT.likes LIMIT 1]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Overall, the star operator is now much more powerful than before, so in many queries
+it can replace full-blown <code>FOR</code> loops and subqueries when the goal simply is to iterate
+over sub-parts of a result.</p>
+
+<h2>Multi-star operator</h2>
+
+<p>In 2.7 there is now also a <em>multi-star</em> operator (<code>[**]</code>). This operator can be used to
+iterate over an array, too. In addition it will also flatten its input, so it can be used
+for collapsing nested array structures.</p>
+
+<p>This is useful in cases where a flat result is required but the single star operator would
+return a nested array.</p>
+
+<p>Consider this query with the single star operator:</p>
+
+<figure class='code'><figcaption><span>extracting nested arrays</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[*]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will produce:</p>
+
+<figure class='code'><figcaption><span>result of single star query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">[</span> <span class="s2">&quot;lettuce&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span> <span class="p">],</span>
+</span><span class='line'>  <span class="p">[</span> <span class="s2">&quot;home&quot;</span><span class="p">,</span> <span class="s2">&quot;garden&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span> <span class="s2">&quot;cakes&quot;</span> <span class="p">]</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To get a collapsed array, we can employ the double star operator:</p>
+
+<figure class='code'><figcaption><span>extracting flattend arrays</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[**]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Then we&rsquo;ll get:</p>
+
+<figure class='code'><figcaption><span>result of double star query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="s2">&quot;lettuce&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;home&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;garden&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;cakes&quot;</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note: the result of this query can also be made unique using the standard AQL
+function <code>UNIQUE()</code>.</p>
+
+<p>The star operator in 2.7 can have any number of levels. Using it with a single
+star will simply iterate over the input array, using it with two stars will
+collapse one level of the input, using it with three stars will collapse two
+levels of the input etc.</p>
+
+<h2>Subquery result usage</h2>
+
+<p>While working on the AQL parser anyway, the grammar has been modified so
+it allows a few more types of expressions.</p>
+
+<p>For example, the result of a subquery can now be used as an array and the
+subquery results can be accessed by position directly:</p>
+
+<figure class='code'><figcaption><span>accessing subquery results by position</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN (
+</span><span class='line'>  FOR i IN [ 1, 2, 3 ] 
+</span><span class='line'>   RETURN i
+</span><span class='line'>)[0]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The trailing <code>[0]</code> led to a parse error in previous versions. To make this
+work in previous versions, the subquery result needs to be captured in an
+extra variable using <code>LET</code> before accessing the 0th member of that variable:</p>
+
+<figure class='code'><figcaption><span>workaround for accessing subquery results by position</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>LET temp = (
+</span><span class='line'>  FOR i IN [ 1, 2, 3 ] 
+</span><span class='line'>   RETURN i
+</span><span class='line'>)
+</span><span class='line'>RETURN temp[0]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The parser generalizations now also allow to use the star operator directly
+on a subquery result and access its individual members:</p>
+
+<figure class='code'><figcaption><span>expanding subquery results using star operator</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN (
+</span><span class='line'>  FOR member IN [ 
+</span><span class='line'>    { name: "sir alfred" }, 
+</span><span class='line'>    { name: "mozquito" }
+</span><span class='line'>  ]
+</span><span class='line'>   RETURN i
+</span><span class='line'>)[*].name</span></code></pre></td></tr></table></div></figure>
+
+
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Parsing PHP Arrays With PHP]]></title>
@@ -4163,334 +4404,6 @@ so using functions such as <code>GRAPH_TRAVERSAL</code> etc. is disallowed.</p><
 
 <p>The improvements are present in the <code>devel</code> branch and can be tested in there from now on.
 As usual, feedback is welcome!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Preview of the UPSERT Command]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/03/27/preview-of-the-upsert-command/"/>
-    <updated>2015-03-27T21:37:09+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/03/27/preview-of-the-upsert-command</id>
-    <content type="html"><![CDATA[<p>This week saw the completion of the AQL <code>UPSERT</code> command.</p>
-
-<p>This command will be very helpful in a lot of use cases, including the following:</p>
-
-<ul>
-<li>ensure that a document exists</li>
-<li>update a document if it exists, otherwise create it</li>
-<li>replace a document if it exists, otherwise create it</li>
-</ul>
-
-
-<p>The <code>UPSERT</code> command is executed on the server side and so delivers client
-applications from issuing a fetch command followed by a separate, conditional <code>UPDATE</code>
-or <code>INSERT</code> command.</p>
-
-<!-- more -->
-
-
-<p>The general format of an <code>UPSERT</code> statement is:</p>
-
-<figure class='code'><figcaption><span>UPSERT format</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>UPSERT search-document
-</span><span class='line'>INSERT insert-expression
-</span><span class='line'>UPDATE update-expression
-</span><span class='line'>IN collection-name</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Following are a few example invocations of <code>UPSERT</code>.</p>
-
-<h2>Ensure a document exists</h2>
-
-<p>A simple use case of <code>UPSERT</code> is to ensure that a specific document exists.
-For example, the following query will ensure that that there will be a document
-with attribute <code>ip</code> equal to <code>192.168.173.13</code> in collection <code>hosts</code>:</p>
-
-<figure class='code'><figcaption><span>ensuring a document exists</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>UPSERT { ip: '192.168.173.13' }
-</span><span class='line'>INSERT { ip: '192.168.173.13', name: 'flittard' }
-</span><span class='line'>UPDATE { }
-</span><span class='line'>IN hosts</span></code></pre></td></tr></table></div></figure>
-
-
-<p>If the document does not yet exist, the <code>INSERT</code> part will be carried out. If the
-document is already there, the empty <code>UPDATE</code> part will be run, which will not
-modify the document.</p>
-
-<p>After the query has finished, there will be a document with the specified <code>ip</code> value.</p>
-
-<p>There is no need for client applications to check for document existence first,
-and then to conditionally insert or update, or to try insert first and catch errors.</p>
-
-<p>Note: this is the same as ActiveRecord&rsquo;s <code>find_or_create</code>.</p>
-
-<h2>Update a document if it exists, otherwise create it</h2>
-
-<p>Another common use case is to check whether a specific document exists, and then update it.
-If it does not yet exist, the document shall be created.</p>
-
-<p>Counters are a good example for this, so let&rsquo;s demo this pattern with a counter, too:</p>
-
-<figure class='code'><figcaption><span>UPSERT example</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>UPSERT { ip: '192.168.173.13' }
-</span><span class='line'>INSERT { ip: '192.168.173.13', name: 'flittard', counter: 1 }
-</span><span class='line'>UPDATE { counter : OLD.counter + 1 } 
-</span><span class='line'>IN hosts</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The above query will again look for a document with the specified <code>ip</code> attribute. If the
-document exists, its <code>counter</code> attribute will be increased by one. This is achieved by
-referring to the pseudo-value <code>OLD</code>, which in the <code>UPDATE</code> case contains the previous revision
-of the document.</p>
-
-<p>If the search document does not yet exist, the <code>INSERT</code>part will be carried out, inserting
-the document and setting the initial value of <code>counter</code> to 1.</p>
-
-<p>Assuming the collection was empty before, running the above query once will make the collection
-contain this data:</p>
-
-<figure class='code'><figcaption><span>collection contents after running query once</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;counter&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">&quot;ip&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.173.13&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;flittard&quot;</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>When running the <code>UPSERT</code> statement again, the collection will contain the updated document:</p>
-
-<figure class='code'><figcaption><span>collection contents after running the UPSERT command again:</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;counter&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">&quot;ip&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.173.13&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;flittard&quot;</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Now let&rsquo;s run the query with adjusted <code>ip</code> and <code>name</code> values:</p>
-
-<figure class='code'><figcaption><span>UPSERT with different ip and name</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>UPSERT { ip: '192.168.173.73' }
-</span><span class='line'>INSERT { ip: '192.168.173.73', name: 'brueck', counter: 1 }
-</span><span class='line'>UPDATE { counter : OLD.counter + 1 } 
-</span><span class='line'>IN hosts</span></code></pre></td></tr></table></div></figure>
-
-
-<p>After that, the collection will contain two documents:</p>
-
-<figure class='code'><figcaption><span>collection contents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;counter&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">&quot;ip&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.173.13&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;flittard&quot;</span>
-</span><span class='line'>  <span class="p">},</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;counter&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;brueck&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">&quot;ip&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.173.73&quot;</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Replace a document if it exists, otherwise create it</h2>
-
-<p>We&rsquo;ve seen <code>UPSERT</code> with an <code>INSERT</code> and an <code>UPDATE</code> clause so far.</p>
-
-<p><code>UPDATE</code> will partially update the previous revision of the document if present.
-Only those attributes specified in the <code>update-expression</code> will be updated, and
-all non-specified attributes of the original document revision will remain
-unchanged.</p>
-
-<p>If instead a full replacement of the original document is required, the <code>REPLACE</code>
-clause should be used instead of <code>UPDATE</code>. <code>REPLACE</code> will overwrite the previous
-revision completely with what&rsquo;s in <code>update-expression</code>.</p>
-
-<figure class='code'><figcaption><span>UPSERT replacing a document entirely</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>UPSERT { ip: '192.168.173.73' }
-</span><span class='line'>INSERT { ip: '192.168.173.73', name: 'brueck', counter: 1 }
-</span><span class='line'>REPLACE { location: 'dc1' } 
-</span><span class='line'>IN hosts</span></code></pre></td></tr></table></div></figure>
-
-
-<p><em>note</em>: an older version of this blog post contained a wrong example here. Thanks
-Andy for pointing this out!</p>
-
-<h2>Returning documents</h2>
-
-<p><code>UPSERT</code> can be combined with a <code>RETURN</code> statement to return either the previous
-document revision (in case of <code>UPDATE</code> or <code>REPLACE</code>) or the new version of the
-document.</p>
-
-<p>Client applications can use this to check whether the <code>UPSERT</code> statement has
-inserted or updated the document. In case no previous revision was present, the
-pseudo-value <code>OLD</code> will be <code>null</code>.</p>
-
-<p><code>UPSERT</code> also provides a pseudo-value named <code>NEW</code> containing the insert, updated or
-replaced version of the document:</p>
-
-<figure class='code'><figcaption><span>UPSERT with a RETURN value</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>UPSERT { ip: '192.168.173.187' }
-</span><span class='line'>INSERT { ip: '192.168.173.187', name: 'kalk', counter: 1 }
-</span><span class='line'>UPDATE { counter : OLD.counter + 1 } 
-</span><span class='line'>IN hosts
-</span><span class='line'>RETURN { old: OLD, new: NEW }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In the <code>INSERT</code> case, we&rsquo;ll get:</p>
-
-<figure class='code'><figcaption><span>query return value for INSERT case</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;old&quot;</span><span class="p">:</span> <span class="kc">null</span><span class="p">,</span>
-</span><span class='line'>    <span class="nt">&quot;new&quot;</span><span class="p">:</span> <span class="p">{</span>
-</span><span class='line'>      <span class="nt">&quot;counter&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'>      <span class="nt">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;kalk&quot;</span><span class="p">,</span>
-</span><span class='line'>      <span class="nt">&quot;ip&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.173.187&quot;</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>When running the query again, we&rsquo;ll get into the <code>UPDATE</code> case, and the same query
-will now return:</p>
-
-<figure class='code'><figcaption><span>query return value for the UPDATE case</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;old&quot;</span><span class="p">:</span> <span class="p">{</span>
-</span><span class='line'>      <span class="nt">&quot;counter&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'>      <span class="nt">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;kalk&quot;</span><span class="p">,</span>
-</span><span class='line'>      <span class="nt">&quot;ip&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.173.187&quot;</span>
-</span><span class='line'>    <span class="p">},</span>
-</span><span class='line'>    <span class="nt">&quot;new&quot;</span><span class="p">:</span> <span class="p">{</span>
-</span><span class='line'>      <span class="nt">&quot;counter&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
-</span><span class='line'>      <span class="nt">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;kalk&quot;</span><span class="p">,</span>
-</span><span class='line'>      <span class="nt">&quot;ip&quot;</span><span class="p">:</span> <span class="s2">&quot;192.168.173.187&quot;</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Complex updates</h2>
-
-<p>Updating and returning <code>OLD</code> and <code>NEW</code> will work with arbitrary calculations.
-For example, the following query adds a value <code>development</code> to the <code>tag</code> attribute
-only if not yet present in the search document:</p>
-
-<figure class='code'><figcaption><span>adding a value to an array if not yet present</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>UPSERT { ip: '192.168.173.94' }                                                                              
-</span><span class='line'>INSERT { ip: '192.168.173.94', name: 'chorweiler', tags: [ "development" ] }                                                    
-</span><span class='line'>UPDATE { tags: PUSH(OLD.tags, "development", true) }                                                                          
-</span><span class='line'>IN hosts                                                                                                      
-</span><span class='line'>RETURN { old: OLD, new: NEW }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Running the query multiple times will ensure that <code>tags</code> will contain the value
-<code>development</code> only once.</p>
-
-<p>Note: <code>PUSH</code> is a regular <a href="https://docs.arangodb.com/Aql/ArrayFunctions.html">AQL array function</a>.</p>
-
-<h2>Restrictions</h2>
-
-<p>The <code>search-value</code> needs to be an object literal, with attribute names being inspectable
-at query compile time. This means that neither variables nor bind parameters can be used
-for <code>search-value</code>.</p>
-
-<p>However, bind parameters and variables can be used <strong>inside</strong> <code>search-value</code>.
-Dynamic attribute names cannot be used for specifying attribute names in search-value`.</p>
-
-<p><code>UPSERT</code> does not require an index to be present on the attributes of <code>search-value</code>,
-but in reality queries will benefit from indexes to find matching documents.</p>
-
-<p>When more than one document in the collection matches <code>search-value</code>, one arbitrary match
-will be used for executing the <code>UPDATE</code> clause. It is therefore recommended to use
-<code>UPSERT</code> commands together with a unique index or to make sure from the client application
-that at most one document will match the <code>search-value</code>. Ironically, one way to achieve this is
-to use the <code>UPSERT</code> command for inserts&hellip;</p>
-
-<h2>Availability</h2>
-
-<p><code>UPSERT</code> is currently available in the <code>devel</code> branch of ArangoDB. This branch
-will eventually become release 2.6. Until then, everyone is welcome to try it out and
-provide feedback.</p>
 ]]></content>
   </entry>
   

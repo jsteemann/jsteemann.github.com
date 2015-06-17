@@ -1,0 +1,493 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>AQL Improvements for 2.7 - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="With ArangoDB 2.6 being in beta already, it&rsquo;s time to look at some
+features scheduled for 2.7. Today I&rsquo;ll showcase a few AQL parser &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/06/17/aql-improvements-for-27">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>{ "subject" : "ArangoDB", "tags": [ "multi-model", "nosql", "database" ] }</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">AQL Improvements for 2.7</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-06-17T12:35:16+02:00" pubdate data-updated="true">Jun 17<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>With ArangoDB 2.6 being in beta already, it&rsquo;s time to look at some
+features scheduled for 2.7. Today I&rsquo;ll showcase a few AQL parser
+improvements that are present in the <code>devel</code> branch already, which will
+be the foundation for the 2.7 release.</p>
+
+<!-- more -->
+
+
+<h2>Star operator</h2>
+
+<p>The already existing star operator (<code>[*]</code>) is much more flexible in 2.7
+than in previous ArangoDB versions. It now allows filtering the values it
+iterates over, and optional projections.</p>
+
+<p>These features will be demonstrated using the following example member data:</p>
+
+<figure class='code'><figcaption><span>example data for queries</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;sir alfred&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">60</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;lettuce&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span> <span class="p">]</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;mozquito&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">15</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;skateboards&quot;</span><span class="p">,</span> <span class="s2">&quot;music&quot;</span> <span class="p">]</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;murphy&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">28</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;juice&quot;</span><span class="p">,</span> <span class="s2">&quot;tarts&quot;</span><span class="p">,</span> <span class="s2">&quot;cakes&quot;</span> <span class="p">]</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;helga&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">52</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;home&quot;</span><span class="p">,</span> <span class="s2">&quot;garden&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span> <span class="s2">&quot;cakes&quot;</span> <span class="p">]</span> <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To return all members with an age of 40 or higher and that also like tortoises,
+we can now combine the star operator with an inline <code>FILTER</code> expression:</p>
+
+<figure class='code'><figcaption><span>star operator with inline FILTER</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The inline <code>FILTER</code> expression has access to the current array element via the
+pseudo-variable <code>CURRENT</code>. The <code>FILTER</code> expression can thus access the element&rsquo;s
+attributes and sub-attributes, and also use them in function expressions.</p>
+
+<p>The above query will return only two array members as expected:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;sir alfred&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">60</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;lettuce&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span> <span class="p">]</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;helga&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">52</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;home&quot;</span><span class="p">,</span> <span class="s2">&quot;garden&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span> <span class="s2">&quot;cakes&quot;</span> <span class="p">]</span> <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>It&rsquo;s also possible to extract just a specific sub-attribute of each result value:</p>
+
+<figure class='code'><figcaption><span>extracting just a sub-attribute</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes].name</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will return:</p>
+
+<figure class='code'><figcaption><span>query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="s2">&quot;sir alfred&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;helga&quot;</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If we don&rsquo;t want to return the whole match but a single attribute is not enough, the
+star operator can be used in combination with arbitrary projections, too.</p>
+
+<p>The following query extracts the matching members a <code>FILTER</code> as above, but now only
+returns each member&rsquo;s <code>age</code> attribute and the number of values in the member&rsquo;s <code>likes</code>
+attribute:</p>
+
+<figure class='code'><figcaption><span>extracting with a FILTER and a projection</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes RETURN { 
+</span><span class='line'>  name: CURRENT.name, 
+</span><span class='line'>  likes: LENGTH(CURRENT.likes) 
+</span><span class='line'>}]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will produce the following result:</p>
+
+<figure class='code'><figcaption><span>query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;sir alfred&quot;</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="mi">2</span> <span class="p">},</span>
+</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;helga&quot;</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="mi">4</span> <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>If only a certain number of values is required, the star operator can be combined
+with a <code>LIMIT</code> clause, too. This is useful for testing whether at least one of the
+array members satisfies a <code>FILTER</code> condition:</p>
+
+<figure class='code'><figcaption><span>limiting the number of results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER "garden" IN CURRENT.likes LIMIT 1]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Overall, the star operator is now much more powerful than before, so in many queries
+it can replace full-blown <code>FOR</code> loops and subqueries when the goal simply is to iterate
+over sub-parts of a result.</p>
+
+<h2>Multi-star operator</h2>
+
+<p>In 2.7 there is now also a <em>multi-star</em> operator (<code>[**]</code>). This operator can be used to
+iterate over an array, too. In addition it will also flatten its input, so it can be used
+for collapsing nested array structures.</p>
+
+<p>This is useful in cases where a flat result is required but the single star operator would
+return a nested array.</p>
+
+<p>Consider this query with the single star operator:</p>
+
+<figure class='code'><figcaption><span>extracting nested arrays</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[*]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will produce:</p>
+
+<figure class='code'><figcaption><span>result of single star query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">[</span> <span class="s2">&quot;lettuce&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span> <span class="p">],</span>
+</span><span class='line'>  <span class="p">[</span> <span class="s2">&quot;home&quot;</span><span class="p">,</span> <span class="s2">&quot;garden&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span> <span class="s2">&quot;cakes&quot;</span> <span class="p">]</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To get a collapsed array, we can employ the double star operator:</p>
+
+<figure class='code'><figcaption><span>extracting flattend arrays</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[**]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Then we&rsquo;ll get:</p>
+
+<figure class='code'><figcaption><span>result of double star query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="s2">&quot;lettuce&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;home&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;garden&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;cakes&quot;</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note: the result of this query can also be made unique using the standard AQL
+function <code>UNIQUE()</code>.</p>
+
+<p>The star operator in 2.7 can have any number of levels. Using it with a single
+star will simply iterate over the input array, using it with two stars will
+collapse one level of the input, using it with three stars will collapse two
+levels of the input etc.</p>
+
+<h2>Subquery result usage</h2>
+
+<p>While working on the AQL parser anyway, the grammar has been modified so
+it allows a few more types of expressions.</p>
+
+<p>For example, the result of a subquery can now be used as an array and the
+subquery results can be accessed by position directly:</p>
+
+<figure class='code'><figcaption><span>accessing subquery results by position</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN (
+</span><span class='line'>  FOR i IN [ 1, 2, 3 ] 
+</span><span class='line'>   RETURN i
+</span><span class='line'>)[0]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The trailing <code>[0]</code> led to a parse error in previous versions. To make this
+work in previous versions, the subquery result needs to be captured in an
+extra variable using <code>LET</code> before accessing the 0th member of that variable:</p>
+
+<figure class='code'><figcaption><span>workaround for accessing subquery results by position</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>LET temp = (
+</span><span class='line'>  FOR i IN [ 1, 2, 3 ] 
+</span><span class='line'>   RETURN i
+</span><span class='line'>)
+</span><span class='line'>RETURN temp[0]</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The parser generalizations now also allow to use the star operator directly
+on a subquery result and access its individual members:</p>
+
+<figure class='code'><figcaption><span>expanding subquery results using star operator</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN (
+</span><span class='line'>  FOR member IN [ 
+</span><span class='line'>    { name: "sir alfred" }, 
+</span><span class='line'>    { name: "mozquito" }
+</span><span class='line'>  ]
+</span><span class='line'>   RETURN i
+</span><span class='line'>)[*].name</span></code></pre></td></tr></table></div></figure>
+
+
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-06-17T12:35:16+02:00" pubdate data-updated="true">Jun 17<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/parsing/'>Parsing</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/06/17/aql-improvements-for-27/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/06/17/aql-improvements-for-27/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/06/16/parsing-php-arrays-with-php/" title="Previous Post: Parsing PHP arrays with PHP">&laquo; Parsing PHP arrays with PHP</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/06/17/aql-improvements-for-27/">AQL Improvements for 2.7</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/06/16/parsing-php-arrays-with-php/">Parsing PHP Arrays With PHP</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/06/15/speeding-up-array-slash-object-literal-access/">Speeding Up Array/object Literal Access</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/06/01/on-getting-unique-values/">On Getting Unique Values</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/26/diffing-two-documents-in-aql/">Diffing Two Documents in AQL</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">The Great AQL Shootout: ArangoDB 2.5 vs 2.6</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (25)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (41)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (3)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (7)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (17)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (31)</li><ul class="month_list"><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

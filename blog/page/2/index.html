@@ -11,8 +11,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="While in search for further AQL query optimizations last week, we found that intermediate AQL
-query results were copied one time too often in some &hellip;">
+  <meta name="description" content="This is another post demonstrating some of the AQL query performance improvements
+that can be expected in ArangoDB 2.6. Specifically, this post is &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -82,6 +82,49 @@ query results were copied one time too often in some &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/05/04/subquery-optimizations/">Subquery Optimizations</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-05-04T13:26:00+02:00" pubdate data-updated="true">May 4<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>This is another post demonstrating some of the AQL query performance improvements
+that can be expected in ArangoDB 2.6. Specifically, this post is about an optimization
+for subqueries. AQL queries with multiple subqueries will likely benefit from it.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/05/04/subquery-optimizations/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -540,60 +583,6 @@ statements easier and also more flexible.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/03/27/preview-of-the-upsert-command/">Preview of the UPSERT Command</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-03-27T21:37:09+01:00" pubdate data-updated="true">Mar 27<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>This week saw the completion of the AQL <code>UPSERT</code> command.</p>
-
-<p>This command will be very helpful in a lot of use cases, including the following:</p>
-
-<ul>
-<li>ensure that a document exists</li>
-<li>update a document if it exists, otherwise create it</li>
-<li>replace a document if it exists, otherwise create it</li>
-</ul>
-
-
-<p>The <code>UPSERT</code> command is executed on the server side and so delivers client
-applications from issuing a fetch command followed by a separate, conditional <code>UPDATE</code>
-or <code>INSERT</code> command.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/03/27/preview-of-the-upsert-command/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/3/">&larr; Older</a>
@@ -618,6 +607,10 @@ or <code>INSERT</code> command.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/06/17/aql-improvements-for-27/">AQL Improvements for 2.7</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/06/16/parsing-php-arrays-with-php/">Parsing PHP Arrays With PHP</a>
       </li>
     
@@ -637,10 +630,6 @@ or <code>INSERT</code> command.</p>
         <a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">The Great AQL Shootout: ArangoDB 2.5 vs 2.6</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/05/07/less-intrusive-linking/">Less Intrusive Linking</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -649,11 +638,11 @@ or <code>INSERT</code> command.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (24)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (40)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (3)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (7)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (1)</a></li><li><a href='/blog/categories/performance/'>Performance (17)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (25)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (41)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (3)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (2)</a></li><li><a href='/blog/categories/foxx/'>Foxx (3)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (7)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (17)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (30)</li><ul class="month_list"><li class="month"><a href='/blog/2015/06/'>JUN (3)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (31)</li><ul class="month_list"><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>
