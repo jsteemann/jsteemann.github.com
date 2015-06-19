@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-06-17T17:07:30+02:00</updated>
+  <updated>2015-06-19T16:59:46+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -211,7 +211,7 @@ subquery results can be accessed by position directly:</p>
 <span class='line-number'>4</span>
 </pre></td><td class='code'><pre><code class=''><span class='line'>RETURN (
 </span><span class='line'>  FOR i IN [ 1, 2, 3 ] 
-</span><span class='line'>   RETURN i
+</span><span class='line'>    RETURN i
 </span><span class='line'>)[0]</span></code></pre></td></tr></table></div></figure>
 
 
@@ -226,7 +226,7 @@ extra variable using <code>LET</code> before accessing the 0th member of that va
 <span class='line-number'>5</span>
 </pre></td><td class='code'><pre><code class=''><span class='line'>LET temp = (
 </span><span class='line'>  FOR i IN [ 1, 2, 3 ] 
-</span><span class='line'>   RETURN i
+</span><span class='line'>    RETURN i
 </span><span class='line'>)
 </span><span class='line'>RETURN temp[0]</span></code></pre></td></tr></table></div></figure>
 
@@ -246,7 +246,7 @@ on a subquery result and access its individual members:</p>
 </span><span class='line'>    { name: "sir alfred" }, 
 </span><span class='line'>    { name: "mozquito" }
 </span><span class='line'>  ]
-</span><span class='line'>   RETURN i
+</span><span class='line'>   RETURN member
 </span><span class='line'>)[*].name</span></code></pre></td></tr></table></div></figure>
 
 
