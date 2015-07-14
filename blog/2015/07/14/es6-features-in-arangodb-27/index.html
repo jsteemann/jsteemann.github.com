@@ -1,0 +1,466 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>ES6 Features in ArangoDB 2.7 - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="ArangoDB 2.6 uses V8 engine version 3.31.74.1 for running its own and all user-defined
+JavaScript code. In ArangoDB 2.7 (currently in development), &hellip;">
+  <meta name="keywords" content="ArangoDB, Database, JavaScript, ES6, V8, Foxx, ArangoShell">
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/07/14/es6-features-in-arangodb-27">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>{ "subject" : "ArangoDB", "tags": [ "multi-model", "nosql", "database" ] }</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">ES6 Features in ArangoDB 2.7</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-07-14T20:33:55+02:00" pubdate data-updated="true">Jul 14<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>ArangoDB 2.6 uses V8 engine version 3.31.74.1 for running its own and all user-defined
+JavaScript code. In ArangoDB 2.7 (currently in development), we have upgraded V8 to
+version 4.3.61.</p>
+
+<p>The new V8 version in ArangoDB 2.7 provides several additional ES6 features that can
+be used to improve JavaScript usability and code quality. This blog post showcases <em>strong
+mode</em> and <em>rest parameters</em>, and also shows how to activate <em>TurboFan</em>, V8&rsquo;s new JIT compiler
+for JavaScript.</p>
+
+<p>ArangoDB 2.7 is in development right now, but it can be tried today by
+<a href="/blog/2014/10/16/how-to-compile-arangodb-from-source/">compiling it from source</a>.</p>
+
+<!-- more -->
+
+
+<h2>JavaScript strong mode</h2>
+
+<p>V8 v4 comes with an optional and experimental <em>strong mode</em>. This mode provides only a
+subset of JavaScript, with the idea of intentionally deactivating some of
+<a href="http://archive.oreilly.com/pub/a/javascript/excerpts/javascript-good-parts/bad-parts.html">JavaScript&rsquo;s bad parts</a>.
+It is based on <em>strict mode</em>, but goes further.</p>
+
+<p>Committing to <em>strong mode</em> may not only provide better and stronger semantics, but may
+also enable more optimization opportunities for the JavaScript compiler. For example, the
+strong mode disables JavaScript&rsquo;s <em>with</em> statement and <code>delete</code>! Additionally, <code>var</code> cannot
+be used anymore but is deprecated in favor of <code>let</code> and <code>const</code>.</p>
+
+<p>The proposal for the strong mode can be found
+<a href="https://docs.google.com/document/d/1Qk0qC4s_XNCLemj42FqfsRLp49nDQMZ1y7fwf5YjaI4/view">here</a>,
+and the V8 team also has a <a href="https://developers.google.com/v8/experiments">page about it</a>.</p>
+
+<p>Strong mode must be turned on explicitly. This can be done by adding the <code>--strong-mode=true</code>
+v8 option when starting <em>arangod</em> or <em>arangosh</em>:</p>
+
+<figure class='code'><figcaption><span>enabling strong mode</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh  --javascript.v8-options<span class="o">=</span><span class="s2">&quot;--strong_mode=true&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note that I am using <em>arangosh</em> above, but the same would work for <em>arangod</em>, too, so the feature
+can be used for Foxx routes as well.</p>
+
+<h2>Rest parameters</h2>
+
+<p>How to pass a variable number of arguments to a function?</p>
+
+<p>C and C++ programmers have been using and abusing the ellipsis (<code>...</code>) and <code>__VA_ARGS__</code> features
+of the C preprocessor for a long time. Then came the macros of <code>stdarg.h</code> / <code>cstdarg</code>,
+until C++11 really improved the situation with <code>std::initializer_list</code> and variadic templates.</p>
+
+<p>In JavaScript, one can use the <code>arguments</code> object:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">logSimple</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="nx">value</span> <span class="nx">of</span> <span class="nx">arguments</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">value</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">logSimple</span><span class="p">(</span><span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="s2">&quot;baz&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This does the job, and the above will print something like:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>2015-07-14T19:01:51Z [5245] INFO foo
+</span><span class='line'>2015-07-14T19:01:51Z [5245] INFO bar
+</span><span class='line'>2015-07-14T19:01:51Z [5245] INFO baz</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This is fine as long as all arguments shall be treated the same way. But what if some
+arguments have a designated meaning and should be treated specially?</p>
+
+<p>The solution is to use <em>ES6 rest parameters</em>. The last parameter in an argument list can be
+prefixed with <code>...</code> to capture any number of function parameters:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">logWithContext</span> <span class="p">(</span><span class="nx">context</span><span class="p">,</span> <span class="p">...</span><span class="nx">values</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="nx">value</span> <span class="nx">of</span> <span class="nx">values</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;[&#39;</span> <span class="o">+</span> <span class="nx">context</span> <span class="o">+</span> <span class="s1">&#39;] &#39;</span> <span class="o">+</span> <span class="nx">value</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">logWithContext</span><span class="p">(</span><span class="s2">&quot;es6&quot;</span><span class="p">,</span> <span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="s2">&quot;baz&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As can be seen, the <code>logWithContext</code> function specially handles its <code>context</code> argument, while
+we can still pass any number of further parameters into it. Here&rsquo;s what the above will print:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>2015-07-14T19:07:27Z [5245] INFO [es6]: foo
+</span><span class='line'>2015-07-14T19:07:27Z [5245] INFO [es6]: bar
+</span><span class='line'>2015-07-14T19:07:27Z [5245] INFO [es6]: baz</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note that rest parameters cannot be used with the default configuration and must be turned on
+explicitly in <em>arangosh</em> or <em>arangod</em>.</p>
+
+<p>The startup option to turn them on is:</p>
+
+<figure class='code'><figcaption><span>enabling rest parameters</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh --javascript.v8-options<span class="o">=</span><span class="s2">&quot;--harmony_rest_parameters=true&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>TurboFan</h2>
+
+<p>The new V8 version comes with <em>TurboFan</em>, a new JIT compiler for JavaScript.
+According to <a href="http://blog.chromium.org/2015/07/revving-up-javascript-performance-with.html">this post</a>
+it is already used in Chrome for compiling certain types of JavaScript code.</p>
+
+<p>As fas as I can see, it is turned off by default in our version of V8, and the compiler
+also seems to be rather experimental. To get an idea of what it can already do and where
+its limits are, it can already be tried in ArangoDB 2.7.</p>
+
+<p>By default, it seems to be turned off. Using the following startup option, it can be turned on for
+JavaScript functions with a certain name pattern (i.e. all function names starting with <em>testTurboFan</em>):</p>
+
+<figure class='code'><figcaption><span>starting ArangoShell with TurboFan enabled</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh --javascript.v8-options<span class="o">=</span><span class="s2">&quot;--turbo-filter=testTurboFan*&quot;</span><span class="sb">`</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Without turning on V8 tracing, one will not be able to tell which compiler is used to compile a
+specific function. To turn it on and actually confirm V8 is using TurboFan, use these options:</p>
+
+<figure class='code'><figcaption><span>starting ArangoShell with TurboFan and debug output</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh --javascript.v8-options<span class="o">=</span><span class="s2">&quot;--always-opt --trace_opt --turbo-filter=testTurboFan*&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will be very verbose, but it is good to tell which internal compiler is used to compile a given
+JavaScript function.</p>
+
+<p>For example, after starting the ArangoShell with the above options, run the following test code
+to see that V8 uses TurboFan for compiling the first two functions (which match the name pattern),
+and Crankshaft for the third (which does not match the name pattern):</p>
+
+<figure class='code'><figcaption><span>test code for invoking the TurboFan compiler</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">testTurboFan1</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;turbo-fan 1&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="nx">testTurboFan1</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">function</span> <span class="nx">testTurboFan2</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;turbo-fan 2&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="nx">testTurboFan2</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">function</span> <span class="nx">testSomethingElse</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;something else&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="nx">testSomethingElse</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Here&rsquo;s the confirmation that TurboFan is used:</p>
+
+<figure class='code'><figcaption><span>debug output</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>...
+</span><span class='line'>[compiling method 0x31ca8804e351 &lt;JS Function testTurboFan1 (SharedFunctionInfo 0x31ca8804e171)&gt; using TurboFan]
+</span><span class='line'>...
+</span><span class='line'>[compiling method 0x31ca8804e7f9 &lt;JS Function testTurboFan2 (SharedFunctionInfo 0x31ca8804e619)&gt; using TurboFan]
+</span><span class='line'>...
+</span><span class='line'>[compiling method 0x31ca8804ec71 &lt;JS Function testSomethingElse (SharedFunctionInfo 0x31ca8804ea91)&gt; using Crankshaft]
+</span><span class='line'>...</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Have fun!</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-07-14T20:33:55+02:00" pubdate data-updated="true">Jul 14<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/arangoshell/'>ArangoShell</a>, <a class='category' href='/blog/categories/es6/'>ES6</a>, <a class='category' href='/blog/categories/foxx/'>Foxx</a>, <a class='category' href='/blog/categories/javascript/'>JavaScript</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/07/14/es6-features-in-arangodb-27/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/07/14/es6-features-in-arangodb-27/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/06/17/aql-improvements-for-27/" title="Previous Post: AQL improvements for 2.7">&laquo; AQL improvements for 2.7</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/07/14/es6-features-in-arangodb-27/">ES6 Features in ArangoDB 2.7</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/06/17/aql-improvements-for-27/">AQL Improvements for 2.7</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/06/16/parsing-php-arrays-with-php/">Parsing PHP Arrays With PHP</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/06/15/speeding-up-array-slash-object-literal-access/">Speeding Up Array/object Literal Access</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/06/01/on-getting-unique-values/">On Getting Unique Values</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/05/26/diffing-two-documents-in-aql/">Diffing Two Documents in AQL</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (25)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (42)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (4)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (3)</a></li><li><a href='/blog/categories/foxx/'>Foxx (4)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (17)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (32)</li><ul class="month_list"><li class="month"><a href='/blog/2015/07/'>JUL (1)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

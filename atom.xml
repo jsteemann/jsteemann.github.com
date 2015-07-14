@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-06-19T17:01:52+02:00</updated>
+  <updated>2015-07-14T22:32:53+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,220 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[ES6 Features in ArangoDB 2.7]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/07/14/es6-features-in-arangodb-27/"/>
+    <updated>2015-07-14T20:33:55+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/07/14/es6-features-in-arangodb-27</id>
+    <content type="html"><![CDATA[<p>ArangoDB 2.6 uses V8 engine version 3.31.74.1 for running its own and all user-defined
+JavaScript code. In ArangoDB 2.7 (currently in development), we have upgraded V8 to
+version 4.3.61.</p>
+
+<p>The new V8 version in ArangoDB 2.7 provides several additional ES6 features that can
+be used to improve JavaScript usability and code quality. This blog post showcases <em>strong
+mode</em> and <em>rest parameters</em>, and also shows how to activate <em>TurboFan</em>, V8&rsquo;s new JIT compiler
+for JavaScript.</p>
+
+<p>ArangoDB 2.7 is in development right now, but it can be tried today by
+<a href="http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/">compiling it from source</a>.</p>
+
+<!-- more -->
+
+
+<h2>JavaScript strong mode</h2>
+
+<p>V8 v4 comes with an optional and experimental <em>strong mode</em>. This mode provides only a
+subset of JavaScript, with the idea of intentionally deactivating some of
+<a href="http://archive.oreilly.com/pub/a/javascript/excerpts/javascript-good-parts/bad-parts.html">JavaScript&rsquo;s bad parts</a>.
+It is based on <em>strict mode</em>, but goes further.</p>
+
+<p>Committing to <em>strong mode</em> may not only provide better and stronger semantics, but may
+also enable more optimization opportunities for the JavaScript compiler. For example, the
+strong mode disables JavaScript&rsquo;s <em>with</em> statement and <code>delete</code>! Additionally, <code>var</code> cannot
+be used anymore but is deprecated in favor of <code>let</code> and <code>const</code>.</p>
+
+<p>The proposal for the strong mode can be found
+<a href="https://docs.google.com/document/d/1Qk0qC4s_XNCLemj42FqfsRLp49nDQMZ1y7fwf5YjaI4/view">here</a>,
+and the V8 team also has a <a href="https://developers.google.com/v8/experiments">page about it</a>.</p>
+
+<p>Strong mode must be turned on explicitly. This can be done by adding the <code>--strong-mode=true</code>
+v8 option when starting <em>arangod</em> or <em>arangosh</em>:</p>
+
+<figure class='code'><figcaption><span>enabling strong mode</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh  --javascript.v8-options<span class="o">=</span><span class="s2">&quot;--strong_mode=true&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note that I am using <em>arangosh</em> above, but the same would work for <em>arangod</em>, too, so the feature
+can be used for Foxx routes as well.</p>
+
+<h2>Rest parameters</h2>
+
+<p>How to pass a variable number of arguments to a function?</p>
+
+<p>C and C++ programmers have been using and abusing the ellipsis (<code>...</code>) and <code>__VA_ARGS__</code> features
+of the C preprocessor for a long time. Then came the macros of <code>stdarg.h</code> / <code>cstdarg</code>,
+until C++11 really improved the situation with <code>std::initializer_list</code> and variadic templates.</p>
+
+<p>In JavaScript, one can use the <code>arguments</code> object:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">logSimple</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="nx">value</span> <span class="nx">of</span> <span class="nx">arguments</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">value</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">logSimple</span><span class="p">(</span><span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="s2">&quot;baz&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This does the job, and the above will print something like:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>2015-07-14T19:01:51Z [5245] INFO foo
+</span><span class='line'>2015-07-14T19:01:51Z [5245] INFO bar
+</span><span class='line'>2015-07-14T19:01:51Z [5245] INFO baz</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This is fine as long as all arguments shall be treated the same way. But what if some
+arguments have a designated meaning and should be treated specially?</p>
+
+<p>The solution is to use <em>ES6 rest parameters</em>. The last parameter in an argument list can be
+prefixed with <code>...</code> to capture any number of function parameters:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">logWithContext</span> <span class="p">(</span><span class="nx">context</span><span class="p">,</span> <span class="p">...</span><span class="nx">values</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="nx">value</span> <span class="nx">of</span> <span class="nx">values</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;[&#39;</span> <span class="o">+</span> <span class="nx">context</span> <span class="o">+</span> <span class="s1">&#39;] &#39;</span> <span class="o">+</span> <span class="nx">value</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">logWithContext</span><span class="p">(</span><span class="s2">&quot;es6&quot;</span><span class="p">,</span> <span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="s2">&quot;baz&quot;</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As can be seen, the <code>logWithContext</code> function specially handles its <code>context</code> argument, while
+we can still pass any number of further parameters into it. Here&rsquo;s what the above will print:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>2015-07-14T19:07:27Z [5245] INFO [es6]: foo
+</span><span class='line'>2015-07-14T19:07:27Z [5245] INFO [es6]: bar
+</span><span class='line'>2015-07-14T19:07:27Z [5245] INFO [es6]: baz</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note that rest parameters cannot be used with the default configuration and must be turned on
+explicitly in <em>arangosh</em> or <em>arangod</em>.</p>
+
+<p>The startup option to turn them on is:</p>
+
+<figure class='code'><figcaption><span>enabling rest parameters</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh --javascript.v8-options<span class="o">=</span><span class="s2">&quot;--harmony_rest_parameters=true&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>TurboFan</h2>
+
+<p>The new V8 version comes with <em>TurboFan</em>, a new JIT compiler for JavaScript.
+According to <a href="http://blog.chromium.org/2015/07/revving-up-javascript-performance-with.html">this post</a>
+it is already used in Chrome for compiling certain types of JavaScript code.</p>
+
+<p>As fas as I can see, it is turned off by default in our version of V8, and the compiler
+also seems to be rather experimental. To get an idea of what it can already do and where
+its limits are, it can already be tried in ArangoDB 2.7.</p>
+
+<p>By default, it seems to be turned off. Using the following startup option, it can be turned on for
+JavaScript functions with a certain name pattern (i.e. all function names starting with <em>testTurboFan</em>):</p>
+
+<figure class='code'><figcaption><span>starting ArangoShell with TurboFan enabled</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh --javascript.v8-options<span class="o">=</span><span class="s2">&quot;--turbo-filter=testTurboFan*&quot;</span><span class="sb">`</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Without turning on V8 tracing, one will not be able to tell which compiler is used to compile a
+specific function. To turn it on and actually confirm V8 is using TurboFan, use these options:</p>
+
+<figure class='code'><figcaption><span>starting ArangoShell with TurboFan and debug output</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh --javascript.v8-options<span class="o">=</span><span class="s2">&quot;--always-opt --trace_opt --turbo-filter=testTurboFan*&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will be very verbose, but it is good to tell which internal compiler is used to compile a given
+JavaScript function.</p>
+
+<p>For example, after starting the ArangoShell with the above options, run the following test code
+to see that V8 uses TurboFan for compiling the first two functions (which match the name pattern),
+and Crankshaft for the third (which does not match the name pattern):</p>
+
+<figure class='code'><figcaption><span>test code for invoking the TurboFan compiler</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">testTurboFan1</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;turbo-fan 1&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="nx">testTurboFan1</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">function</span> <span class="nx">testTurboFan2</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;turbo-fan 2&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="nx">testTurboFan2</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">function</span> <span class="nx">testSomethingElse</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;something else&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="nx">testSomethingElse</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Here&rsquo;s the confirmation that TurboFan is used:</p>
+
+<figure class='code'><figcaption><span>debug output</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>...
+</span><span class='line'>[compiling method 0x31ca8804e351 &lt;JS Function testTurboFan1 (SharedFunctionInfo 0x31ca8804e171)&gt; using TurboFan]
+</span><span class='line'>...
+</span><span class='line'>[compiling method 0x31ca8804e7f9 &lt;JS Function testTurboFan2 (SharedFunctionInfo 0x31ca8804e619)&gt; using TurboFan]
+</span><span class='line'>...
+</span><span class='line'>[compiling method 0x31ca8804ec71 &lt;JS Function testSomethingElse (SharedFunctionInfo 0x31ca8804ea91)&gt; using Crankshaft]
+</span><span class='line'>...</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Have fun!</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Improvements for 2.7]]></title>
@@ -4295,115 +4509,6 @@ applications. Client programs do not need to be adjusted to reap the benefits. T
 that has changed were the <em>internals</em> of the cursor API. Its public REST interface remains unchanged.</p>
 
 <p>The changes are included in the <code>devel</code> branch and can be tested there.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Improvements for Data-modification Queries]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries/"/>
-    <updated>2015-03-27T23:29:19+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/03/27/improvements-for-data-modification-queries</id>
-    <content type="html"><![CDATA[<p>Data-modification queries were enhanced in ArangoDB 2.4 to be able to also return
-the inserted, update or removed documents.</p>
-
-<p>For example, the following statement inserted a few documents and also returned
-them with all their attributes:</p>
-
-<figure class='code'><figcaption><span>AQL insert query returning documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN 1..10
-</span><span class='line'>  INSERT { value: i } IN test
-</span><span class='line'>  LET inserted = NEW
-</span><span class='line'>  RETURN inserted</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The syntax for returning documents from data-modification queries only supported
-the exact above format. Using a <code>LET</code> clause was required, and the <code>RETURN</code> clause
-was limited to returning the variable introduced by the <code>LET</code>.</p>
-
-<p>These syntax restrictions have been lifted in the <code>devel</code> branch, which will become
-release 2.6 eventually. The changes make returning values from data-modification
-statements easier and also more flexible.</p>
-
-<!-- more -->
-
-
-<h2>Simpler syntax</h2>
-
-<p>For example, specifying a <code>LET</code> clause is not required anymore (though still fully
-supported). Instead, the <code>RETURN</code> clause can directly refer to the <code>NEW</code> pseudo-value,
-making the query shorter and easier to write:</p>
-
-<figure class='code'><figcaption><span>AQL insert query returning documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN 1..10
-</span><span class='line'>  INSERT { value: i } IN test
-</span><span class='line'>  RETURN NEW</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Projections</h2>
-
-<p>It is now also possible to return a projection instead of returning the entire documents.
-This can be used to reduce the amount of data returned by queries.</p>
-
-<p>For example, the following query will return just the keys of the inserted documents:</p>
-
-<figure class='code'><figcaption><span>AQL insert query returning a projection</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN 1..10
-</span><span class='line'>  INSERT { value: i } IN test
-</span><span class='line'>  RETURN NEW._key</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Using OLD and NEW in the same query</h2>
-
-<p>In previous versions, <code>UPDATE</code> and <code>REPLACE</code> statements could refer to <strong>either</strong>
-the <code>OLD</code> or the <code>NEW</code> pseudo-value, but not to both. 2.6 lifts that restriction, so
-now these queries can refer to both. One can utilize that to return both the previous
-and the updated revision:</p>
-
-<figure class='code'><figcaption><span>AQL update query returning old and new revisions</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN test 
-</span><span class='line'>  UPDATE doc WITH { value: 42 } IN test
-</span><span class='line'>  RETURN { old: OLD, new: NEW }</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Calculations with OLD or NEW</h2>
-
-<p>It is now also possible to run additional calculations with <code>LET</code> statements between
-the data-modification part and the final <code>RETURN</code>:</p>
-
-<figure class='code'><figcaption><span>AQL upsert query with some extra calculations</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>UPSERT { name: 'test' } INSERT { name: 'test' } UPDATE { } IN test
-</span><span class='line'>LET previousRevisionExisted = ! IS_NULL(OLD)
-</span><span class='line'>LET type = previousRevisionExisted ? 'update' : 'insert'
-</span><span class='line'>RETURN { _key: NEW._key, type: type }</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>Restrictions</h2>
-
-<p>Still the following restrictions remain:</p>
-
-<ul>
-<li><p>a data-modification operation can optionally be followed by any number of <code>LET</code> clauses,
-and a final <code>RETURN</code> clause. No other operations (e.g. <code>FOR</code>, <code>SORT</code>, <code>COLLECT</code>) can be
-used after a data-modification operation</p></li>
-<li><p>calculations following a data-modification operation must not access data in collections,
-so using functions such as <code>GRAPH_TRAVERSAL</code> etc. is disallowed.</p></li>
-</ul>
-
-
-<p>The improvements are present in the <code>devel</code> branch and can be tested in there from now on.
-As usual, feedback is welcome!</p>
 ]]></content>
   </entry>
   
