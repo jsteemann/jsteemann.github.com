@@ -11,8 +11,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="ArangoDB&rsquo;s devel branch recently saw a change that makes writing
-some AQL queries a bit simpler. The change introduces an optional shorthand &hellip;">
+  <meta name="description" content="Last week saw the addition of the RETURN DISTINCT for AQL queries.
+This is a new shortcut syntax for making result sets unique. For this purpose it &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -82,6 +82,55 @@ some AQL queries a bit simpler. The change introduces an optional shorthand &hel
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/07/27/introducing-return-distinct/">Introducing RETURN DISTINCT</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-07-27T11:48:41+02:00" pubdate data-updated="true">Jul 27<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>Last week saw the addition of the <code>RETURN DISTINCT</code> for AQL queries.
+This is a new shortcut syntax for making result sets unique.</p>
+
+<p>For this purpose it can be used as an easier-to-memorize alternative for
+the already existing <code>COLLECT</code> statement. <code>COLLECT</code> is very flexible and
+can be used for multiple purposes, but it is syntactic overkill for making
+a result set unique.</p>
+
+<p>The new <code>RETURN DISTINCT</code> syntax makes queries easier to write and understand.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/07/27/introducing-return-distinct/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -555,51 +604,6 @@ other contexts, e.g. when <code>ld</code> shall remain as the system&rsquo;s def
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/05/07/bulk-document-lookups/">Bulk Document Lookups</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-05-07T17:48:21+02:00" pubdate data-updated="true">May 7<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>ArangoDB 2.6 comes with a specialized API for bulk document lookups.</p>
-
-<p>The new API allows fetching multiple documents from the server using a single
-request, making bulk document retrieval more efficient than when using
-one request per document to fetch.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/05/07/bulk-document-lookups/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -622,6 +626,10 @@ one request per document to fetch.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/07/27/introducing-return-distinct/">Introducing RETURN DISTINCT</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/07/27/aql-object-literal-simplification/">AQL Object Literal Simplification</a>
       </li>
     
@@ -641,10 +649,6 @@ one request per document to fetch.</p>
         <a href="/blog/2015/06/15/speeding-up-array-slash-object-literal-access/">Speeding Up Array/object Literal Access</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/06/01/on-getting-unique-values/">On Getting Unique Values</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -653,11 +657,11 @@ one request per document to fetch.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (26)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (43)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (4)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (3)</a></li><li><a href='/blog/categories/foxx/'>Foxx (4)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (17)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (27)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (44)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (4)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (3)</a></li><li><a href='/blog/categories/foxx/'>Foxx (4)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (17)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (33)</li><ul class="month_list"><li class="month"><a href='/blog/2015/07/'>JUL (2)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (34)</li><ul class="month_list"><li class="month"><a href='/blog/2015/07/'>JUL (3)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

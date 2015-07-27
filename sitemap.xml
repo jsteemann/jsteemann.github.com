@@ -237,12 +237,16 @@
         <lastmod>2015-07-27T11:44:43+02:00</lastmod>
     </url>
     <url>
+        <loc>http://jsteemann.github.io/blog/2015/07/27/introducing-return-distinct/</loc>
+        <lastmod>2015-07-27T12:11:53+02:00</lastmod>
+    </url>
+    <url>
         <loc>http://jsteemann.github.io/about/</loc>
-        <lastmod>2015-07-27T11:44:43+02:00</lastmod>
+        <lastmod>2015-07-27T12:11:53+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2015-07-27T11:44:43+02:00</lastmod>
+        <lastmod>2015-07-27T12:11:53+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -250,6 +254,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2015-07-27T11:44:43+02:00</lastmod>
+        <lastmod>2015-07-27T12:11:53+02:00</lastmod>
     </url>
 </urlset>

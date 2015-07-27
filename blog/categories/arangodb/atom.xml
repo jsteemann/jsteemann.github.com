@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-07-27T11:46:18+02:00</updated>
+  <updated>2015-07-27T12:12:15+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,67 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Introducing RETURN DISTINCT]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/07/27/introducing-return-distinct/"/>
+    <updated>2015-07-27T11:48:41+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/07/27/introducing-return-distinct</id>
+    <content type="html"><![CDATA[<p>Last week saw the addition of the <code>RETURN DISTINCT</code> for AQL queries.
+This is a new shortcut syntax for making result sets unique.</p>
+
+<p>For this purpose it can be used as an easier-to-memorize alternative for
+the already existing <code>COLLECT</code> statement. <code>COLLECT</code> is very flexible and
+can be used for multiple purposes, but it is syntactic overkill for making
+a result set unique.</p>
+
+<p>The new <code>RETURN DISTINCT</code> syntax makes queries easier to write and understand.</p>
+
+<!-- more -->
+
+
+<p>Here&rsquo;s a non-scientific proof for this claim:</p>
+
+<p>Compare the following queries, which both return each distinct <code>age</code> attribute
+value from the collection:</p>
+
+<p><code>plain making result set unique using COLLECT
+FOR doc IN collection
+  COLLECT age = doc.age
+  RETURN age
+</code></p>
+
+<p><code>plain making result set unique using RETURN DISTINCT
+FOR doc IN collection
+  RETURN DISTINCT doc.age
+</code></p>
+
+<p>Clearly, the query using <code>RETURN DISTINCT</code> is more intuitive, especially for
+AQL beginners. Apart from that, using <code>RETURN DISTINCT</code> will save a bit of typing
+compared to the longer <code>COLLECT</code>-based query.</p>
+
+<p>Internally both <code>COLLECT</code> and <code>RETURN DISTINCT</code> will work by creating an
+<code>AggregateNode</code>. The optimizer will try the <em>sorted</em> and the <em>hashed</em> variants
+for both, so they should perform about the same.</p>
+
+<p>However, the result of a <code>RETURN DISTINCT</code> does not have any guaranteed order,
+so the optimizer will not insert a post-<code>SORT</code> for it. It may do so for a regular
+<code>COLLECT</code>.</p>
+
+<p>As mentioned before, <code>COLLECT</code> is more flexible than <code>RETURN DISTINCT</code>.
+Notably, <code>COLLECT</code> is superior to <code>RETURN DISTINCT</code> when the result set should
+be made unique using more than one criterion, e.g.</p>
+
+<p><code>plain using more than one criterion for uniqueness
+FOR doc IN collection
+  COLLECT status = doc.status, age = doc.age,
+  RETURN { status, age }
+</code></p>
+
+<p>This is currently not achievable via <code>RETURN DISTINCT</code>, as it only works
+with a single criterion.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Object Literal Simplification]]></title>
@@ -577,75 +638,6 @@ or the result of an expression), or for parameters passed into user-defined AQL 
 Enabling it for user-defined AQL functions is not safe because in theory these might
 modify their arguments (and function arguments are passed by reference &ndash; passing them
 by value would also defeat the purpose of the optimization).</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[On Getting Unique Values]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/06/01/on-getting-unique-values/"/>
-    <updated>2015-06-01T13:27:13+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/06/01/on-getting-unique-values</id>
-    <content type="html"><![CDATA[<p>While paging through the issues in the <a href="https://github.com/arangodb/arangodb">ArangoDB issue tracker</a>
-I came across <a href="https://github.com/arangodb/arangodb/issues/987">issue #987</a>, titled
-<em>Trying to get distinct document attribute values from a large collection fails</em>.</p>
-
-<p>The issue was opened around 10 months ago when ArangoDB 2.2 was around. We improved AQL performance
-somewhat since then, so I was eager to see how the query would perform in ArangoDB 2.6, especially
-when comparing it to 2.2.</p>
-
-<!-- more -->
-
-
-<p>For reproduction I quickly put together some example data to run the query on:
-<code>js setting up example data
-var db = require("org/arangodb").db;
-var c = db._create("test");
-for (var i = 0; i &lt; 4 * 1000 * 1000; ++i) {
-  c.save({ _key: "test" + i, value: (i % 100) });
-}
-require("internal").wal.flush(true, true);
-</code></p>
-
-<p>This produces a collection named <code>test</code> with 4 million documents. Each document has a numeric <code>value</code>
-attribute, which in total has 100 unique values. I remembered from a conversation with the guy that
-opened the issue that the number of distinct values was 100 or even slightly lower. I didn&rsquo;t bother
-to create an index on the <code>value</code> attribute, which might have sped up the query.</p>
-
-<p>With data available, it was time to run the query and measure its execution time:
-<code>js running the query
-var time = require("internal").time;
-var start = time();
-db._query("FOR doc IN test COLLECT value = doc.value RETURN value");
-time() - start;
-</code></p>
-
-<p>Running this in 2.2.7 took 3 minutes and 18 seconds before bursting with the following error message:</p>
-
-<p>```plain 2.2.7 error message
-#</p>
-
-<h1>Fatal error in CALL_AND_RETRY_2</h1>
-
-<h1>Allocation failed &ndash; process out of memory</h1>
-
-<p>#
-```</p>
-
-<p>In the 2.2 branch AQL queries were fully transformed to JavaScript and executed using V8. Obviously
-that didn&rsquo;t work well with large collections. That was one of the reasons why version 2.3 saw a major
-rewrite of the AQL engine.</p>
-
-<p>As a consequence, running the query in 2.3 (2.3.5) worked fine. Execution took around 28 seconds.
-The same was true for 2.4 (2.4.8) and 2.5 (2.5.5).</p>
-
-<p>Finally, running the query in 2.6.0 completed in just 3.2 seconds.</p>
-
-<p>The reasons for the speedup are the optimizations done for <code>COLLECT</code> (see
-<a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing with a hash table</a>, the
-<a href="/blog/2015/05/04/return-value-optimization-for-aql/">Return value optimization for AQL</a> and some
-minor optimizations within AQL that didn&rsquo;t get a pretty working title.</p>
-
-<p>Looks like in sum all the optimizations put into 2.6 really pay out.</p>
 ]]></content>
   </entry>
   

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-07-27T11:46:18+02:00</updated>
+  <updated>2015-07-27T12:12:15+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,67 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Introducing RETURN DISTINCT]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/07/27/introducing-return-distinct/"/>
+    <updated>2015-07-27T11:48:41+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/07/27/introducing-return-distinct</id>
+    <content type="html"><![CDATA[<p>Last week saw the addition of the <code>RETURN DISTINCT</code> for AQL queries.
+This is a new shortcut syntax for making result sets unique.</p>
+
+<p>For this purpose it can be used as an easier-to-memorize alternative for
+the already existing <code>COLLECT</code> statement. <code>COLLECT</code> is very flexible and
+can be used for multiple purposes, but it is syntactic overkill for making
+a result set unique.</p>
+
+<p>The new <code>RETURN DISTINCT</code> syntax makes queries easier to write and understand.</p>
+
+<!-- more -->
+
+
+<p>Here&rsquo;s a non-scientific proof for this claim:</p>
+
+<p>Compare the following queries, which both return each distinct <code>age</code> attribute
+value from the collection:</p>
+
+<p><code>plain making result set unique using COLLECT
+FOR doc IN collection
+  COLLECT age = doc.age
+  RETURN age
+</code></p>
+
+<p><code>plain making result set unique using RETURN DISTINCT
+FOR doc IN collection
+  RETURN DISTINCT doc.age
+</code></p>
+
+<p>Clearly, the query using <code>RETURN DISTINCT</code> is more intuitive, especially for
+AQL beginners. Apart from that, using <code>RETURN DISTINCT</code> will save a bit of typing
+compared to the longer <code>COLLECT</code>-based query.</p>
+
+<p>Internally both <code>COLLECT</code> and <code>RETURN DISTINCT</code> will work by creating an
+<code>AggregateNode</code>. The optimizer will try the <em>sorted</em> and the <em>hashed</em> variants
+for both, so they should perform about the same.</p>
+
+<p>However, the result of a <code>RETURN DISTINCT</code> does not have any guaranteed order,
+so the optimizer will not insert a post-<code>SORT</code> for it. It may do so for a regular
+<code>COLLECT</code>.</p>
+
+<p>As mentioned before, <code>COLLECT</code> is more flexible than <code>RETURN DISTINCT</code>.
+Notably, <code>COLLECT</code> is superior to <code>RETURN DISTINCT</code> when the result set should
+be made unique using more than one criterion, e.g.</p>
+
+<p><code>plain using more than one criterion for uniqueness
+FOR doc IN collection
+  COLLECT status = doc.status, age = doc.age,
+  RETURN { status, age }
+</code></p>
+
+<p>This is currently not achievable via <code>RETURN DISTINCT</code>, as it only works
+with a single criterion.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Object Literal Simplification]]></title>
@@ -470,149 +531,6 @@ The same was true for 2.4 (2.4.8) and 2.5 (2.5.5).</p>
 minor optimizations within AQL that didn&rsquo;t get a pretty working title.</p>
 
 <p>Looks like in sum all the optimizations put into 2.6 really pay out.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Diffing Two Documents in AQL]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/26/diffing-two-documents-in-aql/"/>
-    <updated>2015-05-26T11:08:31+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/26/diffing-two-documents-in-aql</id>
-    <content type="html"><![CDATA[<p>I just stumbled upon a <a href="https://www.arangodb.com/2015/04/aql-functions-improvements/">comment in the ArangoDB blog</a>
-asking how to create a diff of two documents with AQL.</p>
-
-<p>Though there is no built-in AQL function to diff two documents, it is easily possible to build your own like in
-the following query.</p>
-
-<!-- more -->
-
-
-<p>```plain AQL code for diffing two documents
-/<em> input document 1</em>/
-LET doc1 = {
-  &ldquo;foo&rdquo; : &ldquo;bar&rdquo;,
-  &ldquo;a&rdquo; : 1,
-  &ldquo;b&rdquo; : 2
-}</p>
-
-<p>/<em> input document 2 </em>/
-LET doc2 = {
-  &ldquo;foo&rdquo; : &ldquo;baz&rdquo;,
-  &ldquo;a&rdquo; : 2,
-  &ldquo;c&rdquo; : 3
-}</p>
-
-<p>/<em> collect attributes present in doc1, but missing in doc2 </em>/
-LET missing = (
-  FOR key IN ATTRIBUTES(doc1)</p>
-
-<pre><code>FILTER ! HAS(doc2, key)
-RETURN {
-  [ key ]: doc1[key]
-}
-</code></pre>
-
-<p>)</p>
-
-<p>/<em> collect attributes present in both docs, but that have different values </em>/
-LET changed = (
-  FOR key IN ATTRIBUTES(doc1)</p>
-
-<pre><code>FILTER HAS(doc2, key) &amp;&amp; doc1[key] != doc2[key]
-RETURN {
-  [ key ] : {
-    old: doc1[key],
-    new: doc2[key]
-  }
-}
-</code></pre>
-
-<p>)</p>
-
-<p>/<em> collect attributes present in doc2, but missing in doc1 </em>/
-LET added = (
-  FOR key IN ATTRIBUTES(doc2)</p>
-
-<pre><code>FILTER ! HAS(doc1, key)
-RETURN {
-  [ key ] : doc2[key]
-}
-</code></pre>
-
-<p>)</p>
-
-<p>/<em> return final result </em>/
-RETURN {
-  &ldquo;missing&rdquo; : missing,
-  &ldquo;changed&rdquo; : changed,
-  &ldquo;added&rdquo; : added
-}
-```</p>
-
-<p>Note: the query may look a bit lengthy, but much of that is due to formatting. A more terse
-version can be found below.</p>
-
-<p>The above query will return a document with three attributes:</p>
-
-<ul>
-<li><em>missing</em>: contains all attributes only present in first document (i.e. missing in second document)</li>
-<li><em>changed</em>: contains all attributes present in both documents that have different values</li>
-<li><em>added</em>: contains all attributes only present in second document (i.e. missing in first document)</li>
-</ul>
-
-
-<p>For the two example documents it will return:
-```json diff query result
-[
-  {</p>
-
-<pre><code>"missing" : [ 
-  { 
-    "b" : 2 
-  } 
-], 
-"changed" : [ 
-  { 
-    "foo" : { 
-      "old" : "bar", 
-      "new" : "baz" 
-    } 
-  }, 
-  { 
-    "a" : { 
-      "old" : 1, 
-      "new" : 2 
-    } 
-  } 
-], 
-"added" : [ 
-  { 
-    "c" : 3 
-  } 
-] 
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<p>That output format was the first that came to my mind. It is of course possible to adjust the query so
-it produces a different output format.</p>
-
-<p>Following is a version of the same query that can be invoked from JavaScript easily. It passes the two
-documents as bind parameters and calls <code>db._query</code>. The query is now a one-liner (less readable but easier
-to copy&amp;paste):</p>
-
-<p>```js
-bindVariables = {
-  doc1 : { &ldquo;foo&rdquo; : &ldquo;bar&rdquo;, &ldquo;a&rdquo; : 1, &ldquo;b&rdquo; : 2 },
-  doc2 : { &ldquo;foo&rdquo; : &ldquo;baz&rdquo;, &ldquo;a&rdquo; : 2, &ldquo;c&rdquo; : 3 }
-};</p>
-
-<p>query = &ldquo;LET doc1 = @doc1, doc2 = @doc2, missing = (FOR key IN ATTRIBUTES(doc1) FILTER ! HAS(doc2, key) RETURN { [ key ]: doc1[key] }), changed = (FOR key IN ATTRIBUTES(doc1) FILTER HAS(doc2, key) &amp;&amp; doc1[key] != doc2[key] RETURN { [ key ] : { old: doc1[key], new: doc2[key] } }), added = (FOR key IN ATTRIBUTES(doc2) FILTER ! HAS(doc1, key) RETURN { [ key ] : doc2[key] }) RETURN { missing : missing, changed : changed, added : added }&rdquo;;</p>
-
-<p>result = db._query(query, bindVariables).toArray();
-```</p>
 ]]></content>
   </entry>
   

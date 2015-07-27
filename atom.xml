@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-07-27T11:46:18+02:00</updated>
+  <updated>2015-07-27T12:12:15+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,74 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Introducing RETURN DISTINCT]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/07/27/introducing-return-distinct/"/>
+    <updated>2015-07-27T11:48:41+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/07/27/introducing-return-distinct</id>
+    <content type="html"><![CDATA[<p>Last week saw the addition of the <code>RETURN DISTINCT</code> for AQL queries.
+This is a new shortcut syntax for making result sets unique.</p>
+
+<p>For this purpose it can be used as an easier-to-memorize alternative for
+the already existing <code>COLLECT</code> statement. <code>COLLECT</code> is very flexible and
+can be used for multiple purposes, but it is syntactic overkill for making
+a result set unique.</p>
+
+<p>The new <code>RETURN DISTINCT</code> syntax makes queries easier to write and understand.</p>
+
+<!-- more -->
+
+
+<p>Here&rsquo;s a non-scientific proof for this claim:</p>
+
+<p>Compare the following queries, which both return each distinct <code>age</code> attribute
+value from the collection:</p>
+
+<figure class='code'><figcaption><span>making result set unique using COLLECT</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  COLLECT age = doc.age
+</span><span class='line'>  RETURN age</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>making result set unique using RETURN DISTINCT</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  RETURN DISTINCT doc.age</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Clearly, the query using <code>RETURN DISTINCT</code> is more intuitive, especially for
+AQL beginners. Apart from that, using <code>RETURN DISTINCT</code> will save a bit of typing
+compared to the longer <code>COLLECT</code>-based query.</p>
+
+<p>Internally both <code>COLLECT</code> and <code>RETURN DISTINCT</code> will work by creating an
+<code>AggregateNode</code>. The optimizer will try the <em>sorted</em> and the <em>hashed</em> variants
+for both, so they should perform about the same.</p>
+
+<p>However, the result of a <code>RETURN DISTINCT</code> does not have any guaranteed order,
+so the optimizer will not insert a post-<code>SORT</code> for it. It may do so for a regular
+<code>COLLECT</code>.</p>
+
+<p>As mentioned before, <code>COLLECT</code> is more flexible than <code>RETURN DISTINCT</code>.
+Notably, <code>COLLECT</code> is superior to <code>RETURN DISTINCT</code> when the result set should
+be made unique using more than one criterion, e.g.</p>
+
+<figure class='code'><figcaption><span>using more than one criterion for uniqueness</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  COLLECT status = doc.status, age = doc.age, 
+</span><span class='line'>  RETURN { status, age }</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This is currently not achievable via <code>RETURN DISTINCT</code>, as it only works
+with a single criterion.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Object Literal Simplification]]></title>
@@ -4212,168 +4280,6 @@ to insert a new document.</p>
 a stable 2.6 release.</p>
 
 <p><strong>Enjoy!</strong></p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[More Efficient Data Exports]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/"/>
-    <updated>2015-04-04T21:51:33+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports</id>
-    <content type="html"><![CDATA[<p>I recently wrote about the <a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">performance improvements for the cursor API</a>
-made in ArangoDB 2.6. The performance improvements are due to a rewrite of the cursor API&rsquo;s internals.</p>
-
-<p>As a byproduct of this rewrite, an extra API was created for exporting all documents from a
-collection to a client application. With this being its only use case, it is clear that the new
-API will not solve every data export problem. However, the API&rsquo;s limitedness facilitated a very efficient
-implementation, resulting in <strong>nice speedups</strong> and <strong>lower memory usage</strong> when compared to the alternative
-way of exporting all documents into a client application.</p>
-
-<!-- more -->
-
-
-<p>There did not exist an <em>official</em> export API before. So users often ran AQL queries like the following
-to export all documents from a collection:</p>
-
-<figure class='code'><figcaption><span>AQL query to export all documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
-</span><span class='line'>  RETURN doc</span></code></pre></td></tr></table></div></figure>
-
-
-<p>While such AQL queries will work for smaller result sets, they will get problematic when results get
-bigger. The reason is that the AQL very will effectively create a snapshot of all the documents present
-in the collection. Creating the snapshot is required for data consistency. Once the snapshot is created,
-clients can incrementally fetch the data from the snapshot and will still get a consistent result even
-if the underlying collections get modified.</p>
-
-<p>For smaller result sets, snapshotting is not a big issue. But when exporting all documents from a
-bigger collection, big result sets will be produced. In this case, the snapshotting can become expensive
-in terms of CPU time and also memory consumption.</p>
-
-<p>We couldn&rsquo;t get around the snapshotting completely, but we could take advantage of the fact that when exporting
-documents from a collection, all that can be snapshotted are documents. This is different to snapshotting
-arbitrary AQL queries, which can produce any kind and combination of JSON.</p>
-
-<p>Dealing only with documents allowed us to take an efficiency shortcut: instead of copying the complete
-documents it will only copy pointers to the document revisions presently in th collection. Not only is this
-much faster than doing a full copy of the document, but it also saves a lot of memory.</p>
-
-<h2>Invoking the API</h2>
-
-<p>While the invocation of the cursor API and the export API is slightly different, their result formats
-have intentionally been kept similar. This way client programs do not need to be adjusted much to consume
-the export API instead of the cursor API.</p>
-
-<p>An example command for exporting via the cursor API is:</p>
-
-<figure class='code'><figcaption><span>exporting all documents via the cursor API</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>curl -X POST <span class="se">\</span>
-</span><span class='line'>     <span class="s2">&quot;http://127.0.0.1:8529/_api/cursor&quot;</span> <span class="se">\</span>
-</span><span class='line'>     --data <span class="s1">&#39;{&quot;query&quot;:&quot;FOR doc IN collection RETURN docs&quot;}&#39;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>A command for exporting via the new export API is:</p>
-
-<figure class='code'><figcaption><span>exporting all documents via the export API</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>curl -X POST <span class="se">\</span>
-</span><span class='line'>     <span class="s2">&quot;http://127.0.0.1:8529/_api/export?collection=docs&quot;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In both cases, the result will look like this:</p>
-
-<figure class='code'><figcaption><span>API results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span>
-</span><span class='line'>  <span class="nt">&quot;result&quot;</span><span class="p">:</span> <span class="p">[</span>
-</span><span class='line'>    <span class="err">...</span>
-</span><span class='line'>  <span class="p">],</span>
-</span><span class='line'>  <span class="nt">&quot;hasMore&quot;</span><span class="p">:</span><span class="kc">true</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="s2">&quot;2221050516478&quot;</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The <code>result</code> attribute will contain the first few (1,000 by default) documents. The
-<code>hasMore</code> attribute will indicate whether there are more documents to fetch from the
-server. In this case the client can use the cursor id specified in the <code>id</code> attribute
-to fetch more result.</p>
-
-<p>The API can be invoked via any HTTP-capable client such as <code>curl</code> (as shown above).</p>
-
-<p>I have also added <a href="https://github.com/arangodb/arangodb-php/blob/devel/README.md#exporting_data">bindings to the ArangoDB-PHP driver</a>
-today (contained in the driver&rsquo;s <code>devel</code> branch).</p>
-
-<h2>API performance</h2>
-
-<p>Now, what can be gained by using the export API?</p>
-
-<p>The following table shows the execution times for fetching the first 1,000 documents
-from collections of different sizes, both with via the cursor API and the export API.
-Figures for the cursor API are shown for ArangoDB 2.5 and 2.6 (the version in which
-it was rewritten):</p>
-
-<figure class='code'><figcaption><span>execution times for cursor API and export API</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'># of documents    cursor API (2.5)    cursor API (2.6)      export API
-</span><span class='line'>--------------    ----------------    ----------------      ----------
-</span><span class='line'>       100,000               1.9 s               0.3 s          0.04 s
-</span><span class='line'>       500,000               9.5 s               1,4 s          0.08 s
-</span><span class='line'>     1,000,000              19.0 s               2.8 s          0.14 s
-</span><span class='line'>     2,000,000              39,0 s               7.5 s          0.19 s
-</span><span class='line'>     5,000,000               n/a                 n/a            0.55 s
-</span><span class='line'>    10,000,000               n/a                 n/a            1.32 s</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Execution times are from my laptop, which only has 4 GB of RAM and a slow disk.</p>
-
-<p>As can be seen, the rewritten cursor API in 2.6 is already much faster than the one
-in 2.5. However, for exporting documents from one collection only, the new export API
-is superior.</p>
-
-<p>The export API also uses a lot less memory for snapshotting, as can be nicely seen in the
-two bottom rows of the results. For these cases, the snapshots done by the cursor API
-were bigger than the available RAM and the OS started swapping heavily. Snapshotting
-didn&rsquo;t complete within 15 minutes, so no results are shown above.</p>
-
-<p>Good news is that this didn&rsquo;t happen with the export API, due to the fact that the
-snapshots it creates are much more compact.</p>
-
-<p>Another nice side effect of the speedup is that the first results will arrive much
-earlier in the client application. This will help in reducing client connection timeouts
-in case clients are enforcing them on temporarily non-responding connections.</p>
-
-<h2>Summary</h2>
-
-<p>ArangoDB 2.6 provides a specialized export API for exporting all documents from a
-collection and shipping them to a client application. It is rather limited but
-faster than the general-purpose AQL cursor API and can store its snapshots using less
-memory.</p>
-
-<p>Therefore, exporting all documents from bigger collections calls for using the new
-export API from 2.6 on. The new export API is present in the <code>devel</code> branch, which
-will eventually turn into a 2.6 release.</p>
-
-<p>For other cases, when still using the cursor API, 2.6 will also provide significant
-performance improvements when compared to 2.5. This can be seen from the comparison
-table above and also from the observations made
-<a href="https://jsteemann.github.io/blog/2015/04/01/improvements-for-the-cursor-api/">here</a>.</p>
 ]]></content>
   </entry>
   
