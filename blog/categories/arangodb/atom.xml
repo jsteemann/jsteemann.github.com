@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-07-14T22:32:53+02:00</updated>
+  <updated>2015-07-27T11:46:18+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,53 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[AQL Object Literal Simplification]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/07/27/aql-object-literal-simplification/"/>
+    <updated>2015-07-27T11:33:09+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/07/27/aql-object-literal-simplification</id>
+    <content type="html"><![CDATA[<p>ArangoDB&rsquo;s <code>devel</code> branch recently saw a change that makes writing
+some AQL queries a bit simpler.</p>
+
+<p>The change introduces an optional shorthand notation for object attributes
+in the style of ES6&rsquo;s enhanced object literal notation.</p>
+
+<!-- more -->
+
+
+<p>For example, consider the following query that groups values by <code>age</code>
+attribute and counts the number of documents per distinct <code>age</code> value:</p>
+
+<p><code>plain example query
+FOR doc IN collection
+  COLLECT age = doc.age WITH COUNT INTO length
+  RETURN { age: age, length: length }
+</code></p>
+
+<p>The object declaration in the last line of the query is somewhat redundant
+because one has to type identical attribute names and values:</p>
+
+<p><code>plain the long notation for object literals
+RETURN { age: age, length: length }
+</code></p>
+
+<p>In this case, the new shorthand notation simplifies the <code>RETURN</code> to:</p>
+
+<p><code>plain using shorthand notation for object literals
+RETURN { age, length }
+</code></p>
+
+<p>In general, the shorthand notation can be used for all object literals when
+there is an attribute name that refers to a query variable of the same name.</p>
+
+<p>It can also be mixed with the longer notation, e.g.:</p>
+
+<p><code>plain mixing long and shorthand notation
+RETURN { age, length, dateCreated: DATE_NOW() }
+</code></p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[ES6 Features in ArangoDB 2.7]]></title>
@@ -599,149 +646,6 @@ The same was true for 2.4 (2.4.8) and 2.5 (2.5.5).</p>
 minor optimizations within AQL that didn&rsquo;t get a pretty working title.</p>
 
 <p>Looks like in sum all the optimizations put into 2.6 really pay out.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Diffing Two Documents in AQL]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/26/diffing-two-documents-in-aql/"/>
-    <updated>2015-05-26T11:08:31+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/26/diffing-two-documents-in-aql</id>
-    <content type="html"><![CDATA[<p>I just stumbled upon a <a href="https://www.arangodb.com/2015/04/aql-functions-improvements/">comment in the ArangoDB blog</a>
-asking how to create a diff of two documents with AQL.</p>
-
-<p>Though there is no built-in AQL function to diff two documents, it is easily possible to build your own like in
-the following query.</p>
-
-<!-- more -->
-
-
-<p>```plain AQL code for diffing two documents
-/<em> input document 1</em>/
-LET doc1 = {
-  &ldquo;foo&rdquo; : &ldquo;bar&rdquo;,
-  &ldquo;a&rdquo; : 1,
-  &ldquo;b&rdquo; : 2
-}</p>
-
-<p>/<em> input document 2 </em>/
-LET doc2 = {
-  &ldquo;foo&rdquo; : &ldquo;baz&rdquo;,
-  &ldquo;a&rdquo; : 2,
-  &ldquo;c&rdquo; : 3
-}</p>
-
-<p>/<em> collect attributes present in doc1, but missing in doc2 </em>/
-LET missing = (
-  FOR key IN ATTRIBUTES(doc1)</p>
-
-<pre><code>FILTER ! HAS(doc2, key)
-RETURN {
-  [ key ]: doc1[key]
-}
-</code></pre>
-
-<p>)</p>
-
-<p>/<em> collect attributes present in both docs, but that have different values </em>/
-LET changed = (
-  FOR key IN ATTRIBUTES(doc1)</p>
-
-<pre><code>FILTER HAS(doc2, key) &amp;&amp; doc1[key] != doc2[key]
-RETURN {
-  [ key ] : {
-    old: doc1[key],
-    new: doc2[key]
-  }
-}
-</code></pre>
-
-<p>)</p>
-
-<p>/<em> collect attributes present in doc2, but missing in doc1 </em>/
-LET added = (
-  FOR key IN ATTRIBUTES(doc2)</p>
-
-<pre><code>FILTER ! HAS(doc1, key)
-RETURN {
-  [ key ] : doc2[key]
-}
-</code></pre>
-
-<p>)</p>
-
-<p>/<em> return final result </em>/
-RETURN {
-  &ldquo;missing&rdquo; : missing,
-  &ldquo;changed&rdquo; : changed,
-  &ldquo;added&rdquo; : added
-}
-```</p>
-
-<p>Note: the query may look a bit lengthy, but much of that is due to formatting. A more terse
-version can be found below.</p>
-
-<p>The above query will return a document with three attributes:</p>
-
-<ul>
-<li><em>missing</em>: contains all attributes only present in first document (i.e. missing in second document)</li>
-<li><em>changed</em>: contains all attributes present in both documents that have different values</li>
-<li><em>added</em>: contains all attributes only present in second document (i.e. missing in first document)</li>
-</ul>
-
-
-<p>For the two example documents it will return:
-```json diff query result
-[
-  {</p>
-
-<pre><code>"missing" : [ 
-  { 
-    "b" : 2 
-  } 
-], 
-"changed" : [ 
-  { 
-    "foo" : { 
-      "old" : "bar", 
-      "new" : "baz" 
-    } 
-  }, 
-  { 
-    "a" : { 
-      "old" : 1, 
-      "new" : 2 
-    } 
-  } 
-], 
-"added" : [ 
-  { 
-    "c" : 3 
-  } 
-] 
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<p>That output format was the first that came to my mind. It is of course possible to adjust the query so
-it produces a different output format.</p>
-
-<p>Following is a version of the same query that can be invoked from JavaScript easily. It passes the two
-documents as bind parameters and calls <code>db._query</code>. The query is now a one-liner (less readable but easier
-to copy&amp;paste):</p>
-
-<p>```js
-bindVariables = {
-  doc1 : { &ldquo;foo&rdquo; : &ldquo;bar&rdquo;, &ldquo;a&rdquo; : 1, &ldquo;b&rdquo; : 2 },
-  doc2 : { &ldquo;foo&rdquo; : &ldquo;baz&rdquo;, &ldquo;a&rdquo; : 2, &ldquo;c&rdquo; : 3 }
-};</p>
-
-<p>query = &ldquo;LET doc1 = @doc1, doc2 = @doc2, missing = (FOR key IN ATTRIBUTES(doc1) FILTER ! HAS(doc2, key) RETURN { [ key ]: doc1[key] }), changed = (FOR key IN ATTRIBUTES(doc1) FILTER HAS(doc2, key) &amp;&amp; doc1[key] != doc2[key] RETURN { [ key ] : { old: doc1[key], new: doc2[key] } }), added = (FOR key IN ATTRIBUTES(doc2) FILTER ! HAS(doc1, key) RETURN { [ key ] : doc2[key] }) RETURN { missing : missing, changed : changed, added : added }&rdquo;;</p>
-
-<p>result = db._query(query, bindVariables).toArray();
-```</p>
 ]]></content>
   </entry>
   
