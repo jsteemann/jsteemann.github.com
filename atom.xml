@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-07-27T12:12:15+02:00</updated>
+  <updated>2015-07-28T23:34:59+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,66 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[How to Set Up Fish Completion for ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/"/>
+    <updated>2015-07-28T23:10:32+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb</id>
+    <content type="html"><![CDATA[<p>While experimenting with the <a href="http://fishshell.com/">fish shell</a> on my laptop
+I found <em>fish</em> has a slightly different (but much fancier) tab-completion mechanism
+than <em>bash</em>.</p>
+
+<p>Re-using the <a href="http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/">existing completer for bash</a>
+wouldn&rsquo;t work, so I put together some dedicated completions files for <em>fish</em>.</p>
+
+<!-- more -->
+
+
+<p>The files can be downloaded here:
+<a href="http://jsteemann.github.io/downloads/code/completions-fish-2.5">2.5</a> <a href="http://jsteemann.github.io/downloads/code/completions-fish-2.6">2.6</a></p>
+
+<p>To activate these completions, copy the appropriate file into <code>~/.arangodb-completions</code>
+and source it from <em>fish</em>:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">source</span> ~/.arangodb-completions
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In order to permanently activate these completions, you may source the completions file
+from your <code>config.fish</code> file, which is normally located in directory <code>~/.config/fish</code>.</p>
+
+<h2>Full setup</h2>
+
+<p>The following command, executed in <em>fish</em>, should install the completions for 2.6 and
+activate them:</p>
+
+<figure class='code'><figcaption><span>activate completions for ArangoDB 2.6 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.6
+</span><span class='line'><span class="nb">echo</span> <span class="s2">&quot;source ~/.arangodb-completions&quot;</span> &gt;&gt; ~/.config/fish/config.fish
+</span><span class='line'><span class="nb">source</span> ~/.arangodb-completions
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To install fish completions for ArangoDB 2.5, the command is:</p>
+
+<figure class='code'><figcaption><span>activate completions for ArangoDB 2.5 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.5
+</span><span class='line'><span class="nb">echo</span> <span class="s2">&quot;source ~/.arangodb-completions&quot;</span> &gt;&gt; ~/.config/fish/config.fish
+</span><span class='line'><span class="nb">source</span> ~/.arangodb-completions
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To see it in action, type <code>arangosh --</code> in <em>fish</em> and then press <strong>TAB</strong>:</p>
+
+<p><img src="http://jsteemann.github.io/downloads/screenshots/fish-completion.png"></p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Introducing RETURN DISTINCT]]></title>
@@ -4110,176 +4170,6 @@ we need to create the index on <code>game</code> and <code>date</code>:</p>
 <p>On a side note: the <code>REMOVE</code> was limited to the <em>oldest</em> 1000 entries. This
 was done to make the query return fast. The removal query can be repeated while
 there are still entries to remove.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Updating Documents With Arangoimp]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/04/14/updating-documents-with-arangoimp/"/>
-    <updated>2015-04-14T14:55:45+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/04/14/updating-documents-with-arangoimp</id>
-    <content type="html"><![CDATA[<p>Inspired by the feature request in <a href="https://github.com/arangodb/arangodb/issues/1298">Github issue #1298</a>,
-we added update and replace support for ArangoDB&rsquo;s import facilities.</p>
-
-<p>This extends ArangoDB&rsquo;s HTTP REST API for importing documents plus the arangoimp binary so they
-can not only insert new documents but also update existing ones.</p>
-
-<p>Inserts and updates can also be mixed in a single import run.
-This blog post provides a few usage examples.</p>
-
-<!-- more -->
-
-
-<h2>Traditional import</h2>
-
-<p>Previously, the HTTP REST API for importing documents and the arangoimp binary only supported
-document inserts, so they could not be used to update existing documents. Bulk-updating existing
-documents with data from a file or mixing inserts with updates required to write custom scripts
-or run multiple commands or queries.</p>
-
-<p>I won&rsquo;t show this in detail but want to concentrate solely on what the import did. I will only
-show arangoimp and not the HTTP import API.</p>
-
-<p>Let&rsquo;s assume there is already a collection named <em>users</em> containing the following documents:</p>
-
-<figure class='code'><figcaption><span>data in collection before import</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user1&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;John Doe&quot;</span> <span class="p">}</span>
-</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user2&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;Jane Smith&quot;</span> <span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Now, importing the following data via arangoimp would produce errors for line 1 and 2 (i.e.
-for keys <code>user1</code> and <code>user2</code>) because these documents already exist in the target collection:</p>
-
-<figure class='code'><figcaption><span>data to be imported</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user1&quot;</span><span class="p">,</span> <span class="nt">&quot;country&quot;</span> <span class="p">:</span> <span class="s2">&quot;AU&quot;</span> <span class="p">}</span>
-</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user2&quot;</span><span class="p">,</span> <span class="nt">&quot;country&quot;</span> <span class="p">:</span> <span class="s2">&quot;UK&quot;</span> <span class="p">}</span>
-</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user3&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;Joe Public&quot;</span><span class="p">,</span> <span class="nt">&quot;country&quot;</span> <span class="p">:</span> <span class="s2">&quot;ZA&quot;</span> <span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Here&rsquo;s what happened when importing the above data into the collection with the two existing
-documents:</p>
-
-<pre><code>&gt; arangoimp --file data.json --collection users
-
-2015-04-14T18:23:32Z [27441] WARNING at position 1: creating document failed with error 'unique constraint violated', offending document: {"_key":"user1","country":"AU"}
-2015-04-14T18:23:32Z [27441] WARNING at position 2: creating document failed with error 'unique constraint violated', offending document: {"_key":"user2","country":"UK"}
-
-created:          1
-warnings/errors:  2
-</code></pre>
-
-<p>After the traditional import, the collection contained the following documents:</p>
-
-<figure class='code'><figcaption><span>collection contents after traditional import</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user1&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;John Doe&quot;</span> <span class="p">}</span>
-</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user2&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;Jane Smith&quot;</span> <span class="p">}</span>
-</span><span class='line'><span class="p">{</span> <span class="nt">&quot;_key&quot;</span> <span class="p">:</span> <span class="s2">&quot;user3&quot;</span><span class="p">,</span> <span class="nt">&quot;country&quot;</span> <span class="p">:</span> <span class="s2">&quot;ZA&quot;</span><span class="p">,</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;Joe Public&quot;</span> <span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>As can be seen, the first two documents (<code>user1</code> and <code>user2</code>) remain unmodified, and the third
-document (<code>user3</code>) was inserted because it did not yet exist in the target collection.</p>
-
-<h2>Using &mdash;on-duplicate</h2>
-
-<p>So what&rsquo;s the change?</p>
-
-<p>As announced, a single import run can now both insert new documents and update existing ones.
-What exactly will happen is configurable by setting arangoimp&rsquo;s new command-line option
-<code>--on-duplicate</code>.</p>
-
-<p>By default, even in <code>devel</code> there will be errors reported for the two already existing documents.</p>
-
-<p>Good news is that this behavior can be changed by setting <code>--on-duplicate</code> to a value of <code>update</code>,
-<code>replace</code> or <code>ignore</code>:</p>
-
-<ul>
-<li><p><code>error</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
-import will not modify it and instead return an error. This is the default behavior and
-compatible with all previous versions of ArangoDB.</p>
-
-<p>We have seen the result above in the <em>traditional import</em>.</p></li>
-<li><p><code>update</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
-import will (partially) update the existing document with the specified attributes.
-Only the attributes present in the import data will be updated, and all other attributes of
-the document present in the collection will be preserved.</p>
-
-<pre><code>&gt; arangoimp --file data.json --collection users --on-duplicate update
-
-created:          1
-warnings/errors:  0
-updated/replaced: 2
-ignored:          0
-</code></pre>
-
-<p>The first two documents (<code>user1</code> and <code>user2</code>) were updated (attribute <code>country</code>
-was added) and the third document (<code>user3</code>) was inserted because it did not exist in the
-target collection:</p>
-
-<pre><code>{ "_key" : "user1", "country" : "AU", "name" : "John Doe" }
-{ "_key" : "user2", "country" : "UK", "name" : "Jane Smith" } 
-{ "_key" : "user3", "country" : "ZA", "name" : "Joe Public" } 
-</code></pre></li>
-<li><p><code>replace</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
-import will fully replace the existing document with the specified attributes.
-Only the attributes present in the import data will be preserved, and all other attributes of
-the document present in the collection will be removed.</p>
-
-<pre><code>&gt; arangoimp --file data.json --collection users --on-duplicate replace
-
-created:          1
-warnings/errors:  0
-updated/replaced: 2
-ignored:          0
-</code></pre>
-
-<p>The first two documents (<code>user1</code> and <code>user2</code>) were replaced (attribute <code>country</code> was present
-in the import data, previously existing attribute <code>name</code> was removed). The third document
-(<code>user3</code>) was inserted because it did not exist in the target collection before:</p>
-
-<pre><code>{ "_key" : "user1", "country" : "AU" } 
-{ "_key" : "user2", "country" : "UK" } 
-{ "_key" : "user3", "country" : "ZA", "name" : "Joe Public" } 
-</code></pre></li>
-<li><p><code>ignore</code>: if a document with the specified <code>_key</code> already exists in the target collection, the
-import will ignore and not modify it. The difference to <code>error</code> is that ignored documents will
-not be counted as errors. No errors/warnings will be reported for duplicate <code>_key</code> values, but
-the number of duplicate key occurrences will be reported in the <code>ignored</code> attribute</p>
-
-<pre><code>&gt; arangoimp --file data.json --collection users --on-duplicate ignore
-
-created:          1
-warnings/errors:  0
-updated/replaced: 0
-ignored:          2
-</code></pre>
-
-<p>Collection contents are the same as in the <code>error</code> case.</p></li>
-</ul>
-
-
-<p>The above examples were for the arangoimp import binary, but the HTTP import API was adjusted
-as well. The duplicate key behavior can be controlled there by using the new <code>onDuplicate</code> URL
-parameter. Possible values are also <code>error</code>, <code>update</code>, <code>replace</code> and <code>ignore</code> as shown for arangoimp.</p>
-
-<h2>Caveats</h2>
-
-<p>All matching is done using document keys (i.e. <code>_key</code> attributes) and no other attributes. That
-means existing documents can only be updated if their <code>_key</code> attributes are present in the import
-data. When no <code>_key</code> attribute is present for a document in the import data, the import will try
-to insert a new document.</p>
-
-<p>The extended functionality is available in the <code>devel</code> branch, which will eventually turn into
-a stable 2.6 release.</p>
-
-<p><strong>Enjoy!</strong></p>
 ]]></content>
   </entry>
   

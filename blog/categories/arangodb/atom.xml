@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-07-27T12:12:15+02:00</updated>
+  <updated>2015-07-28T23:34:59+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,56 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[How to Set Up Fish Completion for ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/"/>
+    <updated>2015-07-28T23:10:32+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb</id>
+    <content type="html"><![CDATA[<p>While experimenting with the <a href="http://fishshell.com/">fish shell</a> on my laptop
+I found <em>fish</em> has a slightly different (but much fancier) tab-completion mechanism
+than <em>bash</em>.</p>
+
+<p>Re-using the <a href="/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/">existing completer for bash</a>
+wouldn&rsquo;t work, so I put together some dedicated completions files for <em>fish</em>.</p>
+
+<!-- more -->
+
+
+<p>The files can be downloaded here:
+<a href="/downloads/code/completions-fish-2.5">2.5</a> <a href="/downloads/code/completions-fish-2.6">2.6</a></p>
+
+<p>To activate these completions, copy the appropriate file into <code>~/.arangodb-completions</code>
+and source it from <em>fish</em>:
+<code>bash
+source ~/.arangodb-completions
+</code></p>
+
+<p>In order to permanently activate these completions, you may source the completions file
+from your <code>config.fish</code> file, which is normally located in directory <code>~/.config/fish</code>.</p>
+
+<h2>Full setup</h2>
+
+<p>The following command, executed in <em>fish</em>, should install the completions for 2.6 and
+activate them:
+<code>bash activate completions for ArangoDB 2.6
+wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.6
+echo "source ~/.arangodb-completions" &gt;&gt; ~/.config/fish/config.fish
+source ~/.arangodb-completions
+</code></p>
+
+<p>To install fish completions for ArangoDB 2.5, the command is:
+<code>bash activate completions for ArangoDB 2.5
+wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.5
+echo "source ~/.arangodb-completions" &gt;&gt; ~/.config/fish/config.fish
+source ~/.arangodb-completions
+</code></p>
+
+<p>To see it in action, type <code>arangosh --</code> in <em>fish</em> and then press <strong>TAB</strong>:</p>
+
+<p><img src="/downloads/screenshots/fish-completion.png"></p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Introducing RETURN DISTINCT]]></title>
@@ -496,148 +546,6 @@ on a subquery result and access its individual members:</p>
 </code></pre>
 
 <p>```</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Speeding Up Array/object Literal Access]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access/"/>
-    <updated>2015-06-15T15:56:27+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access</id>
-    <content type="html"><![CDATA[<p>Last week some further optimization slipped into 2.6. The optimization can
-provide significant speedups in AQL queries using huge array/object bind parameters
-and passing them into V8-based functions.</p>
-
-<!-- more -->
-
-
-<p>It started with an ArangoDB user reporting a specific query to run unexpectedly slow.
-The part of the query that caused the problem was simple and looked like this:</p>
-
-<p><code>plain problematic query
-FOR doc IN collection
-  FILTER doc.attribute == @value
-  RETURN TRANSLATE(doc.from, translations, 0)
-</code></p>
-
-<p>In the original query, <code>translations</code> was a big, constant object literal. Think of
-something like the following, but with a lot more values:</p>
-
-<p><code>json example translations value
-{
-  "p1" : 1,
-  "p2" : 2,
-  "p3" : 40,
-  "p4" : 9,
-  "p5" : 12
-}
-</code></p>
-
-<p>The translations were used for replacing an attribute value in existing documents
-with a lookup table computed outside the AQL query.</p>
-
-<p>The number of values in the <code>translations</code> object was varying from query to query,
-with no upper bound on the number of values. It was possible that the query was
-running with 50,000 lookup values in the <code>translations</code> object.</p>
-
-<p>When trying to reproduce the problem, we expected that the query would get at worst
-<em>linearly</em> slower with an increasing number of lookup values. But in reality, the
-following <em>non-linear</em> execution times were observed when increasing the number of
-lookup values:</p>
-
-<p>```plain execution times for varying input sizes, without optimization</p>
-
-<h1>of values |  execution time</h1>
-
-<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</p>
-
-<pre><code>      1 |        0.6111 s
-      2 |        0.6078 s  
-      4 |        0.6021 s
-      8 |        0.6160 s
-     16 |        0.6925 s
-     32 |        0.7107 s
-     64 |        0.7677 s
-    128 |        0.8576 s
-    256 |        1.0544 s
-    512 |        1.4579 s
-   1024 |        8.8303 s
-   2048 |       17.3674 s
-   4096 |       35.3109 s
-   8192 |       74.9161 s
-  16384 |      145.0837 s
-  32768 |      361.9870 s
-  65536 |      880.4995 s
-</code></pre>
-
-<p>```</p>
-
-<p>(note: all values stated above are wall-clock times for running the query with a
-FILTER condition matching 50,000 documents &ndash; i.e. the <code>TRANSLATE()</code> expression was
-executed 50,000 times per query)</p>
-
-<p>With small objects passed in <code>translate</code>, the execution times only increased slowly
-even when object sizes were doubled. The <code>TRANSLATE()</code> expression&rsquo;s share of the
-overall query execution time was still low for small objects, even when doubling
-their sizes. However, it got pretty bad for objects with 1,024 members already, and
-from that point on, execution times more than doubled if object sizes got doubled.</p>
-
-<p>The <code>TRANSLATE()</code> function itself has O(1) complexity, so we could rule it out as
-the problem cause. However, <code>TRANSLATE()</code> is V8-based, and it turned out that there
-was a problem when the number of values in the <code>translations</code> object increased from
-1022 to 1023. At that particular threshold, execution time quadrupled.</p>
-
-<p>At 1023 object members, V8 seems to change the internal object format, which probably
-requires rearranging the object data internally. V8 has several <em>internal</em> types for
-representing JavaScript objects, and converting between them is not free.</p>
-
-<p>The obvious optimization opportunity for this case was to create the <code>translations</code>
-object value just once as a V8 object, and reuse the same object when calling the
-<code>TRANSLATE()</code> function repeatedly. This avoids repeated creation and destruction of
-the V8 objects used in function calls, and as a side effect may also lead to less garbage
-values being accumulated when functions are called repeatedly.</p>
-
-<p>The optimization is possible here because the <code>translations</code> object is an object literal
-and thus constant. It will also work for array literals and bind parameters (which
-are also treated as literals once their values are known).</p>
-
-<p>Here are the execution time for running the <code>TRANSLATE()</code> on 50,000 documents with the
-modification:</p>
-
-<p>```plain execution times, with optimization</p>
-
-<h1>of values |  execution time</h1>
-
-<p>&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;+&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;&mdash;</p>
-
-<pre><code>      1 |        0.6251 s
-      2 |        0.6302 s  
-      4 |        0.6138 s
-      8 |        0.6141 s
-     16 |        0.6685 s
-     32 |        0.6232 s
-     64 |        0.6204 s
-    128 |        0.6326 s
-    256 |        0.6460 s
-    512 |        0.6275 s
-   1024 |        0.6639 s
-   2048 |        0.6345 s
-   4096 |        0.6554 s
-   8192 |        0.6789 s
-  16384 |        0.7569 s
-  32768 |        0.7636 s
-  65536 |        1.0173 s
-</code></pre>
-
-<p>```</p>
-
-<p>Looks like this is going to scale way better.</p>
-
-<p>The optimization is disabled for big array/objects which are non-constant (e.g. a variable
-or the result of an expression), or for parameters passed into user-defined AQL functions.
-Enabling it for user-defined AQL functions is not safe because in theory these might
-modify their arguments (and function arguments are passed by reference &ndash; passing them
-by value would also defeat the purpose of the optimization).</p>
 ]]></content>
   </entry>
   

@@ -11,8 +11,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="I recently wrote about the performance improvements for the cursor API
-made in ArangoDB 2.6. The performance improvements are due to a rewrite of the &hellip;">
+  <meta name="description" content="Inspired by the feature request in Github issue #1298,
+we added update and replace support for ArangoDB&rsquo;s import facilities. This extends &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -82,6 +82,54 @@ made in ArangoDB 2.6. The performance improvements are due to a rewrite of the &
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/04/14/updating-documents-with-arangoimp/">Updating Documents With Arangoimp</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-14T14:55:45+02:00" pubdate data-updated="true">Apr 14<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>Inspired by the feature request in <a href="https://github.com/arangodb/arangodb/issues/1298">Github issue #1298</a>,
+we added update and replace support for ArangoDB&rsquo;s import facilities.</p>
+
+<p>This extends ArangoDB&rsquo;s HTTP REST API for importing documents plus the arangoimp binary so they
+can not only insert new documents but also update existing ones.</p>
+
+<p>Inserts and updates can also be mixed in a single import run.
+This blog post provides a few usage examples.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/04/14/updating-documents-with-arangoimp/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -560,60 +608,6 @@ it seemed to work fine.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/02/03/using-dynamic-attribute-names-in-aql/">Using Dynamic Attribute Names in AQL</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-02-03T00:12:39+01:00" pubdate data-updated="true">Feb 3<span>rd</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>On our mailing list, there is quite often the question whether attribute names in objects
-returned from AQL queries can be made dynamic.</p>
-
-<p>Here&rsquo;s a (non-working) example query for this:</p>
-
-<figure class='code'><figcaption><span>example query that does not work</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  RETURN { doc.type : doc.value }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The intention in the above query obviously is to use the dynamic value from <code>doc.type</code> as
-an attribute name in the result object and not to have an attribute named <code>"doc.type"</code>. This
-feature is probably in the top 20 of the most-often wished features.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/02/03/using-dynamic-attribute-names-in-aql/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/4/">&larr; Older</a>
@@ -638,6 +632,10 @@ feature is probably in the top 20 of the most-often wished features.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/">How to Set Up Fish Completion for ArangoDB</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/07/27/introducing-return-distinct/">Introducing RETURN DISTINCT</a>
       </li>
     
@@ -657,10 +655,6 @@ feature is probably in the top 20 of the most-often wished features.</p>
         <a href="/blog/2015/06/16/parsing-php-arrays-with-php/">Parsing PHP Arrays With PHP</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/06/15/speeding-up-array-slash-object-literal-access/">Speeding Up Array/object Literal Access</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -669,11 +663,11 @@ feature is probably in the top 20 of the most-often wished features.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (27)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (44)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (4)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (3)</a></li><li><a href='/blog/categories/foxx/'>Foxx (4)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (17)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (27)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (45)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (4)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (3)</a></li><li><a href='/blog/categories/foxx/'>Foxx (4)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (17)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (34)</li><ul class="month_list"><li class="month"><a href='/blog/2015/07/'>JUL (3)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (35)</li><ul class="month_list"><li class="month"><a href='/blog/2015/07/'>JUL (4)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

@@ -11,7 +11,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="I recently wrote about using TravisCI for continuously testing C++11 projects. Now, what if a build fails? Especially for C and C++ projects, build &hellip;">
+  <meta name="description" content="Today I was asked to look at code that was supposed to read data
+from a MySQL data source, process it and then import it into ArangoDB. To run and &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -81,6 +82,55 @@
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2014/11/04/setting-up-test-data/">Setting Up Test Data</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2014-11-04T22:14:21+01:00" pubdate data-updated="true">Nov 4<span>th</span>, 2014</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>Today I was asked to look at code that was supposed to read data
+from a MySQL data source, process it and then import it into ArangoDB.</p>
+
+<p>To run and debug the code I had to have some MySQL data source. So I
+thought I&rsquo;d quickly set up a simple example table with a few rows.
+It turned out that this took more time than what I had expected.</p>
+
+<p>Maybe I&rsquo;m spoilt by JavaScript-enabled, schema-free databases where
+creating such test setups is so much easier.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2014/11/04/setting-up-test-data/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -517,63 +567,6 @@ at least at the moment.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Benchmarking ArangoDB&#8217;s Write-ahead Log</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-08-07T01:27:04+02:00" pubdate data-updated="true">Aug 7<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><h1>Motivation</h1>
-
-<p>One of the major changes in ArangoDB 2.2 was the introduction of the
-<em>write-ahead log</em> (abbreviated <em>WAL</em>).</p>
-
-<p>The introduction of the WAL changed how documents are stored internally in
-ArangoDB. A lot of things have been changed for it under the hood, and it has
-been a lot of work to implement it.</p>
-
-<p>During the implementation, we refactored some code parts and made them
-considerably faster. From these changes we expected a positive effect on the
-database performance. But due to the fact that shape information is now also
-saved in the write-ahead log, there may also be some negative effect.</p>
-
-<p>We developers were of course very interested in seeing the net effects, so
-we ran some tests for a few use cases. We compared ArangoDB 2.1.2 (still without
-the WAL) with ArangoDB 2.2.1 (with the WAL). The results are interesting.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/6/">&larr; Older</a>
@@ -598,6 +591,10 @@ the WAL) with ArangoDB 2.2.1 (with the WAL). The results are interesting.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/">How to Set Up Fish Completion for ArangoDB</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/07/27/introducing-return-distinct/">Introducing RETURN DISTINCT</a>
       </li>
     
@@ -617,10 +614,6 @@ the WAL) with ArangoDB 2.2.1 (with the WAL). The results are interesting.</p>
         <a href="/blog/2015/06/16/parsing-php-arrays-with-php/">Parsing PHP Arrays With PHP</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/06/15/speeding-up-array-slash-object-literal-access/">Speeding Up Array/object Literal Access</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -629,11 +622,11 @@ the WAL) with ArangoDB 2.2.1 (with the WAL). The results are interesting.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (27)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (44)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (4)</a></li><li><a href='/blog/categories/bash/'>Bash (1)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (3)</a></li><li><a href='/blog/categories/foxx/'>Foxx (4)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (6)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (17)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (27)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (45)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (4)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (6)</a></li><li><a href='/blog/categories/concepts/'>Concepts (6)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (3)</a></li><li><a href='/blog/categories/foxx/'>Foxx (4)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (17)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (34)</li><ul class="month_list"><li class="month"><a href='/blog/2015/07/'>JUL (3)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (35)</li><ul class="month_list"><li class="month"><a href='/blog/2015/07/'>JUL (4)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

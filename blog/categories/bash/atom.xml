@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Bash | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/bash/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-07-27T12:12:15+02:00</updated>
+  <updated>2015-07-28T23:34:59+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,56 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[How to Set Up Fish Completion for ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/"/>
+    <updated>2015-07-28T23:10:32+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb</id>
+    <content type="html"><![CDATA[<p>While experimenting with the <a href="http://fishshell.com/">fish shell</a> on my laptop
+I found <em>fish</em> has a slightly different (but much fancier) tab-completion mechanism
+than <em>bash</em>.</p>
+
+<p>Re-using the <a href="/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/">existing completer for bash</a>
+wouldn&rsquo;t work, so I put together some dedicated completions files for <em>fish</em>.</p>
+
+<!-- more -->
+
+
+<p>The files can be downloaded here:
+<a href="/downloads/code/completions-fish-2.5">2.5</a> <a href="/downloads/code/completions-fish-2.6">2.6</a></p>
+
+<p>To activate these completions, copy the appropriate file into <code>~/.arangodb-completions</code>
+and source it from <em>fish</em>:
+<code>bash
+source ~/.arangodb-completions
+</code></p>
+
+<p>In order to permanently activate these completions, you may source the completions file
+from your <code>config.fish</code> file, which is normally located in directory <code>~/.config/fish</code>.</p>
+
+<h2>Full setup</h2>
+
+<p>The following command, executed in <em>fish</em>, should install the completions for 2.6 and
+activate them:
+<code>bash activate completions for ArangoDB 2.6
+wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.6
+echo "source ~/.arangodb-completions" &gt;&gt; ~/.config/fish/config.fish
+source ~/.arangodb-completions
+</code></p>
+
+<p>To install fish completions for ArangoDB 2.5, the command is:
+<code>bash activate completions for ArangoDB 2.5
+wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.5
+echo "source ~/.arangodb-completions" &gt;&gt; ~/.config/fish/config.fish
+source ~/.arangodb-completions
+</code></p>
+
+<p>To see it in action, type <code>arangosh --</code> in <em>fish</em> and then press <strong>TAB</strong>:</p>
+
+<p><img src="/downloads/screenshots/fish-completion.png"></p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[How to Set Up Bash Completion for ArangoDB]]></title>

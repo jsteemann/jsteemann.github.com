@@ -7,13 +7,14 @@
   <meta charset="utf-8">
   <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
   <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
-  <title>J@ArangoDB</title>
+  <title>How to Set Up Fish Completion for ArangoDB - J@ArangoDB</title>
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="Motivation One of the major changes in ArangoDB 2.2 was the introduction of the
-write-ahead log (abbreviated WAL). The introduction of the WAL &hellip;">
-  
+  <meta name="description" content="While experimenting with the fish shell on my laptop
+I found fish has a slightly different (but much fancier) tab-completion mechanism
+than bash. Re- &hellip;">
+  <meta name="keywords" content="ArangoDB, Database, linux, fish, tab completion">
 
   <!-- http://t.co/dKP3o1e -->
   <meta name="HandheldFriendly" content="True">
@@ -21,7 +22,7 @@ write-ahead log (abbreviated WAL). The introduction of the WAL &hellip;">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://jsteemann.github.io/blog/page/6">
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
@@ -80,15 +81,12 @@ write-ahead log (abbreviated WAL). The introduction of the WAL &hellip;">
 </nav>
   <div id="main">
     <div id="content">
-      <div class="blog-index">
+      <div>
+<article class="hentry" role="article">
   
-  
-  
-    <article>
-      
   <header>
     
-      <h1 class="entry-title"><a href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Benchmarking ArangoDB&#8217;s Write-ahead Log</a></h1>
+      <h1 class="entry-title">How to Set Up Fish Completion for ArangoDB</h1>
     
     
       <p class="meta">
@@ -104,95 +102,76 @@ write-ahead log (abbreviated WAL). The introduction of the WAL &hellip;">
   
 
 
-<time datetime="2014-08-07T01:27:04+02:00" pubdate data-updated="true">Aug 7<span>th</span>, 2014</time>
+<time datetime="2015-07-28T23:10:32+02:00" pubdate data-updated="true">Jul 28<span>th</span>, 2015</time>
         
       </p>
     
   </header>
 
 
-  <div class="entry-content"><h1>Motivation</h1>
+<div class="entry-content"><p>While experimenting with the <a href="http://fishshell.com/">fish shell</a> on my laptop
+I found <em>fish</em> has a slightly different (but much fancier) tab-completion mechanism
+than <em>bash</em>.</p>
 
-<p>One of the major changes in ArangoDB 2.2 was the introduction of the
-<em>write-ahead log</em> (abbreviated <em>WAL</em>).</p>
+<p>Re-using the <a href="/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/">existing completer for bash</a>
+wouldn&rsquo;t work, so I put together some dedicated completions files for <em>fish</em>.</p>
 
-<p>The introduction of the WAL changed how documents are stored internally in
-ArangoDB. A lot of things have been changed for it under the hood, and it has
-been a lot of work to implement it.</p>
+<!-- more -->
 
-<p>During the implementation, we refactored some code parts and made them
-considerably faster. From these changes we expected a positive effect on the
-database performance. But due to the fact that shape information is now also
-saved in the write-ahead log, there may also be some negative effect.</p>
 
-<p>We developers were of course very interested in seeing the net effects, so
-we ran some tests for a few use cases. We compared ArangoDB 2.1.2 (still without
-the WAL) with ArangoDB 2.2.1 (with the WAL). The results are interesting.</p>
+<p>The files can be downloaded here:
+<a href="/downloads/code/completions-fish-2.5">2.5</a> <a href="/downloads/code/completions-fish-2.6">2.6</a></p>
 
+<p>To activate these completions, copy the appropriate file into <code>~/.arangodb-completions</code>
+and source it from <em>fish</em>:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">source</span> ~/.arangodb-completions
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In order to permanently activate these completions, you may source the completions file
+from your <code>config.fish</code> file, which is normally located in directory <code>~/.config/fish</code>.</p>
+
+<h2>Full setup</h2>
+
+<p>The following command, executed in <em>fish</em>, should install the completions for 2.6 and
+activate them:</p>
+
+<figure class='code'><figcaption><span>activate completions for ArangoDB 2.6 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.6
+</span><span class='line'><span class="nb">echo</span> <span class="s2">&quot;source ~/.arangodb-completions&quot;</span> &gt;&gt; ~/.config/fish/config.fish
+</span><span class='line'><span class="nb">source</span> ~/.arangodb-completions
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To install fish completions for ArangoDB 2.5, the command is:</p>
+
+<figure class='code'><figcaption><span>activate completions for ArangoDB 2.5 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.5
+</span><span class='line'><span class="nb">echo</span> <span class="s2">&quot;source ~/.arangodb-completions&quot;</span> &gt;&gt; ~/.config/fish/config.fish
+</span><span class='line'><span class="nb">source</span> ~/.arangodb-completions
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To see it in action, type <code>arangosh --</code> in <em>fish</em> and then press <strong>TAB</strong>:</p>
+
+<p><img src="/downloads/screenshots/fish-completion.png"></p>
 </div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2014/08/07/benchmarking-arangodbs-write-ahead-log/">Read on &rarr;</a>
-    </footer>
-  
 
 
-    </article>
-  
-  
-    <article>
+  <footer>
+    <p class="meta">
       
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/08/06/how-arangodbs-write-ahead-log-works/">How ArangoDB&#8217;s Write-ahead Log Works</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
   
 
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
 
-<time datetime="2014-08-06T21:14:00+02:00" pubdate data-updated="true">Aug 6<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>Since version 2.2, ArangoDB stores all data-modification operations in its
-<em>write-ahead log</em> (abbreviated <em>WAL</em>). The introduction of the WAL massively
-changed how data are stored in ArangoDB.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2014/08/06/how-arangodbs-write-ahead-log-works/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
-  
-    <article>
       
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/06/03/schema-handling-in-arangodb/">Schema Handling in ArangoDB</a></h1>
-    
-    
-      <p class="meta">
-        
 
 
 
@@ -204,40 +183,38 @@ changed how data are stored in ArangoDB.</p>
   
 
 
-<time datetime="2014-06-03T22:57:58+02:00" pubdate data-updated="true">Jun 3<span>rd</span>, 2014</time>
-        
-      </p>
+<time datetime="2015-07-28T23:10:32+02:00" pubdate data-updated="true">Jul 28<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/bash/'>Bash</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>
+  
+</span>
+
+
+    </p>
     
-  </header>
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/" >Tweet</a>
+  
+  
+  
+</div>
 
-
-  <div class="entry-content"><h1>Schemas vs. schema-free</h1>
-
-<p>In a relational database, all rows in a table have the same structure.
-The structure is saved once for the table, and the invidiual rows only
-contain the row&rsquo;s values. This is an efficient approach if all records
-have the exact same structure, i.e. the same attributes (same names and
-same data types).</p>
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/07/27/introducing-return-distinct/" title="Previous Post: Introducing RETURN DISTINCT">&laquo; Introducing RETURN DISTINCT</a>
+      
+      
+    </p>
+  </footer>
+</article>
 
 </div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2014/06/03/schema-handling-in-arangodb/">Read on &rarr;</a>
-    </footer>
-  
 
-
-    </article>
-  
-  <div class="pagination">
-    
-    <a href="/blog/archives">Blog Archives</a>
-    
-    <a class="next" href="/blog/page/5/">Newer &rarr;</a>
-    
-  </div>
-</div>
 <aside class="sidebar">
   
     <section>
@@ -300,6 +277,7 @@ same data types).</p>
 
   
 </aside>
+
 
     </div>
   </div>
