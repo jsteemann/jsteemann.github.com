@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-07-28T23:34:59+02:00</updated>
+  <updated>2015-07-30T14:57:27+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,127 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Throughput Enhancements]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/07/30/throughput-enhancements/"/>
+    <updated>2015-07-30T12:54:12+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/07/30/throughput-enhancements</id>
+    <content type="html"><![CDATA[<p>We&rsquo;ve recently been working on improving ArangoDB&rsquo;s throughput,
+especially when using the ArangoDB&rsquo;s interface.</p>
+
+<p>In this post, I will show some of the improvements already achieved,
+though the work is not yet finished. Therefore, the results shown here
+are still somewhat preliminary.</p>
+
+<!-- more -->
+
+
+<p>We wanted to measure improvements for ArangoDB&rsquo;s HTTP interface, and so we used
+<a href="https://github.com/wg/wrk"><em>wrk</em></a> as an external HTTP load generator.</p>
+
+<p>During the tests, <em>wrk</em> called some specific URLs on a local ArangoDB instance on
+an otherwise idle machine. The test was run with ArangoDB 2.6 and <code>devel</code>. The
+ArangoDB instances were started with their default configuration.</p>
+
+<p><em>wrk</em> was invoked with varying amounts of client connections and threads, so the
+tests cover serial and concurrent/parallel requests:</p>
+
+<p><code>bash invoking wrk
+wrk -c $CONNECTIONS -t $THREADS -d 10 $URL
+</code></p>
+
+<p>The number of connections (<code>$CONNECTIONS</code>) and theads (<code>$THREADS</code>) were both varied
+from 1 to 8. <em>wrk</em> requires at least as many connections as threads.</p>
+
+<p>The first URL tested was a route in a simple Foxx application that inserts the data
+shipped in the HTTP request into a collection on the server. The internals of the
+route should not matter here, as this post focuses on the throughput improvements.</p>
+
+<p>Following are the results for calling the route with <em>wrk</em>, comparing the stable
+ArangoDB version (2.6.3) with the current development version (head of <code>devel</code> branch
+as of today). The table shows the number of documents that were inserted during the
+10 seconds the <em>wrk</em> client ran:</p>
+
+<p>```</p>
+
+<h2>Threads      Connections        2.6       devel</h2>
+
+<pre><code>  1                1      12569       20157 
+  1                2      28094       36031   
+  1                4      46310       66524 
+  1                8      46798       80667
+</code></pre>
+
+<p>```</p>
+
+<p>As can be seen above, <code>devel</code> was able to handle much more requests than 2.6 even
+with a single connection (i.e. serial client requests). Throughput was about 60 %
+higher for this case.</p>
+
+<p>When increasing the number of client connections, the number of requests handled by
+<code>devel</code> ws also higher than that of 2.6, with improvements between around 25 and 70 %.</p>
+
+<p>When increasing the number of client load generation threads, the picture doesn&rsquo;t
+change much. Here&rsquo;s the full table of results:</p>
+
+<p>```</p>
+
+<h2>Threads      Connections        2.6       devel</h2>
+
+<pre><code>  1                1      12569       20157 
+  1                2      28094       36031   
+  1                4      46310       66524 
+  1                8      46798       80667
+
+  2                2      28931       36326    
+  2                4      47181       67654    
+  2                8      47594       88617 
+
+  4                4      46553       67585   
+  4                8      47531       86935 
+
+  8                8      46431       91953 
+</code></pre>
+
+<p>```</p>
+
+<p>The next test consisted of inserting documents into a collection again, but using the
+built-in HTTP API for creating documents instead of a user-defined Foxx application.
+Throughput is expected to be higher than in the Foxx case because the built-in method
+is hard-wired and only serves a single purpose, whereas the Foxx route is user-definable
+and capable of doing fancy things, such as validating data, restricting access etc.</p>
+
+<p>Here are the results for calling the hard-wired insertion route, again for 2.6 and <code>devel</code>:</p>
+
+<p>```</p>
+
+<h2>Threads      Connections        2.6       devel</h2>
+
+<pre><code>  1                1     102133      112843 
+  1                2     185529      210795 
+  1                4     335607      373070
+  1                8     518354      576034
+
+  2                2     181237      196482 
+  2                4     345455      363255
+  2                8     474558      550835
+
+  4                4     318331      355328
+  4                8     483388      516100
+
+  8                8     482369      527395
+</code></pre>
+
+<p>```</p>
+
+<p><code>devel</code> provides higher throughput than 2.6 for this route as well. Improvements fell
+into the range of between 5 and 15 %. That&rsquo;s not as impressive as in the Foxx route
+case above, but still a welcome improvement.</p>
+
+<p>And of course we&rsquo;ll try to improve the throughput further.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[How to Set Up Fish Completion for ArangoDB]]></title>
@@ -344,208 +465,6 @@ testSomethingElse();
 </code></p>
 
 <p>Have fun!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Improvements for 2.7]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/06/17/aql-improvements-for-27/"/>
-    <updated>2015-06-17T12:35:16+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/06/17/aql-improvements-for-27</id>
-    <content type="html"><![CDATA[<p>With ArangoDB 2.6 being in beta already, it&rsquo;s time to look at some
-features scheduled for 2.7. Today I&rsquo;ll showcase a few AQL parser
-improvements that are present in the <code>devel</code> branch already, which will
-be the foundation for the 2.7 release.</p>
-
-<!-- more -->
-
-
-<h2>Star operator</h2>
-
-<p>The already existing star operator (<code>[*]</code>) is much more flexible in 2.7
-than in previous ArangoDB versions. It now allows filtering the values it
-iterates over, and optional projections.</p>
-
-<p>These features will be demonstrated using the following example member data:</p>
-
-<p><code>json example data for queries
-[
-  { "name" : "sir alfred", "age" : 60, "likes" : [ "lettuce", "tortoises" ] },
-  { "name" : "mozquito", "age" : 15, "likes" : [ "skateboards", "music" ] },
-  { "name" : "murphy", "age" : 28, "likes" : [ "juice", "tarts", "cakes" ] },
-  { "name" : "helga", "age" : 52, "likes" : [ "home", "garden", "tortoises", "cakes" ] }
-]
-</code></p>
-
-<p>To return all members with an age of 40 or higher and that also like tortoises,
-we can now combine the star operator with an inline <code>FILTER</code> expression:</p>
-
-<p><code>plain star operator with inline FILTER
-RETURN @members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes]
-</code></p>
-
-<p>The inline <code>FILTER</code> expression has access to the current array element via the
-pseudo-variable <code>CURRENT</code>. The <code>FILTER</code> expression can thus access the element&rsquo;s
-attributes and sub-attributes, and also use them in function expressions.</p>
-
-<p>The above query will return only two array members as expected:</p>
-
-<p><code>json
-[
-  { "name" : "sir alfred", "age" : 60, "likes" : [ "lettuce", "tortoises" ] },
-  { "name" : "helga", "age" : 52, "likes" : [ "home", "garden", "tortoises", "cakes" ] }
-]
-</code></p>
-
-<p>It&rsquo;s also possible to extract just a specific sub-attribute of each result value:</p>
-
-<p><code>plain extracting just a sub-attribute
-RETURN @members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes].name
-</code></p>
-
-<p>This will return:</p>
-
-<p><code>json query result
-[
-  "sir alfred",
-  "helga"
-]
-</code></p>
-
-<p>If we don&rsquo;t want to return the whole match but a single attribute is not enough, the
-star operator can be used in combination with arbitrary projections, too.</p>
-
-<p>The following query extracts the matching members a <code>FILTER</code> as above, but now only
-returns each member&rsquo;s <code>age</code> attribute and the number of values in the member&rsquo;s <code>likes</code>
-attribute:</p>
-
-<p><code>plain extracting with a FILTER and a projection
-RETURN @members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes RETURN {
-  name: CURRENT.name,
-  likes: LENGTH(CURRENT.likes)
-}]
-</code></p>
-
-<p>This will produce the following result:</p>
-
-<p><code>json query result
-[
-  { "name" : "sir alfred", "likes" : 2 },
-  { "name" : "helga", "likes" : 4 }
-]
-</code></p>
-
-<p>If only a certain number of values is required, the star operator can be combined
-with a <code>LIMIT</code> clause, too. This is useful for testing whether at least one of the
-array members satisfies a <code>FILTER</code> condition:</p>
-
-<p><code>plain limiting the number of results
-RETURN @members[* FILTER "garden" IN CURRENT.likes LIMIT 1]
-</code></p>
-
-<p>Overall, the star operator is now much more powerful than before, so in many queries
-it can replace full-blown <code>FOR</code> loops and subqueries when the goal simply is to iterate
-over sub-parts of a result.</p>
-
-<h2>Multi-star operator</h2>
-
-<p>In 2.7 there is now also a <em>multi-star</em> operator (<code>[**]</code>). This operator can be used to
-iterate over an array, too. In addition it will also flatten its input, so it can be used
-for collapsing nested array structures.</p>
-
-<p>This is useful in cases where a flat result is required but the single star operator would
-return a nested array.</p>
-
-<p>Consider this query with the single star operator:</p>
-
-<p><code>plain extracting nested arrays
-RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[*]
-</code></p>
-
-<p>This will produce:</p>
-
-<p><code>json result of single star query
-[
-  [ "lettuce", "tortoises" ],
-  [ "home", "garden", "tortoises", "cakes" ]
-]
-</code></p>
-
-<p>To get a collapsed array, we can employ the double star operator:</p>
-
-<p><code>plain extracting flattend arrays
-RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[**]
-</code></p>
-
-<p>Then we&rsquo;ll get:</p>
-
-<p><code>json result of double star query
-[
-  "lettuce",
-  "tortoises",
-  "home",
-  "garden",
-  "tortoises",
-  "cakes"
-]
-</code></p>
-
-<p>Note: the result of this query can also be made unique using the standard AQL
-function <code>UNIQUE()</code>.</p>
-
-<p>The star operator in 2.7 can have any number of levels. Using it with a single
-star will simply iterate over the input array, using it with two stars will
-collapse one level of the input, using it with three stars will collapse two
-levels of the input etc.</p>
-
-<h2>Subquery result usage</h2>
-
-<p>While working on the AQL parser anyway, the grammar has been modified so
-it allows a few more types of expressions.</p>
-
-<p>For example, the result of a subquery can now be used as an array and the
-subquery results can be accessed by position directly:</p>
-
-<p>```plain accessing subquery results by position</p>
-
-<pre><code>RETURN (
-  FOR i IN [ 1, 2, 3 ] 
-    RETURN i
-)[0]
-</code></pre>
-
-<p>```</p>
-
-<p>The trailing <code>[0]</code> led to a parse error in previous versions. To make this
-work in previous versions, the subquery result needs to be captured in an
-extra variable using <code>LET</code> before accessing the 0th member of that variable:</p>
-
-<p>```plain workaround for accessing subquery results by position</p>
-
-<pre><code>LET temp = (
-  FOR i IN [ 1, 2, 3 ] 
-    RETURN i
-)
-RETURN temp[0]
-</code></pre>
-
-<p>```</p>
-
-<p>The parser generalizations now also allow to use the star operator directly
-on a subquery result and access its individual members:</p>
-
-<p>```plain expanding subquery results using star operator</p>
-
-<pre><code>RETURN (
-  FOR member IN [ 
-    { name: "sir alfred" }, 
-    { name: "mozquito" }
-  ]
-   RETURN member
-)[*].name
-</code></pre>
-
-<p>```</p>
 ]]></content>
   </entry>
   

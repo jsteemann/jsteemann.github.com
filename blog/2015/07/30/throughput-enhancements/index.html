@@ -7,13 +7,13 @@
   <meta charset="utf-8">
   <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
   <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
-  <title>Using Dynamic Attribute Names in AQL - J@ArangoDB</title>
+  <title>Throughput Enhancements - J@ArangoDB</title>
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="On our mailing list, there is quite often the question whether attribute names in objects
-returned from AQL queries can be made dynamic. Here&rsquo;s &hellip;">
-  <meta name="keywords" content="ArangoDB, database, AQL, JavaScript">
+  <meta name="description" content="We&rsquo;ve recently been working on improving ArangoDB&rsquo;s throughput,
+especially when using the ArangoDB&rsquo;s interface. In this post, I &hellip;">
+  <meta name="keywords" content="ArangoDB, Database, Performance, Foxx">
 
   <!-- http://t.co/dKP3o1e -->
   <meta name="HandheldFriendly" content="True">
@@ -21,7 +21,7 @@ returned from AQL queries can be made dynamic. Here&rsquo;s &hellip;">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql">
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/07/30/throughput-enhancements">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
@@ -85,7 +85,7 @@ returned from AQL queries can be made dynamic. Here&rsquo;s &hellip;">
   
   <header>
     
-      <h1 class="entry-title">Using Dynamic Attribute Names in AQL</h1>
+      <h1 class="entry-title">Throughput Enhancements</h1>
     
     
       <p class="meta">
@@ -101,79 +101,76 @@ returned from AQL queries can be made dynamic. Here&rsquo;s &hellip;">
   
 
 
-<time datetime="2015-02-03T00:12:39+01:00" pubdate data-updated="true">Feb 3<span>rd</span>, 2015</time>
+<time datetime="2015-07-30T12:54:12+02:00" pubdate data-updated="true">Jul 30<span>th</span>, 2015</time>
         
       </p>
     
   </header>
 
 
-<div class="entry-content"><p>On our mailing list, there is quite often the question whether attribute names in objects
-returned from AQL queries can be made dynamic.</p>
+<div class="entry-content"><p>We&rsquo;ve recently been working on improving ArangoDB&rsquo;s throughput,
+especially when using the ArangoDB&rsquo;s interface.</p>
 
-<p>Here&rsquo;s a (non-working) example query for this:</p>
-
-<figure class='code'><figcaption><span>example query that does not work</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  RETURN { doc.type : doc.value }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The intention in the above query obviously is to use the dynamic value from <code>doc.type</code> as
-an attribute name in the result object and not to have an attribute named <code>"doc.type"</code>. This
-feature is probably in the top 20 of the most-often wished features.</p>
+<p>In this post, I will show some of the improvements already achieved,
+though the work is not yet finished. Therefore, the results shown here
+are still somewhat preliminary.</p>
 
 <!-- more -->
 
 
-<p>However, the above query won&rsquo;t even parse. The AQL grammar only allows string values
-left of the colon in an object definition. Non-quoted strings are allowed there too, and are
-implicitly turned into quoted strings. It works similar to how object literals are defined
-in JavaScript:</p>
+<p>We wanted to measure improvements for ArangoDB&rsquo;s HTTP interface, and so we used
+<a href="https://github.com/wg/wrk"><em>wrk</em></a> as an external HTTP load generator.</p>
 
-<figure class='code'><figcaption><span>using unquoted and quoted string attribute names</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<p>During the tests, <em>wrk</em> called some specific URLs on a local ArangoDB instance on
+an otherwise idle machine. The test was run with ArangoDB 2.6 and <code>devel</code>. The
+ArangoDB instances were started with their default configuration.</p>
+
+<p><em>wrk</em> was invoked with varying amounts of client connections and threads, so the
+tests cover serial and concurrent/parallel requests:</p>
+
+<figure class='code'><figcaption><span>invoking wrk</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>wrk -c <span class="nv">$CONNECTIONS</span> -t <span class="nv">$THREADS</span> -d 10 <span class="nv">$URL</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The number of connections (<code>$CONNECTIONS</code>) and theads (<code>$THREADS</code>) were both varied
+from 1 to 8. <em>wrk</em> requires at least as many connections as threads.</p>
+
+<p>The first URL tested was a route in a simple Foxx application that inserts the data
+shipped in the HTTP request into a collection on the server. The internals of the
+route should not matter here, as this post focuses on the throughput improvements.</p>
+
+<p>Following are the results for calling the route with <em>wrk</em>, comparing the stable
+ArangoDB version (2.6.3) with the current development version (head of <code>devel</code> branch
+as of today). The table shows the number of documents that were inserted during the
+10 seconds the <em>wrk</em> client ran:</p>
+
+<figure class='code'><figcaption><span>invoking wrk</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN { 
-</span><span class='line'>  foo : "bar",
-</span><span class='line'>  "baz" : "qux"
-</span><span class='line'>}</span></code></pre></td></tr></table></div></figure>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>Threads      Connections        2.6       devel
+</span><span class='line'>-----------------------------------------------
+</span><span class='line'>      1                1      12569       20157
+</span><span class='line'>      1                2      28094       36031
+</span><span class='line'>      1                4      46310       66524
+</span><span class='line'>      1                8      46798       80667
+</span></code></pre></td></tr></table></div></figure>
 
 
-<p>Why not allow arbitrary expression left of the colon? The reason is simple: this would cause
-ambiguity and probably have side-effects. For an example, have a look at the following query:</p>
+<p>As can be seen above, <code>devel</code> was able to handle much more requests than 2.6 even
+with a single connection (i.e. serial client requests). Throughput was about 60 %
+higher for this case.</p>
 
-<figure class='code'><figcaption><span>which attribute name to use here?</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  LET type = doc.type;
-</span><span class='line'>  RETURN { type : doc.value }</span></code></pre></td></tr></table></div></figure>
+<p>When increasing the number of client connections, the number of requests handled by
+<code>devel</code> ws also higher than that of 2.6, with improvements between around 25 and 70 %.</p>
 
+<p>When increasing the number of client load generation threads, the picture doesn&rsquo;t
+change much. Here&rsquo;s the full table of results:</p>
 
-<p>If the <code>type</code> attribute name inside the object definition is interpreted as a string literal
-as it currently is an AQL (and always was), then the resulting attribute name is just <code>"type"</code>.</p>
-
-<p>If the <code>type</code> attribute name would now be intepreted as an expression, it would get the value
-that was assigned to the variable <code>type</code> by the <code>LET</code> statement. Removing the <code>LET</code> from the
-query would change the attribute name in the result back to the string literal <code>"type"</code>.</p>
-
-<p>The ambiguity could be solved by telling the parser what to do in such cases. While technically
-this could be working, I think it may have too many unintended side-effects. I already mentioned
-that introducing a <code>LET</code> statement into the query would change the attribute name in the result.
-The same could also happen if a collection named <code>type</code> was added to the query. And it would
-break compatibility with existing queries.</p>
-
-<p>JavaScript has the same problem, and it wasn&rsquo;t solved portably yet. However, there is a proposal
-for ES6 that suggests enclosing attribute name expressions in <code>[</code> and <code>]</code>.</p>
-
-<p>To me, this looks like a good solution for the problem. It&rsquo;s two bytes more when keying in
-queries, but the syntax is easy and explicit. There are no ambiguities.</p>
-
-<p>I prototyped this solution for AQL, so I could write:</p>
-
-<figure class='code'><figcaption><span>query using dynamic attribute names</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span>invoking wrk</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
@@ -188,58 +185,70 @@ queries, but the syntax is easy and explicit. There are no ambiguities.</p>
 <span class='line-number'>13</span>
 <span class='line-number'>14</span>
 <span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR i IN 1..5 
-</span><span class='line'>  RETURN { 
-</span><span class='line'>    [ CONCAT('test', i) ] : i, 
-</span><span class='line'>    [ SUBSTITUTE(CONCAT('i is ', (i &lt;= 3 ? 'small' : 'not small')), { ' ' :  '_' } ) ] : i 
-</span><span class='line'>  }
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>Threads      Connections        2.6       devel
+</span><span class='line'>-----------------------------------------------
+</span><span class='line'>      1                1      12569       20157
+</span><span class='line'>      1                2      28094       36031
+</span><span class='line'>      1                4      46310       66524
+</span><span class='line'>      1                8      46798       80667
 </span><span class='line'>
-</span><span class='line'>[
-</span><span class='line'>  { 
-</span><span class='line'>    "test1" : 1, 
-</span><span class='line'>    "i_is_small" : 1 
-</span><span class='line'>  }, 
-</span><span class='line'>  { 
-</span><span class='line'>    "test2" : 2, 
-</span><span class='line'>    "i_is_small" : 2 
-</span><span class='line'>  }, 
-</span><span class='line'>  { 
-</span><span class='line'>    "test3" : 3, 
-</span><span class='line'>    "i_is_small" : 3 
-</span><span class='line'>  }, 
-</span><span class='line'>  { 
-</span><span class='line'>    "test4" : 4, 
-</span><span class='line'>    "i_is_not_small" : 4 
-</span><span class='line'>  }, 
-</span><span class='line'>  { 
-</span><span class='line'>    "test5" : 5, 
-</span><span class='line'>    "i_is_not_small" : 5 
-</span><span class='line'>  } 
-</span><span class='line'>]</span></code></pre></td></tr></table></div></figure>
+</span><span class='line'>      2                2      28931       36326
+</span><span class='line'>      2                4      47181       67654
+</span><span class='line'>      2                8      47594       88617
+</span><span class='line'>
+</span><span class='line'>      4                4      46553       67585
+</span><span class='line'>      4                8      47531       86935
+</span><span class='line'>
+</span><span class='line'>      8                8      46431       91953
+</span></code></pre></td></tr></table></div></figure>
 
 
-<p>I ran a few queries with this, and they seemed to work. <del>However, I haven&rsquo;t
-committed the feature yet. There might still be cases in which it doesn&rsquo;t work. Tests
-for the feature are also still missing. I hope I can finalize the implementation soon
-so it becomes available in some release.</del></p>
+<p>The next test consisted of inserting documents into a collection again, but using the
+built-in HTTP API for creating documents instead of a user-defined Foxx application.
+Throughput is expected to be higher than in the Foxx case because the built-in method
+is hard-wired and only serves a single purpose, whereas the Foxx route is user-definable
+and capable of doing fancy things, such as validating data, restricting access etc.</p>
 
-<p><strong>UPDATE</strong>: tests have been added, and the feature has been committed in devel. It is
-included in ArangoDB since version 2.5.</p>
+<p>Here are the results for calling the hard-wired insertion route, again for 2.6 and <code>devel</code>:</p>
 
-<p>Everyone is welcome to try it out already!</p>
+<figure class='code'><figcaption><span>invoking wrk</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>Threads      Connections        2.6       devel
+</span><span class='line'>-----------------------------------------------
+</span><span class='line'>      1                1     102133      112843
+</span><span class='line'>      1                2     185529      210795
+</span><span class='line'>      1                4     335607      373070
+</span><span class='line'>      1                8     518354      576034
+</span><span class='line'>
+</span><span class='line'>      2                2     181237      196482
+</span><span class='line'>      2                4     345455      363255
+</span><span class='line'>      2                8     474558      550835
+</span><span class='line'>
+</span><span class='line'>      4                4     318331      355328
+</span><span class='line'>      4                8     483388      516100
+</span><span class='line'>
+</span><span class='line'>      8                8     482369      527395
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>devel</code> provides higher throughput than 2.6 for this route as well. Improvements fell
+into the range of between 5 and 15 %. That&rsquo;s not as impressive as in the Foxx route
+case above, but still a welcome improvement.</p>
+
+<p>And of course we&rsquo;ll try to improve the throughput further.</p>
 </div>
 
 
@@ -262,12 +271,12 @@ included in ArangoDB since version 2.5.</p>
   
 
 
-<time datetime="2015-02-03T00:12:39+01:00" pubdate data-updated="true">Feb 3<span>rd</span>, 2015</time>
+<time datetime="2015-07-30T12:54:12+02:00" pubdate data-updated="true">Jul 30<span>th</span>, 2015</time>
       
 
 <span class="categories">
   
-    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/javascript/'>JavaScript</a>
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/foxx/'>Foxx</a>, <a class='category' href='/blog/categories/performance/'>Performance</a>
   
 </span>
 
@@ -276,7 +285,7 @@ included in ArangoDB since version 2.5.</p>
     
       <div class="sharing">
   
-  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/" >Tweet</a>
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/07/30/throughput-enhancements/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/07/30/throughput-enhancements/" >Tweet</a>
   
   
   
@@ -285,10 +294,8 @@ included in ArangoDB since version 2.5.</p>
     
     <p class="meta">
       
-        <a class="basic-alignment left" href="/blog/2015/01/31/yaor-yet-another-optimizer-rule/" title="Previous Post: YAOR - yet another optimizer rule">&laquo; YAOR - yet another optimizer rule</a>
+        <a class="basic-alignment left" href="/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/" title="Previous Post: How to set up fish completion for ArangoDB">&laquo; How to set up fish completion for ArangoDB</a>
       
-      
-        <a class="basic-alignment right" href="/blog/2015/02/05/using-arangodb-as-a-logstash-output/" title="Next Post: Using ArangoDB as a logstash output">Using ArangoDB as a logstash output &raquo;</a>
       
     </p>
   </footer>
