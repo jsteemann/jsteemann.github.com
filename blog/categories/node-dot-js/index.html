@@ -7,13 +7,12 @@
   <meta charset="utf-8">
   <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
   <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
-  <title>YAOR - Yet Another Optimizer Rule - J@ArangoDB</title>
+  <title>Category: Node.js - J@ArangoDB</title>
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="A quick post that showcases the new optimizer rule move-calculations-down that was added
-in ArangoDB 2.5 (current devel branch). Consider the &hellip;">
-  <meta name="keywords" content="ArangoDB, database, AQL, Optimizer">
+  <meta name="description" content="Category: Node.js">
+  
 
   <!-- http://t.co/dKP3o1e -->
   <meta name="HandheldFriendly" content="True">
@@ -21,7 +20,7 @@ in ArangoDB 2.5 (current devel branch). Consider the &hellip;">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   
-  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule">
+  <link rel="canonical" href="http://jsteemann.github.ioblog/categories/node-dot-js">
   <link href="/favicon.png" rel="icon">
   <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
   <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
@@ -81,152 +80,35 @@ in ArangoDB 2.5 (current devel branch). Consider the &hellip;">
   <div id="main">
     <div id="content">
       <div>
-<article class="hentry" role="article">
+<article role="article">
   
   <header>
-    
-      <h1 class="entry-title">YAOR - Yet Another Optimizer Rule</h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-01-31T18:51:30+01:00" pubdate data-updated="true">Jan 31<span>st</span>, 2015</time>
-        
-      </p>
+    <h1 class="entry-title">Category: Node.js</h1>
     
   </header>
+  
+  <div id="blog-archives" class="category">
 
 
-<div class="entry-content"><p>A quick post that showcases the new optimizer rule <code>move-calculations-down</code> that was added
-in ArangoDB 2.5 (current <code>devel</code> branch).</p>
 
-<!-- more -->
+  
+  <h2>2015</h2>
 
+<article>
+  
+<h1><a href="/blog/2015/08/01/how-v8-is-used-in-arangodb/">How V8 Is Used in ArangoDB</a></h1>
+<time datetime="2015-08-01T19:06:04+02:00" pubdate><span class='month'>Aug</span> <span class='day'>01</span> <span class='year'>2015</span></time>
 
-<p>Consider the following simple query:</p>
-
-<figure class='code'><figcaption><span>Example query </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN test 
-</span><span class='line'>  LET calculated = CONCAT('foo', doc.value) 
-</span><span class='line'>  FILTER doc.value &lt; 100 
-</span><span class='line'>  RETURN calculated</span></code></pre></td></tr></table></div></figure>
+<footer>
+  <span class="categories">posted in <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/concepts/'>Concepts</a>, <a class='category' href='/blog/categories/foxx/'>Foxx</a>, <a class='category' href='/blog/categories/node-dot-js/'>Node.js</a></span>
+</footer>
 
 
-<p>If no indexes are present in collection <code>test</code>, the execution plan will look
-like this in 2.4:</p>
+</article>
 
-<p><img src="/downloads/screenshots/explain-24.png"></p>
-
-<p>The plan can be improved a bit. While there are no indexes to exploit, the calculation
-for <code>calculated</code> can be pushed beyond the execution of the <code>FILTER</code>. This will be very
-beneficial if the calculation is expensive and the <code>FILTER</code> can prune a lot of documents.</p>
-
-<p>In 2.5, there is an optimizer rule <code>move-calculations-down</code> that will do this. It will
-move all eligible calculations as far down in the plan as possible. A calculation obviously can
-be moved down a step only if the successor step does not depend on its result.</p>
-
-<p>Additionally, a calculation will not be moved beyond a <code>COLLECT</code> operation, because
-<code>COLLECT</code> changes which variables are visible in a scope. Finally, a calculation will not
-be moved down inside a <code>FOR</code> loop, in order to avoid repeated calculations.</p>
-
-<p>In the example query, the step following the <code>LET</code> calculation was a <code>FILTER</code>.
-The filter condition does not depend on the result of <code>calcuated</code>, so the calculation is
-eligible for being moved down.</p>
-
-<p>The resulting execution plan will look like this in 2.5:</p>
-
-<p><img src="/downloads/screenshots/explain-25.png"></p>
-
-<p>As we can see from the changed id sequence on the left, the calculation was moved down.</p>
-
-<p>What does this buy us? For the simple query above, with the <code>test</code> collection containing
-100.000 documents with <code>value</code> ranging from 0 to 99,999, the results are as follows:</p>
-
-<ul>
-<li>if the filter leaves only 0.1 % of the documents pass, execution time goes down from
-0.87 seconds to 0.17 seconds thanks to the rule</li>
-<li>if the filter lets 1 % of the documents pass, execution time is 0.21 seconds with the rule,
-and 0.91 without</li>
-<li>if the filter lets 10 % of the documents pass, execution time is 0.25 s, vs. 0.91 seconds
-without.</li>
-<li>if the filter lets all documents pss, there is no difference in execution time</li>
-</ul>
-
-
-<p>This is quite a nice speedup, especially when taking into account how simple the optimizer
-rule is. The effects may be even greater for queries that contain multiple calculations
-that can be pushed beyond filters, or for more expensive calculations.</p>
-
-<p>Of course the best solution for the above query would be to use a skiplist index on
-<code>value</code>, but that&rsquo;s a different story. The optimizer rule shown here is orthogonal to
-using indexes, so queries already using indexes might still benefit from the rule if they
-contain additional calculations or further filters which cannot be satifisfied by indexes.</p>
 </div>
 
-
-  <footer>
-    <p class="meta">
-      
   
-
-<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
-
-      
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-01-31T18:51:30+01:00" pubdate data-updated="true">Jan 31<span>st</span>, 2015</time>
-      
-
-<span class="categories">
-  
-    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>
-  
-</span>
-
-
-    </p>
-    
-      <div class="sharing">
-  
-  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/" >Tweet</a>
-  
-  
-  
-</div>
-
-    
-    <p class="meta">
-      
-        <a class="basic-alignment left" href="/blog/2015/01/28/using-custom-visitors-in-aql-graph-traversals/" title="Previous Post: Using custom visitors in AQL graph traversals">&laquo; Using custom visitors in AQL graph traversals</a>
-      
-      
-        <a class="basic-alignment right" href="/blog/2015/02/03/using-dynamic-attribute-names-in-aql/" title="Next Post: Using dynamic attribute names in AQL">Using dynamic attribute names in AQL &raquo;</a>
-      
-    </p>
-  </footer>
 </article>
 
 </div>

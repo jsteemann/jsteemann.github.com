@@ -4,7 +4,7 @@
   <title><![CDATA[Category: C++ | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/c-plus-plus/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-07-30T14:57:27+02:00</updated>
+  <updated>2015-08-01T23:40:26+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,261 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[How V8 Is Used in ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/08/01/how-v8-is-used-in-arangodb/"/>
+    <updated>2015-08-01T19:06:04+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/08/01/how-v8-is-used-in-arangodb</id>
+    <content type="html"><![CDATA[<p>ArangoDB allows running user-defined JavaScript code in the database.
+This can be used for more complex, <em>stored procedures</em>-like database operations.
+Additionally, ArangoDB&rsquo;s <a href="https://www.arangodb.com/foxx/">Foxx framework</a> can
+be used to make any database functionality available via an HTTP REST API.
+It&rsquo;s easy to build microservices with it, using the scripting functionality
+for tasks like access control, data validation, sanitation etc.</p>
+
+<p>We often get asked how the scripting functionality is implemented under the hood.
+Additionally, several people have asked how ArangoDB&rsquo;s JavaScript functionality
+relates to node.js.</p>
+
+<p>This post tries to explain that in detail.</p>
+
+<!-- more -->
+
+
+<h1>The C++ parts</h1>
+
+<p><em>arangosh</em>, the ArangoShell, and <em>arangod</em>, the database server, are written in
+C++ and they are shipped as native code executables. Some parts of both <em>arangosh</em>
+and <em>arangod</em> itself are written in JavaScript (more on that later).</p>
+
+<p>The I/O handling in <em>arangod</em> is written in C++ and uses libev (written in C)
+for the low-level event handling. All the socket I/O, working scheduling and
+queueing is written in C++, too. These are parts that require high parallelism,
+so we want this to run in multiple threads.</p>
+
+<p>All the indexes, the persistence layer and many of the fundamental operations,
+like the ones for document inserts, updates, deletes, imports are written in C++ for
+effective control of memory usage and parallelism. AQL&rsquo;s query parser is written
+using the usual combination of Flex and Bison, which generate C files that are
+compiled to native code. The AQL optimizer, AQL executor and many AQL functions are
+writting in C++ as well.</p>
+
+<p>Some AQL functions however, are written in JavaScript. And if an AQL query
+invokes a user-defined function, this function will be a JavaScript function, too.</p>
+
+<h1>How ArangoDB uses V8</h1>
+
+<p>How is JavaScript code executed in ArangoDB?</p>
+
+<p>Both <em>arangosh</em> and <em>arangod</em> are linked against the <a href="https://developers.google.com/v8/">V8 JavaScript engine</a>
+library. V8 (itself written in C++) is the component that runs the JavaScript
+code in ArangoDB.</p>
+
+<p>V8 requires JavaScript code to run in a so-called <em>isolate</em> (note: I&rsquo;ll be
+oversimplifying a bit here &ndash; in reality there are isolates and contexts).
+As the name suggests, isolates are completely isolated from each other.
+Especially, data cannot be shared or moved across isolates, and each isolate
+can be used by only one thread at a time.</p>
+
+<p>Let&rsquo;s look at how <em>arangosh</em>, the ArangoShell, uses V8. All JavaScript commands
+entered in <em>arangosh</em> will be compiled and executing with V8 immediately.
+In <em>arangosh</em>, this happens using a single V8 isolate.</p>
+
+<p>On the server side, things are a bit different. In <em>arangod</em>, there are multiple
+V8 isolates. The number of isolates to create is a startup configuration
+option (<code>--javascript.v8-contexts</code>). Creating multiple isolates allows running
+JavaScript code in multiple threads, truly parallel. Apart from that, <em>arangod</em>
+has multiple I/O threads (<code>--scheduler.threads</code> configuration option) for handling
+the communication with client applications.</p>
+
+<p>As mentioned earlier, part of ArangoDB&rsquo;s codebase itself is written in JavaScript,
+and this JavaScript code is executed the same way as any user-defined will be executed.</p>
+
+<h1>Executing JavaScript code with V8</h1>
+
+<p>For executing any JavaScript code (built-in or user-defined), ArangoDB will invoke
+V8&rsquo;s JIT compiler to compile the script code into native code and run it.</p>
+
+<p>The JIT compiler in V8 will not try extremely hard to optimize the code on the
+first invocation. On initial compilation, it will aim for a good balance of
+optimizations and fast compilation time. If it finds some code parts are called
+often, it may re-try to optimize these parts more aggressively automatically.
+To make things even more complex, there are different JIT compilers in V8
+(i.e. Crankshaft and Turbofan) with different sweet spots. JavaScript modes
+(i.e. <em>strict mode</em> and <em>strong mode</em>) can also affect the level of optimizations
+the compilers will carry out.</p>
+
+<p>Now, after the JavaScript code has been compiled to native code, V8 will run it
+until it returns or fails with an uncaught exception.</p>
+
+<p>But can how the JavaScript code access the database data and server internals?
+In other words, what actually happens if a JavaScript command such as the following
+is executed?</p>
+
+<p><code>js example JavaScript command
+db.myCollection.save({ _key: "test" });
+</code></p>
+
+<h2>Accessing server internals from JavaScript</h2>
+
+<p>Inside <em>arangod</em>, each V8 isolate is equipped with a global variable named <code>db</code>.
+This JavaScript variable is a wrapper around database functionality written in C++.
+When the <code>db</code> object is created, we tell V8 that its methods are C++ callbacks.</p>
+
+<p>Whenever the <code>db</code> object is accessed in JavaScript, the V8 engine will therefore
+call C++ methods. These provide full access to the server internals, can do whatever
+is required and return data in the format that V8 requires. V8 then makes the
+return data accessible to the JavaScript code.</p>
+
+<p>Executing <code>db.myCollection.save(...)</code> is effectively two operations: accessing the
+property <code>myCollection</code> on the object <code>db</code> and then calling function <code>save</code> on that
+property. For the first operation, V8 will invoke the object&rsquo;s <code>NamedPropertyHandler</code>,
+which is a C++ function that is responsible for returning the value for the property
+with the given name (<code>myCollection</code>). In the case of <code>db</code>, we have a C++ function
+that collection object if it exists, or <code>undefined</code> if not.</p>
+
+<p>The collection object again has C++ bindings in the background, so calling function
+<code>save</code> on it will call another C++ function. The collection object also has a (hidden)
+pointer to the C++ collection. When <code>save</code> is called, we will extract that pointer
+from the <code>this</code> object so we know which C++ data structures to work on. The <code>save</code>
+function will also get the to-be-inserted document data as its payload. V8 will
+pass this to the C++ function as well so we can validate it and convert it into
+our internal data format.</p>
+
+<p>On the server side, there are several objects exposed to JavaScript that have C++
+bindings. There are also non-object functions that have C++ bindings. Some of these
+functions are also bolted on regular JavaScript objects.</p>
+
+<h2>Accessing server internals from ArangoShell</h2>
+
+<p>When running the same command in <em>arangosh</em>, things will be completely different.
+The ArangoShell may run on the same host as the <em>arangod</em> server process, but it may
+also run on a completely different one. Providing <em>arangosh</em> access to server internals
+such as pointers will therefore not work in general. Even if <em>arangosh</em> and <em>arangod</em>
+do run on the same host, they are independent processes with no access to the each
+other&rsquo;s data. The latter problem could be solved by having a shared memory segment
+that both <em>arangosh</em> and <em>arangod</em> can use, but why bother with that special case
+which will provide no help in the general case when the shell can be located on
+<strong>any</strong> host.</p>
+
+<p>To make the shell work in all these situations, it uses the HTTP REST API provided
+by the ArangoDB server to talk to it. For <em>arangod</em>, any ArangoShell client is just
+another client, with no special treatments or protocols.</p>
+
+<p>As a consequence, all operations on databases and collections run from the ArangoShell
+are JavaScript wrappers that call their respective server-side HTTP APIs.</p>
+
+<p>Recalling the command example again (<code>db.myCollection.save(...)</code>), the shell will first
+access the property <code>myCollection</code> of the object <code>db</code>. In the shell <code>db</code> is a regular
+JavaScript object with no C++ bindings. When the shell is started, it will make an
+HTTP call to <em>arangod</em> to retrieve a list of all available collections, and register
+them as properties in its <code>db</code> object. Calling the <code>save</code> method on one of these
+objects will trigger an HTTP POST request to the server API at <code>/_api/document?collection=myCollection</code>,
+with the to-be-inserted data in its request body. Eventually the server will respond
+and the command will return with the data retrieved from the server.</p>
+
+<h2>Considerations</h2>
+
+<p>Consider running the following JavaScript code:</p>
+
+<p><code>js code to insert 1000 documents
+for (var i = 0; i &lt; 1000; ++i) {
+  db.myCollection.save({ _key: "test" + i });
+}
+</code></p>
+
+<p>When run from inside the ArangoShell, the code will be executed in there. The shell will
+perform an HTTP request to <em>arangod</em> for each call to <code>save</code>. We&rsquo;ll end up with 1,000
+HTTP requests.</p>
+
+<p>Running the same code inside <em>arangod</em> will trigger no HTTP requests, as the server-side
+functions are backed with C++ internals and can access the database data directly. It will
+be a lot faster to run this loop on the server than in <em>arangosh</em>. A while ago I wrote
+<a href="/blog/2014/08/30/understanding-where-operations-are-executed/">another article</a> about this.</p>
+
+<p>When replacing the ArangoShell with another client application, things are no different.
+A client application will not have access to the server internals, so all it can do is to
+make requests to the server (by the way, the principle would be no different if we used
+MySQL or other database servers, only the protocols would vary).</p>
+
+<p>Fortunately, there is a fix for this: making the code run server-side. For example, the
+above code can be put into a Foxx route. This way it is not only fast but will be made
+accessible via an HTTP REST API so client applications can call it with a single HTTP request.</p>
+
+<p>In reality, database operations will be more complex than in the above example. And this
+is where having a full-featured scripting language like JavaScript helps. It provides all
+the features that are needed for more complex tasks such as validating and sanitizing input
+data, access control, executing database queries and postprocessing results.</p>
+
+<h1>The differences to node.js</h1>
+
+<p>To start with: ArangoDB is not node.js, and vice versa. ArangoDB is not a node.js module
+either. ArangoDB and node.js are completely indepedent.</p>
+
+<p>But there is a commonality: both ArangoDB and node.js use the V8 engine for running
+JavaScript code.</p>
+
+<h2>Threading</h2>
+
+<p>AFAIK, standard node.js only has a single V8 isolate to run all code in.
+While that made the implementation easier (no hassle with multi-threading) it
+also limits node.js to using only a single CPU.</p>
+
+<p>It&rsquo;s not unusual to see a multi-core server with a node.js instance maxing out
+one CPU while the other CPUs are sitting idle. In order to max out a multi-core
+server, people often start multiple node.js instances on a single server. That will
+work fine, but the node.js instances will be independent, and sharing data between
+them is not possible in plain JavaScript.</p>
+
+<p>And because a node.js instance is single-threaded, it is also important that
+code written for node.js is non-blocking. Code that blocks while waiting for
+some I/O operation would block the only available CPU. Using non-blocking
+I/O operations allows node.js to queue the operation, and execute other code
+in the meantime, allowing overall progress. This also makes it look like it
+would be executing multiple actions in parallel, while it is actually executing
+them sequentially.</p>
+
+<p>Contrary, <em>arangod</em> is a multi-threaded server. It can serve multiple requests in
+parallel, using multiple CPUs. Because <em>arangod</em> has multiple V8 isolates that
+each can execute JavaScript code, it can run JavaScript in multiple threads in parallel.</p>
+
+<p><em>arangosh</em>, the ArangoShell, is single-threaded and provides only a single V8 isolate.</p>
+
+<h2>Usage of modules</h2>
+
+<p>Both node.js and ArangoDB can load code at runtime so it can be organized into
+modules or libraries. In both, extra JavaScript modules can be loaded using the
+<code>require</code> function.</p>
+
+<p>There is often confusion about whether node.js modules can be used in ArangoDB.
+This is probably because the answer is &ldquo;<em>it depends!</em>&rdquo;.</p>
+
+<p>node.js packages can be written in JavaScript but they can also compile to native
+code using C++. The latter can be used to extend the functionality of node.js with
+features that JavaScript alone wouldn&rsquo;t be capable of. Such modules however often
+heavily depend on a specific V8 version (so do not necessarily compile in a node.js
+version with a different version of V8) and often rely on node.js internals.</p>
+
+<p>ArangoDB can load modules that are written in pure JavaScript. Modules that
+depend on non-JavaScript functionality (such as native modules for node.js) or modules
+that rely on node.js internals cannot be loaded in ArangoDB. As a rule of thumb,
+any module will run in ArangoDB that is implemented in pure JavaScript, does not
+access global variables and only requires other modules that obey the same restrictions.</p>
+
+<p>ArangoDB also uses several externally maintained JavaScript-only libraries, such as
+underscore.js. This module will run everywhere because it conforms to the mentioned
+restrictions.</p>
+
+<p>ArangoDB also uses several other modules that are maintained on npm.js.
+An example module is <a href="https://www.npmjs.com/package/aqb">AQB</a>, a query builder for AQL.
+It is written in pure JavaScript too, so it can be used from a node.js application and
+from within ArangoDB. If there is an updated version of this module, we use npm to
+install it in a subdirectory of ArangoDB. As per npm convention, the node.js modules
+shipped with ArangoDB reside in a directory named <code>node_modules</code>. Probably this is
+what caused some of the confusion.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Less Intrusive Linking]]></title>
@@ -549,57 +804,6 @@ doubly-linked list container.</p>
 operations, a dedicated type for NULL pointers, STL support for
 threads and mutexes, regular expressions, more Unicode support,
 override, final &ndash; to name only a few&hellip;</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Using Travis CI for a C++11 Project]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/"/>
-    <updated>2014-10-17T19:36:57+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project</id>
-    <content type="html"><![CDATA[<p><a href="http://travis-ci.com">TravisCI</a> is a very useful cloud service
-for continous integration. It can be integrated with Github, with each
-commit triggering a new build and reporting back when it broke something.</p>
-
-<p>Travis has support for many programming languages, among them C++.
-But it lacks support for C++11 features.</p>
-
-<!-- more -->
-
-
-<p>Travis provides basic support for C++ projects. <a href="http://docs.travis-ci.com/user/languages/cpp/">It comes with gcc, clang,
-the autotools, make, cmake and scons</a>.</p>
-
-<p>While writing this post, Travis CI build machines run on Ubuntu 12.04
-LTS 64 bit. This version of Ubuntu is rather old already, and does not bring
-too many packages for C++11 development. For example, the default
-C++ compiler installed on TravisCI is g++-4.6.3. This version
-doesn&rsquo;t even understand the compile option <code>-std=c++11</code>.</p>
-
-<p>Official C++11 support <a href="https://gcc.gnu.org/projects/cxx0x.html">started in g++ 4.7</a>,
-though C++0x features were supported way earlier. But to get decent C++11 support
-in g++, it is best to use g++4.8 or higher.</p>
-
-<p>Fortunately TravisCI allows installing other software. To get
-a more recent C++ compiler, it can simply be added from a PPA.
-This can be achieved by putting the PPA in the <code>.travis.yml</code> file of your
-Github repository, e.g.</p>
-
-<p>```yaml
-language: cpp
-compiler: g++</p>
-
-<p>before_install:
-&ndash; sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-&ndash; sudo apt-get update -qq</p>
-
-<p>install:
-&ndash; sudo apt-get install -qq g++-4.8
-&ndash; export CXX=&ldquo;g++-4.8&rdquo;
-```</p>
-
-<p>I have set up an <a href="https://github.com/jsteemann/travis-cxx11">example project on Github</a>
-that demonstrates how to use it.</p>
 ]]></content>
   </entry>
   

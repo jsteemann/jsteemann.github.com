@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-07-30T14:57:27+02:00</updated>
+  <updated>2015-08-01T23:40:26+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,265 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[How V8 Is Used in ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/08/01/how-v8-is-used-in-arangodb/"/>
+    <updated>2015-08-01T19:06:04+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/08/01/how-v8-is-used-in-arangodb</id>
+    <content type="html"><![CDATA[<p>ArangoDB allows running user-defined JavaScript code in the database.
+This can be used for more complex, <em>stored procedures</em>-like database operations.
+Additionally, ArangoDB&rsquo;s <a href="https://www.arangodb.com/foxx/">Foxx framework</a> can
+be used to make any database functionality available via an HTTP REST API.
+It&rsquo;s easy to build microservices with it, using the scripting functionality
+for tasks like access control, data validation, sanitation etc.</p>
+
+<p>We often get asked how the scripting functionality is implemented under the hood.
+Additionally, several people have asked how ArangoDB&rsquo;s JavaScript functionality
+relates to node.js.</p>
+
+<p>This post tries to explain that in detail.</p>
+
+<!-- more -->
+
+
+<h1>The C++ parts</h1>
+
+<p><em>arangosh</em>, the ArangoShell, and <em>arangod</em>, the database server, are written in
+C++ and they are shipped as native code executables. Some parts of both <em>arangosh</em>
+and <em>arangod</em> itself are written in JavaScript (more on that later).</p>
+
+<p>The I/O handling in <em>arangod</em> is written in C++ and uses libev (written in C)
+for the low-level event handling. All the socket I/O, working scheduling and
+queueing is written in C++, too. These are parts that require high parallelism,
+so we want this to run in multiple threads.</p>
+
+<p>All the indexes, the persistence layer and many of the fundamental operations,
+like the ones for document inserts, updates, deletes, imports are written in C++ for
+effective control of memory usage and parallelism. AQL&rsquo;s query parser is written
+using the usual combination of Flex and Bison, which generate C files that are
+compiled to native code. The AQL optimizer, AQL executor and many AQL functions are
+writting in C++ as well.</p>
+
+<p>Some AQL functions however, are written in JavaScript. And if an AQL query
+invokes a user-defined function, this function will be a JavaScript function, too.</p>
+
+<h1>How ArangoDB uses V8</h1>
+
+<p>How is JavaScript code executed in ArangoDB?</p>
+
+<p>Both <em>arangosh</em> and <em>arangod</em> are linked against the <a href="https://developers.google.com/v8/">V8 JavaScript engine</a>
+library. V8 (itself written in C++) is the component that runs the JavaScript
+code in ArangoDB.</p>
+
+<p>V8 requires JavaScript code to run in a so-called <em>isolate</em> (note: I&rsquo;ll be
+oversimplifying a bit here &ndash; in reality there are isolates and contexts).
+As the name suggests, isolates are completely isolated from each other.
+Especially, data cannot be shared or moved across isolates, and each isolate
+can be used by only one thread at a time.</p>
+
+<p>Let&rsquo;s look at how <em>arangosh</em>, the ArangoShell, uses V8. All JavaScript commands
+entered in <em>arangosh</em> will be compiled and executing with V8 immediately.
+In <em>arangosh</em>, this happens using a single V8 isolate.</p>
+
+<p>On the server side, things are a bit different. In <em>arangod</em>, there are multiple
+V8 isolates. The number of isolates to create is a startup configuration
+option (<code>--javascript.v8-contexts</code>). Creating multiple isolates allows running
+JavaScript code in multiple threads, truly parallel. Apart from that, <em>arangod</em>
+has multiple I/O threads (<code>--scheduler.threads</code> configuration option) for handling
+the communication with client applications.</p>
+
+<p>As mentioned earlier, part of ArangoDB&rsquo;s codebase itself is written in JavaScript,
+and this JavaScript code is executed the same way as any user-defined will be executed.</p>
+
+<h1>Executing JavaScript code with V8</h1>
+
+<p>For executing any JavaScript code (built-in or user-defined), ArangoDB will invoke
+V8&rsquo;s JIT compiler to compile the script code into native code and run it.</p>
+
+<p>The JIT compiler in V8 will not try extremely hard to optimize the code on the
+first invocation. On initial compilation, it will aim for a good balance of
+optimizations and fast compilation time. If it finds some code parts are called
+often, it may re-try to optimize these parts more aggressively automatically.
+To make things even more complex, there are different JIT compilers in V8
+(i.e. Crankshaft and Turbofan) with different sweet spots. JavaScript modes
+(i.e. <em>strict mode</em> and <em>strong mode</em>) can also affect the level of optimizations
+the compilers will carry out.</p>
+
+<p>Now, after the JavaScript code has been compiled to native code, V8 will run it
+until it returns or fails with an uncaught exception.</p>
+
+<p>But can how the JavaScript code access the database data and server internals?
+In other words, what actually happens if a JavaScript command such as the following
+is executed?</p>
+
+<figure class='code'><figcaption><span>example JavaScript command</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">myCollection</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">_key</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Accessing server internals from JavaScript</h2>
+
+<p>Inside <em>arangod</em>, each V8 isolate is equipped with a global variable named <code>db</code>.
+This JavaScript variable is a wrapper around database functionality written in C++.
+When the <code>db</code> object is created, we tell V8 that its methods are C++ callbacks.</p>
+
+<p>Whenever the <code>db</code> object is accessed in JavaScript, the V8 engine will therefore
+call C++ methods. These provide full access to the server internals, can do whatever
+is required and return data in the format that V8 requires. V8 then makes the
+return data accessible to the JavaScript code.</p>
+
+<p>Executing <code>db.myCollection.save(...)</code> is effectively two operations: accessing the
+property <code>myCollection</code> on the object <code>db</code> and then calling function <code>save</code> on that
+property. For the first operation, V8 will invoke the object&rsquo;s <code>NamedPropertyHandler</code>,
+which is a C++ function that is responsible for returning the value for the property
+with the given name (<code>myCollection</code>). In the case of <code>db</code>, we have a C++ function
+that collection object if it exists, or <code>undefined</code> if not.</p>
+
+<p>The collection object again has C++ bindings in the background, so calling function
+<code>save</code> on it will call another C++ function. The collection object also has a (hidden)
+pointer to the C++ collection. When <code>save</code> is called, we will extract that pointer
+from the <code>this</code> object so we know which C++ data structures to work on. The <code>save</code>
+function will also get the to-be-inserted document data as its payload. V8 will
+pass this to the C++ function as well so we can validate it and convert it into
+our internal data format.</p>
+
+<p>On the server side, there are several objects exposed to JavaScript that have C++
+bindings. There are also non-object functions that have C++ bindings. Some of these
+functions are also bolted on regular JavaScript objects.</p>
+
+<h2>Accessing server internals from ArangoShell</h2>
+
+<p>When running the same command in <em>arangosh</em>, things will be completely different.
+The ArangoShell may run on the same host as the <em>arangod</em> server process, but it may
+also run on a completely different one. Providing <em>arangosh</em> access to server internals
+such as pointers will therefore not work in general. Even if <em>arangosh</em> and <em>arangod</em>
+do run on the same host, they are independent processes with no access to the each
+other&rsquo;s data. The latter problem could be solved by having a shared memory segment
+that both <em>arangosh</em> and <em>arangod</em> can use, but why bother with that special case
+which will provide no help in the general case when the shell can be located on
+<strong>any</strong> host.</p>
+
+<p>To make the shell work in all these situations, it uses the HTTP REST API provided
+by the ArangoDB server to talk to it. For <em>arangod</em>, any ArangoShell client is just
+another client, with no special treatments or protocols.</p>
+
+<p>As a consequence, all operations on databases and collections run from the ArangoShell
+are JavaScript wrappers that call their respective server-side HTTP APIs.</p>
+
+<p>Recalling the command example again (<code>db.myCollection.save(...)</code>), the shell will first
+access the property <code>myCollection</code> of the object <code>db</code>. In the shell <code>db</code> is a regular
+JavaScript object with no C++ bindings. When the shell is started, it will make an
+HTTP call to <em>arangod</em> to retrieve a list of all available collections, and register
+them as properties in its <code>db</code> object. Calling the <code>save</code> method on one of these
+objects will trigger an HTTP POST request to the server API at <code>/_api/document?collection=myCollection</code>,
+with the to-be-inserted data in its request body. Eventually the server will respond
+and the command will return with the data retrieved from the server.</p>
+
+<h2>Considerations</h2>
+
+<p>Consider running the following JavaScript code:</p>
+
+<figure class='code'><figcaption><span>code to insert 1000 documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="mi">1000</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">db</span><span class="p">.</span><span class="nx">myCollection</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">_key</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span> <span class="p">});</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>When run from inside the ArangoShell, the code will be executed in there. The shell will
+perform an HTTP request to <em>arangod</em> for each call to <code>save</code>. We&rsquo;ll end up with 1,000
+HTTP requests.</p>
+
+<p>Running the same code inside <em>arangod</em> will trigger no HTTP requests, as the server-side
+functions are backed with C++ internals and can access the database data directly. It will
+be a lot faster to run this loop on the server than in <em>arangosh</em>. A while ago I wrote
+<a href="http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed/">another article</a> about this.</p>
+
+<p>When replacing the ArangoShell with another client application, things are no different.
+A client application will not have access to the server internals, so all it can do is to
+make requests to the server (by the way, the principle would be no different if we used
+MySQL or other database servers, only the protocols would vary).</p>
+
+<p>Fortunately, there is a fix for this: making the code run server-side. For example, the
+above code can be put into a Foxx route. This way it is not only fast but will be made
+accessible via an HTTP REST API so client applications can call it with a single HTTP request.</p>
+
+<p>In reality, database operations will be more complex than in the above example. And this
+is where having a full-featured scripting language like JavaScript helps. It provides all
+the features that are needed for more complex tasks such as validating and sanitizing input
+data, access control, executing database queries and postprocessing results.</p>
+
+<h1>The differences to node.js</h1>
+
+<p>To start with: ArangoDB is not node.js, and vice versa. ArangoDB is not a node.js module
+either. ArangoDB and node.js are completely indepedent.</p>
+
+<p>But there is a commonality: both ArangoDB and node.js use the V8 engine for running
+JavaScript code.</p>
+
+<h2>Threading</h2>
+
+<p>AFAIK, standard node.js only has a single V8 isolate to run all code in.
+While that made the implementation easier (no hassle with multi-threading) it
+also limits node.js to using only a single CPU.</p>
+
+<p>It&rsquo;s not unusual to see a multi-core server with a node.js instance maxing out
+one CPU while the other CPUs are sitting idle. In order to max out a multi-core
+server, people often start multiple node.js instances on a single server. That will
+work fine, but the node.js instances will be independent, and sharing data between
+them is not possible in plain JavaScript.</p>
+
+<p>And because a node.js instance is single-threaded, it is also important that
+code written for node.js is non-blocking. Code that blocks while waiting for
+some I/O operation would block the only available CPU. Using non-blocking
+I/O operations allows node.js to queue the operation, and execute other code
+in the meantime, allowing overall progress. This also makes it look like it
+would be executing multiple actions in parallel, while it is actually executing
+them sequentially.</p>
+
+<p>Contrary, <em>arangod</em> is a multi-threaded server. It can serve multiple requests in
+parallel, using multiple CPUs. Because <em>arangod</em> has multiple V8 isolates that
+each can execute JavaScript code, it can run JavaScript in multiple threads in parallel.</p>
+
+<p><em>arangosh</em>, the ArangoShell, is single-threaded and provides only a single V8 isolate.</p>
+
+<h2>Usage of modules</h2>
+
+<p>Both node.js and ArangoDB can load code at runtime so it can be organized into
+modules or libraries. In both, extra JavaScript modules can be loaded using the
+<code>require</code> function.</p>
+
+<p>There is often confusion about whether node.js modules can be used in ArangoDB.
+This is probably because the answer is &ldquo;<em>it depends!</em>&rdquo;.</p>
+
+<p>node.js packages can be written in JavaScript but they can also compile to native
+code using C++. The latter can be used to extend the functionality of node.js with
+features that JavaScript alone wouldn&rsquo;t be capable of. Such modules however often
+heavily depend on a specific V8 version (so do not necessarily compile in a node.js
+version with a different version of V8) and often rely on node.js internals.</p>
+
+<p>ArangoDB can load modules that are written in pure JavaScript. Modules that
+depend on non-JavaScript functionality (such as native modules for node.js) or modules
+that rely on node.js internals cannot be loaded in ArangoDB. As a rule of thumb,
+any module will run in ArangoDB that is implemented in pure JavaScript, does not
+access global variables and only requires other modules that obey the same restrictions.</p>
+
+<p>ArangoDB also uses several externally maintained JavaScript-only libraries, such as
+underscore.js. This module will run everywhere because it conforms to the mentioned
+restrictions.</p>
+
+<p>ArangoDB also uses several other modules that are maintained on npm.js.
+An example module is <a href="https://www.npmjs.com/package/aqb">AQB</a>, a query builder for AQL.
+It is written in pure JavaScript too, so it can be used from a node.js application and
+from within ArangoDB. If there is an updated version of this module, we use npm to
+install it in a subdirectory of ArangoDB. As per npm convention, the node.js modules
+shipped with ArangoDB reside in a directory named <code>node_modules</code>. Probably this is
+what caused some of the confusion.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Throughput Enhancements]]></title>
@@ -55,19 +314,18 @@ ArangoDB version (2.6.3) with the current development version (head of <code>dev
 as of today). The table shows the number of documents that were inserted during the
 10 seconds the <em>wrk</em> client ran:</p>
 
-<figure class='code'><figcaption><span>invoking wrk</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span>test results for 1 thread</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
 <span class='line-number'>5</span>
 <span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>Threads      Connections        2.6       devel
+</pre></td><td class='code'><pre><code class=''><span class='line'>Threads      Connections        2.6       devel
 </span><span class='line'>-----------------------------------------------
-</span><span class='line'>      1                1      12569       20157
-</span><span class='line'>      1                2      28094       36031
-</span><span class='line'>      1                4      46310       66524
-</span><span class='line'>      1                8      46798       80667
-</span></code></pre></td></tr></table></div></figure>
+</span><span class='line'>      1                1      12569       20157 
+</span><span class='line'>      1                2      28094       36031   
+</span><span class='line'>      1                4      46310       66524 
+</span><span class='line'>      1                8      46798       80667</span></code></pre></td></tr></table></div></figure>
 
 
 <p>As can be seen above, <code>devel</code> was able to handle much more requests than 2.6 even
@@ -80,7 +338,7 @@ higher for this case.</p>
 <p>When increasing the number of client load generation threads, the picture doesn&rsquo;t
 change much. Here&rsquo;s the full table of results:</p>
 
-<figure class='code'><figcaption><span>invoking wrk</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span>full test results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
@@ -95,22 +353,21 @@ change much. Here&rsquo;s the full table of results:</p>
 <span class='line-number'>13</span>
 <span class='line-number'>14</span>
 <span class='line-number'>15</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>Threads      Connections        2.6       devel
+</pre></td><td class='code'><pre><code class=''><span class='line'>Threads      Connections        2.6       devel
 </span><span class='line'>-----------------------------------------------
-</span><span class='line'>      1                1      12569       20157
-</span><span class='line'>      1                2      28094       36031
-</span><span class='line'>      1                4      46310       66524
+</span><span class='line'>      1                1      12569       20157 
+</span><span class='line'>      1                2      28094       36031   
+</span><span class='line'>      1                4      46310       66524 
 </span><span class='line'>      1                8      46798       80667
 </span><span class='line'>
-</span><span class='line'>      2                2      28931       36326
-</span><span class='line'>      2                4      47181       67654
-</span><span class='line'>      2                8      47594       88617
+</span><span class='line'>      2                2      28931       36326    
+</span><span class='line'>      2                4      47181       67654    
+</span><span class='line'>      2                8      47594       88617 
 </span><span class='line'>
-</span><span class='line'>      4                4      46553       67585
-</span><span class='line'>      4                8      47531       86935
+</span><span class='line'>      4                4      46553       67585   
+</span><span class='line'>      4                8      47531       86935 
 </span><span class='line'>
-</span><span class='line'>      8                8      46431       91953
-</span></code></pre></td></tr></table></div></figure>
+</span><span class='line'>      8                8      46431       91953 </span></code></pre></td></tr></table></div></figure>
 
 
 <p>The next test consisted of inserting documents into a collection again, but using the
@@ -121,7 +378,7 @@ and capable of doing fancy things, such as validating data, restricting access e
 
 <p>Here are the results for calling the hard-wired insertion route, again for 2.6 and <code>devel</code>:</p>
 
-<figure class='code'><figcaption><span>invoking wrk</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<figure class='code'><figcaption><span>full test results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
@@ -136,22 +393,21 @@ and capable of doing fancy things, such as validating data, restricting access e
 <span class='line-number'>13</span>
 <span class='line-number'>14</span>
 <span class='line-number'>15</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>Threads      Connections        2.6       devel
+</pre></td><td class='code'><pre><code class=''><span class='line'>Threads      Connections        2.6       devel
 </span><span class='line'>-----------------------------------------------
-</span><span class='line'>      1                1     102133      112843
-</span><span class='line'>      1                2     185529      210795
+</span><span class='line'>      1                1     102133      112843 
+</span><span class='line'>      1                2     185529      210795 
 </span><span class='line'>      1                4     335607      373070
 </span><span class='line'>      1                8     518354      576034
 </span><span class='line'>
-</span><span class='line'>      2                2     181237      196482
+</span><span class='line'>      2                2     181237      196482 
 </span><span class='line'>      2                4     345455      363255
 </span><span class='line'>      2                8     474558      550835
-</span><span class='line'>
+</span><span class='line'>      
 </span><span class='line'>      4                4     318331      355328
 </span><span class='line'>      4                8     483388      516100
-</span><span class='line'>
-</span><span class='line'>      8                8     482369      527395
-</span></code></pre></td></tr></table></div></figure>
+</span><span class='line'>      
+</span><span class='line'>      8                8     482369      527395</span></code></pre></td></tr></table></div></figure>
 
 
 <p><code>devel</code> provides higher throughput than 2.6 for this route as well. Improvements fell
@@ -3468,342 +3724,6 @@ collection <code>test</code>:</p>
 
 
 
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[COLLECTing With a Hash Table]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table/"/>
-    <updated>2015-04-22T13:53:10+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table</id>
-    <content type="html"><![CDATA[<p>ArangoDB 2.6 will feature an alternative <strong>hash</strong> implementation of the AQL <code>COLLECT</code>
-operation. The new implementation can speed up some AQL queries that can not exploit indexes
-on the <code>COLLECT</code> group criteria.</p>
-
-<p>This blog post provides a preview of the feature and shows some nice performance improvements.
-It also explains the <code>COLLECT</code>-related optimizer parts and how the optimizer will decide whether
-to use the new or the traditional implementation.</p>
-
-<!-- more -->
-
-
-<h2>Introduction to COLLECT</h2>
-
-<p>A quick recap: in AQL, the <code>COLLECT</code> operation can be used for grouping and optionally counting values.</p>
-
-<p>Here&rsquo;s an example, using flight data:</p>
-
-<figure class='code'><figcaption><span>AQL COLLECT example</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR flight IN flights
-</span><span class='line'>  COLLECT from = flight._from WITH COUNT INTO count
-</span><span class='line'>  RETURN { from: from, count: count }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This query will iterate over all documents in collection <code>flights</code>, and count the
-number of flights per different <code>_from</code> value (origin airport). The query result will
-contain only unique <code>from</code> values plus a counter for each:</p>
-
-<figure class='code'><figcaption><span>query result, grouped by from</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;from&quot;</span> <span class="p">:</span> <span class="s2">&quot;airports/ABE&quot;</span><span class="p">,</span> <span class="nt">&quot;count&quot;</span> <span class="p">:</span> <span class="mi">6205</span> <span class="p">},</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;from&quot;</span> <span class="p">:</span> <span class="s2">&quot;airports/ABQ&quot;</span><span class="p">,</span> <span class="nt">&quot;count&quot;</span> <span class="p">:</span> <span class="mi">39346</span> <span class="p">},</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;from&quot;</span> <span class="p">:</span> <span class="s2">&quot;airports/ACV&quot;</span><span class="p">,</span> <span class="nt">&quot;count&quot;</span> <span class="p">:</span> <span class="mi">362</span> <span class="p">},</span>
-</span><span class='line'>  <span class="err">...</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;from&quot;</span> <span class="p">:</span> <span class="s2">&quot;airports/YAP&quot;</span><span class="p">,</span> <span class="nt">&quot;count&quot;</span> <span class="p">:</span> <span class="mi">285</span> <span class="p">},</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;from&quot;</span> <span class="p">:</span> <span class="s2">&quot;airports/YKM&quot;</span><span class="p">,</span> <span class="nt">&quot;count&quot;</span> <span class="p">:</span> <span class="mi">879</span> <span class="p">},</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;from&quot;</span> <span class="p">:</span> <span class="s2">&quot;airports/YUM&quot;</span><span class="p">,</span> <span class="nt">&quot;count&quot;</span> <span class="p">:</span> <span class="mi">2275</span> <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>As the <code>COLLECT</code> will group its result according to the specified group criteria (<code>flights._from</code>
-in the above query), it needs a way of figuring out to which group any input value does belong.</p>
-
-<p>Before ArangoDB 2.6, there was a single method for determining the group. Starting with ArangoDB
-2.6, the query optimizer can choose between two different <code>COLLECT</code> methods, the <strong>sorted</strong> method
-and the <strong>hash</strong> method.</p>
-
-<h2>Sorted COLLECT method</h2>
-
-<p>The traditional method for determining the group values is the <strong>sorted</strong> method. It has been
-available in ArangoDB since the very start.</p>
-
-<p>The sorted method of <code>COLLECT</code> requires its input to be sorted by the group criteria specified
-in the <code>COLLECT</code> statement. Because there is no guarantee that the input data are already sorted
-in the same way, the query optimizer will automatically insert a <code>SORT</code> statement into the query
-in front of the <code>COLLECT</code>. In case there is a sorted index present on the group criteria attributes,
-the optimizer may be able to optimize away the <code>SORT</code> again. If there is no sorted index present
-on the group criteria attributes, the <code>SORT</code> will remain in the execution plan.</p>
-
-<p>Here is the execution plan for the above query using the <strong>sorted</strong> method of <code>COLLECT</code>. We can see
-the extra <code>SortNode</code> with id #7 being added by the optimizer in front of the <code>COLLECT</code>:</p>
-
-<p><img src="http://jsteemann.github.io/downloads/screenshots/collect-sorted.png"></p>
-
-<p>The <strong>sorted</strong> method of <code>COLLECT</code> is efficient because it can write out a group result whenever
-an input value will start a new group. Therefore it does not need to keep the whole <code>COLLECT</code>
-result in memory. The downside of using the sorted method is that it requires its input to be
-sorted, and that this requires adding an extra <code>SORT</code> for not properly sorted input.</p>
-
-<h2>Hash COLLECT method</h2>
-
-<p>Since ArangoDB 2.6, the query optimizer can also employ the <strong>hash</strong> method for <code>COLLECT</code>. The
-hash method works by assigning the input values of the <code>COLLECT</code> to slots in a hash table. It
-does not require its input to be sorted. Because the entries in the hash table do not have a
-particular order, the query optimizer will add a post-<code>COLLECT</code> <code>SORT</code> statement. With this extra
-sort of the <code>COLLECT</code> result, the optimizer ensures that the output of the sorted <code>COLLECT</code> will
-be the same as the output of the hash <code>COLLECT</code>.</p>
-
-<p>Here is the execution plan for the above query when using the <strong>hash</strong> method of <code>COLLECT</code>.
-Here we can see the extra <code>SortNode</code> with id #7 being added post-<code>COLLECT</code>:</p>
-
-<p><img src="http://jsteemann.github.io/downloads/screenshots/collect-hash.png"></p>
-
-<p>The <strong>hash</strong> method is beneficial because it does not require sorted input and thus no extra
-<code>SORT</code> step in front. However, as the input is not sorted, it is never clear when a group is
-actually finished. The hash method therefore needs to build the whole <code>COLLECT</code> result in memory
-until the input is exhausted. Then it can safely write out all group results. Additionally,
-the result of the hash <code>COLLECT</code> is unsorted. Therefore the optimizer will add a post-<code>COLLECT</code>
-sort to ensure the result will be identical to a <strong>sorted</strong> <code>COLLECT</code>.</p>
-
-<h2>Which method will be used when?</h2>
-
-<p>The query optimizer will always take the initial query plan and specialize its <code>COLLECT</code> nodes to
-using the <strong>sorted</strong> method. It will also add the pre-<code>COLLECT</code> <code>SORT</code> in the original plan.</p>
-
-<p>In addition, for every <code>COLLECT</code> statement not using an <code>INTO</code> clause, the optimizer will create
-a plan variant that uses the <strong>hash</strong> method. In that plan variant, the post-<code>COLLECT</code> <code>SORT</code>
-will be added. Note that a <code>WITH COUNT INTO</code> is still ok here, but that using a regular <code>INTO</code>
-clause will disable the usage of the <strong>hash</strong> method:</p>
-
-<figure class='code'><figcaption><span>a query that cannot use the hash method</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR flight IN flights
-</span><span class='line'>  COLLECT from = flight._from INTO allFlights
-</span><span class='line'>  RETURN { from: from, flights: allFlights }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>If more than one <code>COLLECT</code> method can be used for a query, the created plans will be shipped through
-the regular optimization pipeline. In the end, the optimizer will pick the plan with the lowest
-estimated total cost as it will do for all other queries.</p>
-
-<p>The <strong>hash</strong> variant does not require an up-front sort of the <code>COLLECT</code> input, and will thus be
-preferred over the <strong>sorted</strong> method if the optimizer estimates many input elements for the <code>COLLECT</code>
-and cannot use an index to process them in already sorted order. In this case, the optimizer
-will estimate that post-sorting the result of the <strong>hash</strong> <code>COLLECT</code> will be more efficient than
-pre-sorting the input for the <strong>sorted</strong> <code>COLLECT</code>.</p>
-
-<p>The main assumption behind this estimation is that the result of any <code>COLLECT</code> statement will
-contain at most as many elements as there are input elements to it. Therefore, the output of
-a <code>COLLECT</code> is likely to be smaller (in terms of rows) than its input, making post-sorting more
-efficient than pre-sorting.</p>
-
-<p>If there is a sorted index on the <code>COLLECT</code> group criteria that the optimizer can exploit, the
-optimizer will pick the <strong>sorted</strong> method because thanks to the index it can optimize away the
-pre-<code>COLLECT</code> sort, leaving no sorts left in the final execution plan.</p>
-
-<p>To override the optimizer decision, <code>COLLECT</code> statements now have an <code>OPTIONS</code> modifier. This
-modifier can be used to force the optimizer to use the <strong>sorted</strong> variant:</p>
-
-<figure class='code'><figcaption><span>forcing the use of the sorted variant</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR flight IN flights
-</span><span class='line'>  COLLECT from = flight._from WITH COUNT INTO count OPTIONS { method: "sorted" }
-</span><span class='line'>  RETURN { from: from, count: count }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Note that specifying <strong>hash</strong> in <code>method</code> will not force the optimizer to use the <strong>hash</strong> method.
-The reason is that the <strong>hash</strong> variant cannot be used for all queries (only <code>COLLECT</code> statements
-without an <code>INTO</code> clause are eligible). If <code>OPTIONS</code> are omitted or any other method than <code>sorted</code>
-is specified, the optimizer will ignore it and use its regular cost estimations.</p>
-
-<h2>Understanding execution plans</h2>
-
-<p>Which method is actually used in a query can found out by explaining it and looking at its
-execution plan.</p>
-
-<p>A <code>COLLECT</code> is internally handled by an object called <code>AggregateNode</code>, so we have to look for that.
-In the above screenshots, the <code>AggregateNode</code>s are tagged with either <strong>hash</strong> or <strong>sorted</strong>. This can
-also be checked programatically by looking at the <code>aggregationOptions.method</code> attributes in the
-JSON result of an explain().</p>
-
-<p>Here is some example code to extract this information, limited to the <code>AggregateNode</code>s of the
-query already:</p>
-
-<figure class='code'><figcaption><span>extracting just the AggregateNodes from an explain</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span> <span class="err">`</span>
-</span><span class='line'>  <span class="nx">FOR</span> <span class="nx">flight</span> <span class="nx">IN</span> <span class="nx">flights</span>
-</span><span class='line'>  <span class="nx">COLLECT</span> <span class="nx">from</span> <span class="o">=</span> <span class="nx">flight</span><span class="p">.</span><span class="nx">_from</span> <span class="nx">WITH</span> <span class="nx">COUNT</span> <span class="nx">INTO</span> <span class="nx">count</span>
-</span><span class='line'>  <span class="nx">RETURN</span> <span class="p">{</span> <span class="nx">from</span><span class="o">:</span> <span class="nx">from</span><span class="p">,</span> <span class="nx">count</span><span class="o">:</span> <span class="nx">count</span> <span class="p">}</span>
-</span><span class='line'><span class="err">`</span><span class="p">;</span>
-</span><span class='line'><span class="kd">var</span> <span class="nx">stmt</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">_createStatement</span><span class="p">(</span><span class="nx">query</span><span class="p">);</span>
-</span><span class='line'><span class="kd">var</span> <span class="nx">plan</span> <span class="o">=</span> <span class="nx">stmt</span><span class="p">.</span><span class="nx">explain</span><span class="p">().</span><span class="nx">plan</span><span class="p">;</span>
-</span><span class='line'><span class="nx">plan</span><span class="p">.</span><span class="nx">nodes</span><span class="p">.</span><span class="nx">filter</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">node</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">return</span> <span class="nx">node</span><span class="p">.</span><span class="nx">type</span> <span class="o">===</span> <span class="s1">&#39;AggregateNode&#39;</span><span class="p">;</span>
-</span><span class='line'><span class="p">});</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>For the above query, this will produce something like this:</p>
-
-<figure class='code'><figcaption><span>JSON explain result for AggregateNode</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;type&quot;</span> <span class="p">:</span> <span class="s2">&quot;AggregateNode&quot;</span><span class="p">,</span>
-</span><span class='line'>    <span class="err">...</span>
-</span><span class='line'>    <span class="nt">&quot;aggregationOptions&quot;</span> <span class="p">:</span> <span class="p">{</span>
-</span><span class='line'>      <span class="nt">&quot;method&quot;</span> <span class="p">:</span> <span class="s2">&quot;hash&quot;</span>
-</span><span class='line'>    <span class="p">}</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Here we can see that the query is using the <strong>hash</strong> method.</p>
-
-<h2>Optimizing away post-COLLECT sorts</h2>
-
-<p>If a query uses the <strong>hash</strong> method for a <code>COLLECT</code> but the sort order of the <code>COLLECT</code> result
-is irrelevant to the user, the user can provide a hint to the optimizer to remove the
-post-<code>COLLECT</code> sort.</p>
-
-<p>This can be achieved by simply appending a <code>SORT null</code> to the original <code>COLLECT</code> statement.
-Here we can see that this removes the post-<code>COLLECT</code> sort:</p>
-
-<p><img src="http://jsteemann.github.io/downloads/screenshots/collect-nosort.png"></p>
-
-<h2>Performance improvements</h2>
-
-<p>The improvements achievable by using the <strong>hash</strong> method instead of the <strong>sorted</strong> method obviously
-depend on whether there are appropriate indexes present for the group criteria. If an index can
-be exploited, the <strong>sorted</strong> method may be just fine. However, there are cases when no indexes are
-present, for example, when running arbitrary ad-hoc queries or when indexes are too expensive
-(indexes need to be updated on insert/update/remove and also will use memory).</p>
-
-<p>Following are a few comparisons of the <strong>sorted</strong> and the <strong>hash</strong> methods in case no indexes can be
-used.</p>
-
-<p>Here&rsquo;s the setup for the test data. This generates 1M documents with both unique and repeating
-string and numeric values. For the non-unique values, we&rsquo;ll use 20 different categories:</p>
-
-<figure class='code'><figcaption><span>setting up test data</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">test</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">);</span>
-</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="mi">1000000</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">test</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span>
-</span><span class='line'>    <span class="nx">uniqueNumber</span><span class="o">:</span> <span class="nx">i</span><span class="p">,</span>
-</span><span class='line'>    <span class="nx">uniqueString</span><span class="o">:</span> <span class="nb">String</span><span class="p">(</span><span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span><span class="p">),</span>
-</span><span class='line'>    <span class="nx">repeatingNumber</span><span class="o">:</span> <span class="p">(</span><span class="nx">i</span> <span class="o">%</span> <span class="mi">20</span><span class="p">),</span>
-</span><span class='line'>    <span class="nx">repeatingString</span><span class="o">:</span> <span class="nb">String</span><span class="p">(</span><span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="p">(</span><span class="nx">i</span> <span class="o">%</span> <span class="mi">20</span><span class="p">))</span>
-</span><span class='line'>  <span class="p">});</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Now let&rsquo;s run the following query on the data and measure its execution time:</p>
-
-<figure class='code'><figcaption><span>test query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR v IN test
-</span><span class='line'>  COLLECT value = v.@attribute WITH COUNT INTO count
-</span><span class='line'>  RETURN { value: value, count: count }</span></code></pre></td></tr></table></div></figure>
-
-
-<p></p>
-
-<p>The worst case is when the <code>COLLECT</code> will produce as many output rows as there are input
-rows. This will happen when using a unique attribute as the grouping criterion. We&rsquo;ll run
-tests on both numeric and string values.</p>
-
-<p>Here are the execution times for unique inputs. It can be seen that the <strong>hash</strong> method
-here will be beneficial if the post-<code>COLLECT</code> sort can be optimized away. As demonstrated
-above, this can be achieved by adding an extra <code>SORT null</code> after the <code>COLLECT</code> statement.
-If the post-<code>COLLECT</code> sort is not optimized away, it will make the hash method a bit more
-expensive than the <strong>sorted</strong> method:</p>
-
-<figure class='code'><figcaption><span>COLLECT performance with unique inputs</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>collect method       @attribute                duration
-</span><span class='line'>-------------------------------------------------------
-</span><span class='line'>sorted               uniqueNumber               11.92 s 
-</span><span class='line'>hash                 uniqueNumber               13.40 s
-</span><span class='line'>hash (sort null)     uniqueNumber               10.13 s
-</span><span class='line'>sorted               uniqueString               22.04 s
-</span><span class='line'>hash                 uniqueString               27.35 s
-</span><span class='line'>hash (sort null)     uniqueString               12.12 s</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Now let&rsquo;s check the results when we group on an attribute that is non-unique. Following
-are the results for numeric and string attributes with 20 different categories each:</p>
-
-<figure class='code'><figcaption><span>COLLECT performance with non-unique inputs</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>collect method       @attribute                duration
-</span><span class='line'>-------------------------------------------------------
-</span><span class='line'>sorted               repeatingNumber             5.56 s
-</span><span class='line'>hash                 repeatingNumber             0.94 s
-</span><span class='line'>hash (sort null)     repeatingNumber             0.94 s
-</span><span class='line'>sorted               repeatingString            10.56 s
-</span><span class='line'>hash                 repeatingString             1.09 s
-</span><span class='line'>hash (sort null)     repeatingString             1.09 s</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In these cases, the result of the <code>COLLECT</code> will be much smaller than its input (we&rsquo;ll
-only get 20 result rows out instead of 1M). Therefore the post-<code>COLLECT</code> sort for the <strong>hash</strong>
-method will not make any difference, but the pre-<code>COLLECT</code> sort for the <strong>sorted</strong> method
-will still need to sort 1M input values. This is also the reason why the <strong>hash</strong> method
-is significantly faster here.</p>
-
-<p>As usual, your mileage may vary, so please run your own tests.</p>
 ]]></content>
   </entry>
   

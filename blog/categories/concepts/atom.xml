@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Concepts | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/concepts/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-07-30T14:57:27+02:00</updated>
+  <updated>2015-08-01T23:40:26+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,261 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[How V8 Is Used in ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/08/01/how-v8-is-used-in-arangodb/"/>
+    <updated>2015-08-01T19:06:04+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/08/01/how-v8-is-used-in-arangodb</id>
+    <content type="html"><![CDATA[<p>ArangoDB allows running user-defined JavaScript code in the database.
+This can be used for more complex, <em>stored procedures</em>-like database operations.
+Additionally, ArangoDB&rsquo;s <a href="https://www.arangodb.com/foxx/">Foxx framework</a> can
+be used to make any database functionality available via an HTTP REST API.
+It&rsquo;s easy to build microservices with it, using the scripting functionality
+for tasks like access control, data validation, sanitation etc.</p>
+
+<p>We often get asked how the scripting functionality is implemented under the hood.
+Additionally, several people have asked how ArangoDB&rsquo;s JavaScript functionality
+relates to node.js.</p>
+
+<p>This post tries to explain that in detail.</p>
+
+<!-- more -->
+
+
+<h1>The C++ parts</h1>
+
+<p><em>arangosh</em>, the ArangoShell, and <em>arangod</em>, the database server, are written in
+C++ and they are shipped as native code executables. Some parts of both <em>arangosh</em>
+and <em>arangod</em> itself are written in JavaScript (more on that later).</p>
+
+<p>The I/O handling in <em>arangod</em> is written in C++ and uses libev (written in C)
+for the low-level event handling. All the socket I/O, working scheduling and
+queueing is written in C++, too. These are parts that require high parallelism,
+so we want this to run in multiple threads.</p>
+
+<p>All the indexes, the persistence layer and many of the fundamental operations,
+like the ones for document inserts, updates, deletes, imports are written in C++ for
+effective control of memory usage and parallelism. AQL&rsquo;s query parser is written
+using the usual combination of Flex and Bison, which generate C files that are
+compiled to native code. The AQL optimizer, AQL executor and many AQL functions are
+writting in C++ as well.</p>
+
+<p>Some AQL functions however, are written in JavaScript. And if an AQL query
+invokes a user-defined function, this function will be a JavaScript function, too.</p>
+
+<h1>How ArangoDB uses V8</h1>
+
+<p>How is JavaScript code executed in ArangoDB?</p>
+
+<p>Both <em>arangosh</em> and <em>arangod</em> are linked against the <a href="https://developers.google.com/v8/">V8 JavaScript engine</a>
+library. V8 (itself written in C++) is the component that runs the JavaScript
+code in ArangoDB.</p>
+
+<p>V8 requires JavaScript code to run in a so-called <em>isolate</em> (note: I&rsquo;ll be
+oversimplifying a bit here &ndash; in reality there are isolates and contexts).
+As the name suggests, isolates are completely isolated from each other.
+Especially, data cannot be shared or moved across isolates, and each isolate
+can be used by only one thread at a time.</p>
+
+<p>Let&rsquo;s look at how <em>arangosh</em>, the ArangoShell, uses V8. All JavaScript commands
+entered in <em>arangosh</em> will be compiled and executing with V8 immediately.
+In <em>arangosh</em>, this happens using a single V8 isolate.</p>
+
+<p>On the server side, things are a bit different. In <em>arangod</em>, there are multiple
+V8 isolates. The number of isolates to create is a startup configuration
+option (<code>--javascript.v8-contexts</code>). Creating multiple isolates allows running
+JavaScript code in multiple threads, truly parallel. Apart from that, <em>arangod</em>
+has multiple I/O threads (<code>--scheduler.threads</code> configuration option) for handling
+the communication with client applications.</p>
+
+<p>As mentioned earlier, part of ArangoDB&rsquo;s codebase itself is written in JavaScript,
+and this JavaScript code is executed the same way as any user-defined will be executed.</p>
+
+<h1>Executing JavaScript code with V8</h1>
+
+<p>For executing any JavaScript code (built-in or user-defined), ArangoDB will invoke
+V8&rsquo;s JIT compiler to compile the script code into native code and run it.</p>
+
+<p>The JIT compiler in V8 will not try extremely hard to optimize the code on the
+first invocation. On initial compilation, it will aim for a good balance of
+optimizations and fast compilation time. If it finds some code parts are called
+often, it may re-try to optimize these parts more aggressively automatically.
+To make things even more complex, there are different JIT compilers in V8
+(i.e. Crankshaft and Turbofan) with different sweet spots. JavaScript modes
+(i.e. <em>strict mode</em> and <em>strong mode</em>) can also affect the level of optimizations
+the compilers will carry out.</p>
+
+<p>Now, after the JavaScript code has been compiled to native code, V8 will run it
+until it returns or fails with an uncaught exception.</p>
+
+<p>But can how the JavaScript code access the database data and server internals?
+In other words, what actually happens if a JavaScript command such as the following
+is executed?</p>
+
+<p><code>js example JavaScript command
+db.myCollection.save({ _key: "test" });
+</code></p>
+
+<h2>Accessing server internals from JavaScript</h2>
+
+<p>Inside <em>arangod</em>, each V8 isolate is equipped with a global variable named <code>db</code>.
+This JavaScript variable is a wrapper around database functionality written in C++.
+When the <code>db</code> object is created, we tell V8 that its methods are C++ callbacks.</p>
+
+<p>Whenever the <code>db</code> object is accessed in JavaScript, the V8 engine will therefore
+call C++ methods. These provide full access to the server internals, can do whatever
+is required and return data in the format that V8 requires. V8 then makes the
+return data accessible to the JavaScript code.</p>
+
+<p>Executing <code>db.myCollection.save(...)</code> is effectively two operations: accessing the
+property <code>myCollection</code> on the object <code>db</code> and then calling function <code>save</code> on that
+property. For the first operation, V8 will invoke the object&rsquo;s <code>NamedPropertyHandler</code>,
+which is a C++ function that is responsible for returning the value for the property
+with the given name (<code>myCollection</code>). In the case of <code>db</code>, we have a C++ function
+that collection object if it exists, or <code>undefined</code> if not.</p>
+
+<p>The collection object again has C++ bindings in the background, so calling function
+<code>save</code> on it will call another C++ function. The collection object also has a (hidden)
+pointer to the C++ collection. When <code>save</code> is called, we will extract that pointer
+from the <code>this</code> object so we know which C++ data structures to work on. The <code>save</code>
+function will also get the to-be-inserted document data as its payload. V8 will
+pass this to the C++ function as well so we can validate it and convert it into
+our internal data format.</p>
+
+<p>On the server side, there are several objects exposed to JavaScript that have C++
+bindings. There are also non-object functions that have C++ bindings. Some of these
+functions are also bolted on regular JavaScript objects.</p>
+
+<h2>Accessing server internals from ArangoShell</h2>
+
+<p>When running the same command in <em>arangosh</em>, things will be completely different.
+The ArangoShell may run on the same host as the <em>arangod</em> server process, but it may
+also run on a completely different one. Providing <em>arangosh</em> access to server internals
+such as pointers will therefore not work in general. Even if <em>arangosh</em> and <em>arangod</em>
+do run on the same host, they are independent processes with no access to the each
+other&rsquo;s data. The latter problem could be solved by having a shared memory segment
+that both <em>arangosh</em> and <em>arangod</em> can use, but why bother with that special case
+which will provide no help in the general case when the shell can be located on
+<strong>any</strong> host.</p>
+
+<p>To make the shell work in all these situations, it uses the HTTP REST API provided
+by the ArangoDB server to talk to it. For <em>arangod</em>, any ArangoShell client is just
+another client, with no special treatments or protocols.</p>
+
+<p>As a consequence, all operations on databases and collections run from the ArangoShell
+are JavaScript wrappers that call their respective server-side HTTP APIs.</p>
+
+<p>Recalling the command example again (<code>db.myCollection.save(...)</code>), the shell will first
+access the property <code>myCollection</code> of the object <code>db</code>. In the shell <code>db</code> is a regular
+JavaScript object with no C++ bindings. When the shell is started, it will make an
+HTTP call to <em>arangod</em> to retrieve a list of all available collections, and register
+them as properties in its <code>db</code> object. Calling the <code>save</code> method on one of these
+objects will trigger an HTTP POST request to the server API at <code>/_api/document?collection=myCollection</code>,
+with the to-be-inserted data in its request body. Eventually the server will respond
+and the command will return with the data retrieved from the server.</p>
+
+<h2>Considerations</h2>
+
+<p>Consider running the following JavaScript code:</p>
+
+<p><code>js code to insert 1000 documents
+for (var i = 0; i &lt; 1000; ++i) {
+  db.myCollection.save({ _key: "test" + i });
+}
+</code></p>
+
+<p>When run from inside the ArangoShell, the code will be executed in there. The shell will
+perform an HTTP request to <em>arangod</em> for each call to <code>save</code>. We&rsquo;ll end up with 1,000
+HTTP requests.</p>
+
+<p>Running the same code inside <em>arangod</em> will trigger no HTTP requests, as the server-side
+functions are backed with C++ internals and can access the database data directly. It will
+be a lot faster to run this loop on the server than in <em>arangosh</em>. A while ago I wrote
+<a href="/blog/2014/08/30/understanding-where-operations-are-executed/">another article</a> about this.</p>
+
+<p>When replacing the ArangoShell with another client application, things are no different.
+A client application will not have access to the server internals, so all it can do is to
+make requests to the server (by the way, the principle would be no different if we used
+MySQL or other database servers, only the protocols would vary).</p>
+
+<p>Fortunately, there is a fix for this: making the code run server-side. For example, the
+above code can be put into a Foxx route. This way it is not only fast but will be made
+accessible via an HTTP REST API so client applications can call it with a single HTTP request.</p>
+
+<p>In reality, database operations will be more complex than in the above example. And this
+is where having a full-featured scripting language like JavaScript helps. It provides all
+the features that are needed for more complex tasks such as validating and sanitizing input
+data, access control, executing database queries and postprocessing results.</p>
+
+<h1>The differences to node.js</h1>
+
+<p>To start with: ArangoDB is not node.js, and vice versa. ArangoDB is not a node.js module
+either. ArangoDB and node.js are completely indepedent.</p>
+
+<p>But there is a commonality: both ArangoDB and node.js use the V8 engine for running
+JavaScript code.</p>
+
+<h2>Threading</h2>
+
+<p>AFAIK, standard node.js only has a single V8 isolate to run all code in.
+While that made the implementation easier (no hassle with multi-threading) it
+also limits node.js to using only a single CPU.</p>
+
+<p>It&rsquo;s not unusual to see a multi-core server with a node.js instance maxing out
+one CPU while the other CPUs are sitting idle. In order to max out a multi-core
+server, people often start multiple node.js instances on a single server. That will
+work fine, but the node.js instances will be independent, and sharing data between
+them is not possible in plain JavaScript.</p>
+
+<p>And because a node.js instance is single-threaded, it is also important that
+code written for node.js is non-blocking. Code that blocks while waiting for
+some I/O operation would block the only available CPU. Using non-blocking
+I/O operations allows node.js to queue the operation, and execute other code
+in the meantime, allowing overall progress. This also makes it look like it
+would be executing multiple actions in parallel, while it is actually executing
+them sequentially.</p>
+
+<p>Contrary, <em>arangod</em> is a multi-threaded server. It can serve multiple requests in
+parallel, using multiple CPUs. Because <em>arangod</em> has multiple V8 isolates that
+each can execute JavaScript code, it can run JavaScript in multiple threads in parallel.</p>
+
+<p><em>arangosh</em>, the ArangoShell, is single-threaded and provides only a single V8 isolate.</p>
+
+<h2>Usage of modules</h2>
+
+<p>Both node.js and ArangoDB can load code at runtime so it can be organized into
+modules or libraries. In both, extra JavaScript modules can be loaded using the
+<code>require</code> function.</p>
+
+<p>There is often confusion about whether node.js modules can be used in ArangoDB.
+This is probably because the answer is &ldquo;<em>it depends!</em>&rdquo;.</p>
+
+<p>node.js packages can be written in JavaScript but they can also compile to native
+code using C++. The latter can be used to extend the functionality of node.js with
+features that JavaScript alone wouldn&rsquo;t be capable of. Such modules however often
+heavily depend on a specific V8 version (so do not necessarily compile in a node.js
+version with a different version of V8) and often rely on node.js internals.</p>
+
+<p>ArangoDB can load modules that are written in pure JavaScript. Modules that
+depend on non-JavaScript functionality (such as native modules for node.js) or modules
+that rely on node.js internals cannot be loaded in ArangoDB. As a rule of thumb,
+any module will run in ArangoDB that is implemented in pure JavaScript, does not
+access global variables and only requires other modules that obey the same restrictions.</p>
+
+<p>ArangoDB also uses several externally maintained JavaScript-only libraries, such as
+underscore.js. This module will run everywhere because it conforms to the mentioned
+restrictions.</p>
+
+<p>ArangoDB also uses several other modules that are maintained on npm.js.
+An example module is <a href="https://www.npmjs.com/package/aqb">AQB</a>, a query builder for AQL.
+It is written in pure JavaScript too, so it can be used from a node.js application and
+from within ArangoDB. If there is an updated version of this module, we use npm to
+install it in a subdirectory of ArangoDB. As per npm convention, the node.js modules
+shipped with ArangoDB reside in a directory named <code>node_modules</code>. Probably this is
+what caused some of the confusion.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[COLLECTing With a Hash Table]]></title>
@@ -1407,218 +1662,6 @@ is yet that widely supported and easy to use as JSON.</p>
 <p>For our use case, it looks like Msgpack could fit quite well, but
 probably only as a second, alternative interface for highest-efficiency
 data transfers.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[How ArangoDB's Write-ahead Log Works]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/08/06/how-arangodbs-write-ahead-log-works/"/>
-    <updated>2014-08-06T21:14:00+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/08/06/how-arangodbs-write-ahead-log-works</id>
-    <content type="html"><![CDATA[<p>Since version 2.2, ArangoDB stores all data-modification operations in its
-<em>write-ahead log</em> (abbreviated <em>WAL</em>). The introduction of the WAL massively
-changed how data are stored in ArangoDB.</p>
-
-<!-- more -->
-
-
-<h1>What&rsquo;s in the WAL?</h1>
-
-<p>The WAL contains data of all data-modification operations that were executed in
-the ArangoDB server instance. Operations are written to the WAL in the order of
-execution. The following types of operations are logged to the WAL:</p>
-
-<ul>
-<li>creating, updating, replacing or removing documents</li>
-<li>creating, modifying or dropping collections and their indexes</li>
-<li>creating or dropping databases</li>
-</ul>
-
-
-<p>The WAL is used for all databases of an ArangoDB server. Database ids are stored
-in the WAL in order to tell data from different databases apart.</p>
-
-<h1>Recovery using the WAL</h1>
-
-<p>Should the ArangoDB server crash, it will replay its write-ahead
-logs at restart. Replaying the logs will make the server recover the same
-state of data as before the crash.</p>
-
-<p>Any document-modification operations might belong to a transaction. Transaction
-data are also stored in the write-ahead log, allowing the recovery of committed
-transactions and preventing the recovery of aborted or unfinished transactions.</p>
-
-<p>Let&rsquo;s assume the following operations are executed in an ArangoDB server in this
-order&hellip;
-<code>
-Seq#  |  Operation type       |  Transaction#  |  Context
-------+-----------------------+----------------+---------------------------------------
-   1  |  start transaction    |           773  |  database "_system"
-   2  |  insert document      |           773  |  collection "test", key "foo"
-   3  |  start transaction    |           774  |  database "_system"
-   4  |  insert document      |           774  |  collection "mycollection", key "bar"
-   5  |  start transaction    |           775  |  database "_system"
-   6  |  update document      |           775  |  collection "boom", key "test"
-   7  |  abort transaction    |           774  |  -                
-   8  |  remove document      |           773  |  collection "test", key "baz"
-   9  |  commit transaction   |           773  |  -     
-</code>
-&hellip;and then the server goes down due to a power outage.</p>
-
-<p>On server restart, the WAL contents will be replayed, so the server will redo the
-above operations. It will find out that operations #2 and #8 belong to transaction #773.
-Transaction #773 was already committed, so all of its operations must and will be
-recovered.</p>
-
-<p>Further it will find out that operation #4 belongs to transaction #774, which was
-aborted by the user. Therefore, this operation will not be replayed but ignored.</p>
-
-<p>Finally, it will find operation #6 belongs to transaction #775. For this transaction,
-there is neither an abort nor a commit operation in the log. Because the transaction
-was never committed, all of its operations are not replayed at restart and the server
-will behave as if the transaction never happened.</p>
-
-<h1>WAL and replication</h1>
-
-<p>A side-effect of having a write-ahead log is that it can also be used for replication.
-When a slave server fetches the latest changes from the master, the master can simply
-read the operations from its WAL. Data in the WAL are self-contained, meaning the
-master can efficiently compile the list of changes using only the WAL and without
-performing lookups elsewhere.</p>
-
-<p>The WAL is there and will be used anyway, enabling any ArangoDB server to be used as
-a replication master without any configuration. Previous versions of ArangoDB (without
-the WAL) required setting up an extra component for replication logging. This
-requirement is now gone.</p>
-
-<h1>Organization of the WAL</h1>
-
-<p>The WAL is actually a collection of logfiles. Logfiles are named <code>logfile-xxxx.db</code>
-(with xxxx being the logfile&rsquo;s id). Logfiles with lower ids are older than logfiles
-with higher ids. By default, the logfiles reside in the <em>journals</em> sub-directory of
-ArangoDB&rsquo;s database directory.</p>
-
-<p>At any point in time, one of the logfiles will be the <em>active</em> logfile. ArangoDB will
-write all data-modifications to the active logfile. Writing is append-only, meaning
-ArangoDB will never overwrite existing logfile data. To ensure logfile integrity,
-a CRC32 checksum is calculated for each logfile entry. This checksum is validated when
-a logfile is replayed. When there is a checksum mismatch, this indicates a disk error
-or an incompletely written operation &ndash; in both cases it won&rsquo;t be safe to recover and
-replay the operation.</p>
-
-<p>If an operation can&rsquo;t be written into the active logfile due to lack of space, the
-active logfile will be closed and a new logfile will become the active logfile.</p>
-
-<p>A background thread will open new logfiles before the current active one is fully
-filled up. This is done to ensure that no waiting is required when there is a switch
-of the active logfile.</p>
-
-<p>By default, each logfile has a size of 32 MB, allowing lots of operations to be stored
-in it. If you want to adjust the default size, the option <code>--wal.logfile-size</code> is for you.</p>
-
-<h1>Logfile synchronization</h1>
-
-<p>Writes to logfiles are synchronized to disk automatically in a configurable interval
-(the option to look for is <code>--wal.sync-interval</code>). To get immediate synchronization
-of operations, operations can be run with the <code>waitForSync</code> attribute set to <code>true</code>,
-or on collections with the <code>waitForSync</code> attribute being set.</p>
-
-<p>For example, the following operations will have been synchronized to disk when the
-operations return:</p>
-
-<p><code>``js
-// operation will be synchronized because the</code>waitForSync` attribute
-// is set on operation level
-db.test.save({ foo: &ldquo;bar&rdquo; }, { waitForSync: true });</p>
-
-<p>// operation will be synchronized because the <code>waitForSync</code> attribute
-// is set on collection level
-db.mycollection.properties({ waitForSync: true });
-db.mycollection.save({ foo: &ldquo;bar&rdquo; });
-```</p>
-
-<p>When no immediate synchronization has been requested, ArangoDB will have a background
-thread periodically call <code>msync</code> for not-yet synchronized logfile regions. Multiple
-operations are synchronized together because they reside in adjacent memory regions.
-That means automatic synchronization can get away with far less calls to <code>msync</code> than
-there are operations.</p>
-
-<h1>Storage overhead</h1>
-
-<p>Documents stored in the WAL (as part of an insert, update or replace operation) are
-stored in a format that contains the document values plus the document&rsquo;s shape.
-This allows reading a document fully from a WAL entry without looking up shape
-information elsewhere, making it faster and also more reliable.</p>
-
-<p>Storing shape information in the WAL has a storage space overhead though. The overhead
-should not matter much if a logfile contains a lot of documents with identical shapes.
-ArangoDB will make sure each shape is only stored once per WAL logfile. This has
-turned out to be a rather good solution: it reduces WAL storage space requirements
-greatly, and still is reliable and fast, as shape lookups are local to the current
-WAL logfile only.</p>
-
-<p>The overhead of storing shape information in the WAL will matter most when documents
-have completely different shapes. In this case, no shape information will ever be
-re-used. While this may happen in benchmarks with synthetic data, we found that in
-reality there are often lots of identically-structured documents and thus a lot of
-potential for re-using shapes.</p>
-
-<p>Note that storing shape information in the WAL can be turned off to reduce overhead.
-ArangoDB provides the option <code>--wal.suppress-shape-information</code> for this purpose.
-When set to <code>true</code>, no shape information will be written to the WAL. Note that by
-default, the option is set to <code>false</code> and that the option shouldn&rsquo;t be changed if
-the server is to be used as a replication master. If documents aren&rsquo;t too heterogenous,
-setting the option to <code>true</code> won&rsquo;t help much. It will help a lot if all documents
-that are stored have different shapes (which we consider unrealistic, but we still
-provide the option to reduce overhead in this case).</p>
-
-<h1>WAL cleanup</h1>
-
-<p>WAL logfiles that are completely filled are subject to garbage collection. WAL
-garbage collection is performed by a separate garbage collector thread. The thread
-will copy over the still-relevant operations into the collection datafiles.
-After that, indexes will be adjusted to point to the new storage locations.
-Documents that have become obsolete due to later changes will not be copied from
-the WAL into the collection datafiles at all.</p>
-
-<p>Garbage-collected logfiles are deleted by ArangoDB automatically if there exist
-more of these &ldquo;historic&rdquo; logfiles than configured. The number of historic logfiles
-to keep before deletion is configured using the option <code>--wal.historic-logfiles</code>.</p>
-
-<p>If no replication is to be used, there is no need to keep any historic logfiles.
-They have no purpose but to provide a history of recent changes. The more history
-there is on a master server, the longer is the period for which slave servers can
-request changes for.
-How much history is needed depends on how reliable the network connection between
-a replication slave and the master is. If the network connection is known to fail
-periodically, it may be wise to keep a few historic logfiles on the master, so the
-slave can catch up from the point it stopped when the network connection is
-re-established.</p>
-
-<p>If network connections are reliable or no replication is to be used at all, the
-number of historic logfiles can be set to a low value to save disk space.</p>
-
-<h1>Side-effects of the WAL</h1>
-
-<p>The WAL can be used for replication, removing the requirement to explicitly turn
-on the separate logging of operations for replication purposes. This is a clear
-improvement over previous versions of ArangoDB.</p>
-
-<p>The introduction of the WAL also caused a few other minor changes:</p>
-
-<p>While documents are stored in a WAL logfile, their sizes won&rsquo;t be included in
-the output of the <code>figures</code> method of the collection. When a WAL logfile gets
-garbage-collected, documents will physically be moved into the collection logfiles
-and the figures will be updated.</p>
-
-<p>Note that the output of the <code>count</code> method is not affected by whether a document
-is stored in the WAL or in a collection logfile.</p>
-
-<p>Another side-effect of storing operations in the WAL first is that no collection
-logfiles will be created when the first document is inserted. So there will be
-collections with documents but without any logfiles, at least temporarily until
-the WAL garbage collection kicks in and will transfer data from the WAL to the
-collection logfiles.</p>
 ]]></content>
   </entry>
   

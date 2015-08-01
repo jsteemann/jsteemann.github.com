@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-07-30T14:57:27+02:00</updated>
+  <updated>2015-08-01T23:40:26+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -54,7 +54,7 @@ ArangoDB version (2.6.3) with the current development version (head of <code>dev
 as of today). The table shows the number of documents that were inserted during the
 10 seconds the <em>wrk</em> client ran:</p>
 
-<p>```</p>
+<p>```plain test results for 1 thread</p>
 
 <h2>Threads      Connections        2.6       devel</h2>
 
@@ -76,7 +76,7 @@ higher for this case.</p>
 <p>When increasing the number of client load generation threads, the picture doesn&rsquo;t
 change much. Here&rsquo;s the full table of results:</p>
 
-<p>```</p>
+<p>```plain full test results</p>
 
 <h2>Threads      Connections        2.6       devel</h2>
 
@@ -105,7 +105,7 @@ and capable of doing fancy things, such as validating data, restricting access e
 
 <p>Here are the results for calling the hard-wired insertion route, again for 2.6 and <code>devel</code>:</p>
 
-<p>```</p>
+<p>```plain full test results</p>
 
 <h2>Threads      Connections        2.6       devel</h2>
 

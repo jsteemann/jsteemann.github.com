@@ -1,24 +1,114 @@
-<?xml version="1.0" encoding="utf-8"?>
-<feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
-  <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
-  <link href="http://jsteemann.github.io/"/>
-  <updated>2015-08-01T23:40:26+02:00</updated>
-  <id>http://jsteemann.github.io/</id>
-  <author>
-    <name><![CDATA[jsteemann]]></name>
-    
-  </author>
-  <generator uri="http://octopress.org/">Octopress</generator>
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>How V8 Is Used in ArangoDB - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
 
   
-  <entry>
-    <title type="html"><![CDATA[How V8 Is Used in ArangoDB]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/08/01/how-v8-is-used-in-arangodb/"/>
-    <updated>2015-08-01T19:06:04+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/08/01/how-v8-is-used-in-arangodb</id>
-    <content type="html"><![CDATA[<p>ArangoDB allows running user-defined JavaScript code in the database.
+  <meta name="description" content="ArangoDB allows running user-defined JavaScript code in the database.
+This can be used for more complex, stored procedures-like database operations. &hellip;">
+  <meta name="keywords" content="ArangoDB, Database, V8, Foxx, Node.js">
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/08/01/how-v8-is-used-in-arangodb">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>{ "subject" : "ArangoDB", "tags": [ "multi-model", "nosql", "database" ] }</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">How V8 Is Used in ArangoDB</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-08-01T19:06:04+02:00" pubdate data-updated="true">Aug 1<span>st</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>ArangoDB allows running user-defined JavaScript code in the database.
 This can be used for more complex, <em>stored procedures</em>-like database operations.
 Additionally, ArangoDB&rsquo;s <a href="https://www.arangodb.com/foxx/">Foxx framework</a> can
 be used to make any database functionality available via an HTTP REST API.
@@ -104,9 +194,10 @@ until it returns or fails with an uncaught exception.</p>
 In other words, what actually happens if a JavaScript command such as the following
 is executed?</p>
 
-<p><code>js example JavaScript command
-db.myCollection.save({ _key: "test" });
-</code></p>
+<figure class='code'><figcaption><span>example JavaScript command</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">myCollection</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">_key</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
 
 <h2>Accessing server internals from JavaScript</h2>
 
@@ -170,11 +261,14 @@ and the command will return with the data retrieved from the server.</p>
 
 <p>Consider running the following JavaScript code:</p>
 
-<p><code>js code to insert 1000 documents
-for (var i = 0; i &lt; 1000; ++i) {
-  db.myCollection.save({ _key: "test" + i });
-}
-</code></p>
+<figure class='code'><figcaption><span>code to insert 1000 documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="mi">1000</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">db</span><span class="p">.</span><span class="nx">myCollection</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">_key</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span> <span class="p">});</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
 
 <p>When run from inside the ArangoShell, the code will be executed in there. The shell will
 perform an HTTP request to <em>arangod</em> for each call to <code>save</code>. We&rsquo;ll end up with 1,000
@@ -265,286 +359,153 @@ from within ArangoDB. If there is an updated version of this module, we use npm 
 install it in a subdirectory of ArangoDB. As per npm convention, the node.js modules
 shipped with ArangoDB reside in a directory named <code>node_modules</code>. Probably this is
 what caused some of the confusion.</p>
-]]></content>
-  </entry>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
   
-  <entry>
-    <title type="html"><![CDATA[Throughput Enhancements]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/30/throughput-enhancements/"/>
-    <updated>2015-07-30T12:54:12+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/30/throughput-enhancements</id>
-    <content type="html"><![CDATA[<p>We&rsquo;ve recently been working on improving ArangoDB&rsquo;s throughput,
-especially when using the ArangoDB&rsquo;s interface.</p>
 
-<p>In this post, I will show some of the improvements already achieved,
-though the work is not yet finished. Therefore, the results shown here
-are still somewhat preliminary.</p>
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
 
-<!-- more -->
+      
 
 
-<p>We wanted to measure improvements for ArangoDB&rsquo;s HTTP interface, and so we used
-<a href="https://github.com/wg/wrk"><em>wrk</em></a> as an external HTTP load generator.</p>
 
-<p>During the tests, <em>wrk</em> called some specific URLs on a local ArangoDB instance on
-an otherwise idle machine. The test was run with ArangoDB 2.6 and <code>devel</code>. The
-ArangoDB instances were started with their default configuration.</p>
 
-<p><em>wrk</em> was invoked with varying amounts of client connections and threads, so the
-tests cover serial and concurrent/parallel requests:</p>
 
-<p><code>bash invoking wrk
-wrk -c $CONNECTIONS -t $THREADS -d 10 $URL
-</code></p>
 
-<p>The number of connections (<code>$CONNECTIONS</code>) and theads (<code>$THREADS</code>) were both varied
-from 1 to 8. <em>wrk</em> requires at least as many connections as threads.</p>
 
-<p>The first URL tested was a route in a simple Foxx application that inserts the data
-shipped in the HTTP request into a collection on the server. The internals of the
-route should not matter here, as this post focuses on the throughput improvements.</p>
 
-<p>Following are the results for calling the route with <em>wrk</em>, comparing the stable
-ArangoDB version (2.6.3) with the current development version (head of <code>devel</code> branch
-as of today). The table shows the number of documents that were inserted during the
-10 seconds the <em>wrk</em> client ran:</p>
-
-<p>```plain test results for 1 thread</p>
-
-<h2>Threads      Connections        2.6       devel</h2>
-
-<pre><code>  1                1      12569       20157 
-  1                2      28094       36031   
-  1                4      46310       66524 
-  1                8      46798       80667
-</code></pre>
-
-<p>```</p>
-
-<p>As can be seen above, <code>devel</code> was able to handle much more requests than 2.6 even
-with a single connection (i.e. serial client requests). Throughput was about 60 %
-higher for this case.</p>
-
-<p>When increasing the number of client connections, the number of requests handled by
-<code>devel</code> ws also higher than that of 2.6, with improvements between around 25 and 70 %.</p>
-
-<p>When increasing the number of client load generation threads, the picture doesn&rsquo;t
-change much. Here&rsquo;s the full table of results:</p>
-
-<p>```plain full test results</p>
-
-<h2>Threads      Connections        2.6       devel</h2>
-
-<pre><code>  1                1      12569       20157 
-  1                2      28094       36031   
-  1                4      46310       66524 
-  1                8      46798       80667
-
-  2                2      28931       36326    
-  2                4      47181       67654    
-  2                8      47594       88617 
-
-  4                4      46553       67585   
-  4                8      47531       86935 
-
-  8                8      46431       91953 
-</code></pre>
-
-<p>```</p>
-
-<p>The next test consisted of inserting documents into a collection again, but using the
-built-in HTTP API for creating documents instead of a user-defined Foxx application.
-Throughput is expected to be higher than in the Foxx case because the built-in method
-is hard-wired and only serves a single purpose, whereas the Foxx route is user-definable
-and capable of doing fancy things, such as validating data, restricting access etc.</p>
-
-<p>Here are the results for calling the hard-wired insertion route, again for 2.6 and <code>devel</code>:</p>
-
-<p>```plain full test results</p>
-
-<h2>Threads      Connections        2.6       devel</h2>
-
-<pre><code>  1                1     102133      112843 
-  1                2     185529      210795 
-  1                4     335607      373070
-  1                8     518354      576034
-
-  2                2     181237      196482 
-  2                4     345455      363255
-  2                8     474558      550835
-
-  4                4     318331      355328
-  4                8     483388      516100
-
-  8                8     482369      527395
-</code></pre>
-
-<p>```</p>
-
-<p><code>devel</code> provides higher throughput than 2.6 for this route as well. Improvements fell
-into the range of between 5 and 15 %. That&rsquo;s not as impressive as in the Foxx route
-case above, but still a welcome improvement.</p>
-
-<p>And of course we&rsquo;ll try to improve the throughput further.</p>
-]]></content>
-  </entry>
   
-  <entry>
-    <title type="html"><![CDATA[How to Set Up Fish Completion for ArangoDB]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/"/>
-    <updated>2015-07-28T23:10:32+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb</id>
-    <content type="html"><![CDATA[<p>While experimenting with the <a href="http://fishshell.com/">fish shell</a> on my laptop
-I found <em>fish</em> has a slightly different (but much fancier) tab-completion mechanism
-than <em>bash</em>.</p>
-
-<p>Re-using the <a href="/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/">existing completer for bash</a>
-wouldn&rsquo;t work, so I put together some dedicated completions files for <em>fish</em>.</p>
-
-<!-- more -->
 
 
-<p>The files can be downloaded here:
-<a href="/downloads/code/completions-fish-2.5">2.5</a> <a href="/downloads/code/completions-fish-2.6">2.6</a></p>
+<time datetime="2015-08-01T19:06:04+02:00" pubdate data-updated="true">Aug 1<span>st</span>, 2015</time>
+      
 
-<p>To activate these completions, copy the appropriate file into <code>~/.arangodb-completions</code>
-and source it from <em>fish</em>:
-<code>bash
-source ~/.arangodb-completions
-</code></p>
-
-<p>In order to permanently activate these completions, you may source the completions file
-from your <code>config.fish</code> file, which is normally located in directory <code>~/.config/fish</code>.</p>
-
-<h2>Full setup</h2>
-
-<p>The following command, executed in <em>fish</em>, should install the completions for 2.6 and
-activate them:
-<code>bash activate completions for ArangoDB 2.6
-wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.6
-echo "source ~/.arangodb-completions" &gt;&gt; ~/.config/fish/config.fish
-source ~/.arangodb-completions
-</code></p>
-
-<p>To install fish completions for ArangoDB 2.5, the command is:
-<code>bash activate completions for ArangoDB 2.5
-wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.5
-echo "source ~/.arangodb-completions" &gt;&gt; ~/.config/fish/config.fish
-source ~/.arangodb-completions
-</code></p>
-
-<p>To see it in action, type <code>arangosh --</code> in <em>fish</em> and then press <strong>TAB</strong>:</p>
-
-<p><img src="/downloads/screenshots/fish-completion.png"></p>
-]]></content>
-  </entry>
+<span class="categories">
   
-  <entry>
-    <title type="html"><![CDATA[Introducing RETURN DISTINCT]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/27/introducing-return-distinct/"/>
-    <updated>2015-07-27T11:48:41+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/27/introducing-return-distinct</id>
-    <content type="html"><![CDATA[<p>Last week saw the addition of the <code>RETURN DISTINCT</code> for AQL queries.
-This is a new shortcut syntax for making result sets unique.</p>
-
-<p>For this purpose it can be used as an easier-to-memorize alternative for
-the already existing <code>COLLECT</code> statement. <code>COLLECT</code> is very flexible and
-can be used for multiple purposes, but it is syntactic overkill for making
-a result set unique.</p>
-
-<p>The new <code>RETURN DISTINCT</code> syntax makes queries easier to write and understand.</p>
-
-<!-- more -->
-
-
-<p>Here&rsquo;s a non-scientific proof for this claim:</p>
-
-<p>Compare the following queries, which both return each distinct <code>age</code> attribute
-value from the collection:</p>
-
-<p><code>plain making result set unique using COLLECT
-FOR doc IN collection
-  COLLECT age = doc.age
-  RETURN age
-</code></p>
-
-<p><code>plain making result set unique using RETURN DISTINCT
-FOR doc IN collection
-  RETURN DISTINCT doc.age
-</code></p>
-
-<p>Clearly, the query using <code>RETURN DISTINCT</code> is more intuitive, especially for
-AQL beginners. Apart from that, using <code>RETURN DISTINCT</code> will save a bit of typing
-compared to the longer <code>COLLECT</code>-based query.</p>
-
-<p>Internally both <code>COLLECT</code> and <code>RETURN DISTINCT</code> will work by creating an
-<code>AggregateNode</code>. The optimizer will try the <em>sorted</em> and the <em>hashed</em> variants
-for both, so they should perform about the same.</p>
-
-<p>However, the result of a <code>RETURN DISTINCT</code> does not have any guaranteed order,
-so the optimizer will not insert a post-<code>SORT</code> for it. It may do so for a regular
-<code>COLLECT</code>.</p>
-
-<p>As mentioned before, <code>COLLECT</code> is more flexible than <code>RETURN DISTINCT</code>.
-Notably, <code>COLLECT</code> is superior to <code>RETURN DISTINCT</code> when the result set should
-be made unique using more than one criterion, e.g.</p>
-
-<p><code>plain using more than one criterion for uniqueness
-FOR doc IN collection
-  COLLECT status = doc.status, age = doc.age,
-  RETURN { status, age }
-</code></p>
-
-<p>This is currently not achievable via <code>RETURN DISTINCT</code>, as it only works
-with a single criterion.</p>
-]]></content>
-  </entry>
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/concepts/'>Concepts</a>, <a class='category' href='/blog/categories/foxx/'>Foxx</a>, <a class='category' href='/blog/categories/node-dot-js/'>Node.js</a>
   
-  <entry>
-    <title type="html"><![CDATA[AQL Object Literal Simplification]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/27/aql-object-literal-simplification/"/>
-    <updated>2015-07-27T11:33:09+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/27/aql-object-literal-simplification</id>
-    <content type="html"><![CDATA[<p>ArangoDB&rsquo;s <code>devel</code> branch recently saw a change that makes writing
-some AQL queries a bit simpler.</p>
-
-<p>The change introduces an optional shorthand notation for object attributes
-in the style of ES6&rsquo;s enhanced object literal notation.</p>
-
-<!-- more -->
+</span>
 
 
-<p>For example, consider the following query that groups values by <code>age</code>
-attribute and counts the number of documents per distinct <code>age</code> value:</p>
-
-<p><code>plain example query
-FOR doc IN collection
-  COLLECT age = doc.age WITH COUNT INTO length
-  RETURN { age: age, length: length }
-</code></p>
-
-<p>The object declaration in the last line of the query is somewhat redundant
-because one has to type identical attribute names and values:</p>
-
-<p><code>plain the long notation for object literals
-RETURN { age: age, length: length }
-</code></p>
-
-<p>In this case, the new shorthand notation simplifies the <code>RETURN</code> to:</p>
-
-<p><code>plain using shorthand notation for object literals
-RETURN { age, length }
-</code></p>
-
-<p>In general, the shorthand notation can be used for all object literals when
-there is an attribute name that refers to a query variable of the same name.</p>
-
-<p>It can also be mixed with the longer notation, e.g.:</p>
-
-<p><code>plain mixing long and shorthand notation
-RETURN { age, length, dateCreated: DATE_NOW() }
-</code></p>
-]]></content>
-  </entry>
+    </p>
+    
+      <div class="sharing">
   
-</feed>
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/08/01/how-v8-is-used-in-arangodb/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/08/01/how-v8-is-used-in-arangodb/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/07/30/throughput-enhancements/" title="Previous Post: Throughput enhancements">&laquo; Throughput enhancements</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/08/01/how-v8-is-used-in-arangodb/">How V8 Is Used in ArangoDB</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/07/30/throughput-enhancements/">Throughput Enhancements</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/">How to Set Up Fish Completion for ArangoDB</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/07/27/introducing-return-distinct/">Introducing RETURN DISTINCT</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/07/27/aql-object-literal-simplification/">AQL Object Literal Simplification</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/07/14/es6-features-in-arangodb-27/">ES6 Features in ArangoDB 2.7</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (27)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (47)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (4)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (7)</a></li><li><a href='/blog/categories/concepts/'>Concepts (7)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (3)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (18)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (37)</li><ul class="month_list"><li class="month"><a href='/blog/2015/08/'>AUG (1)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
