@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-08-01T23:43:55+02:00</updated>
+  <updated>2015-08-04T20:10:32+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -100,7 +100,7 @@ the compilers will carry out.</p>
 <p>Now, after the JavaScript code has been compiled to native code, V8 will run it
 until it returns or fails with an uncaught exception.</p>
 
-<p>But can how the JavaScript code access the database data and server internals?
+<p>But how can the JavaScript code access the database data and server internals?
 In other words, what actually happens if a JavaScript command such as the following
 is executed?</p>
 
