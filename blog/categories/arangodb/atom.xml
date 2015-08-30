@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-08-04T20:10:32+02:00</updated>
+  <updated>2015-08-30T23:57:02+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,102 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[On Building AQL Query Strings]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/08/30/on-building-aql-query-strings/"/>
+    <updated>2015-08-30T23:14:42+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/08/30/on-building-aql-query-strings</id>
+    <content type="html"><![CDATA[<p>I recently wrote two recipes about generating AQL query
+strings. They are contained in the ArangoDB cookbook by now:</p>
+
+<ul>
+<li><a href="https://docs.arangodb.com/cookbook/AvoidingInjection.html">Avoiding parameter injection in AQL</a></li>
+<li><a href="https://docs.arangodb.com/cookbook/MultilineQueryStrings.html">Writing multi-line AQL queries</a></li>
+</ul>
+
+
+<p>After that, Github user <em>tracker1</em> suggested in <a href="https://github.com/arangodb/arangodb/issues/1457">Github issue 1457</a>
+to take the ES6 template string variant even further, using a generator function for
+string building, and also using promises and ES7 async/await.</p>
+
+<p>We can&rsquo;t use ES7 async/await in ArangoDB at the moment due to lacking support
+in V8, but the suggested template string generator function seemed to be an
+obvious improvement that deserved inclusion in ArangoDB.</p>
+
+<!-- more -->
+
+
+<p>Basically, the suggestion is to use regular JavaScript variables/expressions in
+the template string and have them substituted <em>safely</em>.</p>
+
+<p>With regular AQL bind parameters, a query looks like this:</p>
+
+<p><code>``js
+var bindVars = { name: "test" };
+var query =</code>FOR doc IN collection</p>
+
+<pre><code>         FILTER doc.name == @name 
+         RETURN doc._key`;
+</code></pre>
+
+<p>db._query(query, bindVars);
+```</p>
+
+<p>This is immune to parameter injection, because the query string and the bind parameter
+value are passed in separately. But it&rsquo;s <strong>not very ES6-y</strong>.</p>
+
+<p>Now, after partly implementing <em>tracker1</em>&rsquo;s suggestion, JavaScript values
+and expressions can be used much more <em>naturally</em> when building AQL query strings:</p>
+
+<p><code>``js
+var name = "test";
+var query = aqlQuery</code>FOR doc IN collection</p>
+
+<pre><code>                 FILTER doc.name == ${name} 
+                 RETURN doc._key`;
+</code></pre>
+
+<p>db._query(query);
+```</p>
+
+<p><code>${name}</code> is regular ES template string syntax and would normally be substituted
+with the value of JavaScript variable <code>name</code>. Such simple substitution would be unsafe,
+because it would make the query vulnerable to parameter injection. So we&rsquo;re also
+using a template string generator function named <code>aqlQuery</code>. This function comes
+bundled with ArangoDB 2.7.</p>
+
+<p>Under the hood, <code>aqlQuery</code> will create regular AQL bind parameters for each occurrence
+of a template string parameter. It will keep the query string and the actual bind
+parameter values separate, so it is safe to use.</p>
+
+<p>The function will return an object with that can directly be passed on to the
+<code>db._query()</code> function. Here&rsquo;s what <code>aqlQuery</code> will generate for the above example
+(note: some whitespace was removed from the output):</p>
+
+<p>```js
+{
+  &ldquo;query&rdquo; : &ldquo;FOR doc IN collection FILTER doc.name == @value0 RETURN doc._key&rdquo;,
+  &ldquo;bindVars&rdquo; : {</p>
+
+<pre><code>"value0" : "test" 
+</code></pre>
+
+<p>  }
+}
+```</p>
+
+<p>The <code>aqlQuery</code> template string generator function is available in 2.7, which is
+currently in development. The changes are contained in the <code>devel</code> branch only
+at the moment, but will become available in following 2.7 release. A pull request
+has been issued to have the cookbook recipes updated to include <code>aqlQuery</code>, too.</p>
+
+<p><code>aqlQuery</code> can be used in 2.7 from the ArangoShell, inside arangod (e.g. from inside
+Foxx actions) and from ArangoDB&rsquo;s web interface.</p>
+
+<p>All other variants for building AQL queries are still fully supported.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[How V8 Is Used in ArangoDB]]></title>
@@ -497,53 +593,6 @@ FOR doc IN collection
 
 <p>This is currently not achievable via <code>RETURN DISTINCT</code>, as it only works
 with a single criterion.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Object Literal Simplification]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/27/aql-object-literal-simplification/"/>
-    <updated>2015-07-27T11:33:09+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/27/aql-object-literal-simplification</id>
-    <content type="html"><![CDATA[<p>ArangoDB&rsquo;s <code>devel</code> branch recently saw a change that makes writing
-some AQL queries a bit simpler.</p>
-
-<p>The change introduces an optional shorthand notation for object attributes
-in the style of ES6&rsquo;s enhanced object literal notation.</p>
-
-<!-- more -->
-
-
-<p>For example, consider the following query that groups values by <code>age</code>
-attribute and counts the number of documents per distinct <code>age</code> value:</p>
-
-<p><code>plain example query
-FOR doc IN collection
-  COLLECT age = doc.age WITH COUNT INTO length
-  RETURN { age: age, length: length }
-</code></p>
-
-<p>The object declaration in the last line of the query is somewhat redundant
-because one has to type identical attribute names and values:</p>
-
-<p><code>plain the long notation for object literals
-RETURN { age: age, length: length }
-</code></p>
-
-<p>In this case, the new shorthand notation simplifies the <code>RETURN</code> to:</p>
-
-<p><code>plain using shorthand notation for object literals
-RETURN { age, length }
-</code></p>
-
-<p>In general, the shorthand notation can be used for all object literals when
-there is an attribute name that refers to a query variable of the same name.</p>
-
-<p>It can also be mixed with the longer notation, e.g.:</p>
-
-<p><code>plain mixing long and shorthand notation
-RETURN { age, length, dateCreated: DATE_NOW() }
-</code></p>
 ]]></content>
   </entry>
   

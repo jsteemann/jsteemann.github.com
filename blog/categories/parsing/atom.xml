@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Parsing | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/parsing/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-08-04T20:10:32+02:00</updated>
+  <updated>2015-08-30T23:57:02+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -47,7 +47,7 @@ iterates over, and optional projections.</p>
 we can now combine the star operator with an inline <code>FILTER</code> expression:</p>
 
 <p><code>plain star operator with inline FILTER
-RETURN @members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes]
+RETURN members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes]
 </code></p>
 
 <p>The inline <code>FILTER</code> expression has access to the current array element via the
@@ -66,7 +66,7 @@ attributes and sub-attributes, and also use them in function expressions.</p>
 <p>It&rsquo;s also possible to extract just a specific sub-attribute of each result value:</p>
 
 <p><code>plain extracting just a sub-attribute
-RETURN @members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes].name
+RETURN members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes].name
 </code></p>
 
 <p>This will return:</p>
@@ -86,7 +86,7 @@ returns each member&rsquo;s <code>age</code> attribute and the number of values 
 attribute:</p>
 
 <p><code>plain extracting with a FILTER and a projection
-RETURN @members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes RETURN {
+RETURN members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes RETURN {
   name: CURRENT.name,
   likes: LENGTH(CURRENT.likes)
 }]
@@ -106,7 +106,7 @@ with a <code>LIMIT</code> clause, too. This is useful for testing whether at lea
 array members satisfies a <code>FILTER</code> condition:</p>
 
 <p><code>plain limiting the number of results
-RETURN @members[* FILTER "garden" IN CURRENT.likes LIMIT 1]
+RETURN members[* FILTER "garden" IN CURRENT.likes LIMIT 1]
 </code></p>
 
 <p>Overall, the star operator is now much more powerful than before, so in many queries
@@ -125,7 +125,7 @@ return a nested array.</p>
 <p>Consider this query with the single star operator:</p>
 
 <p><code>plain extracting nested arrays
-RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[*]
+RETURN members[* FILTER CURRENT.age &gt;= 40].likes[*]
 </code></p>
 
 <p>This will produce:</p>
@@ -140,7 +140,7 @@ RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[*]
 <p>To get a collapsed array, we can employ the double star operator:</p>
 
 <p><code>plain extracting flattend arrays
-RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[**]
+RETURN members[* FILTER CURRENT.age &gt;= 40].likes[**]
 </code></p>
 
 <p>Then we&rsquo;ll get:</p>

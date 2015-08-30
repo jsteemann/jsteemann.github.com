@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoShell | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangoshell/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-08-04T20:10:32+02:00</updated>
+  <updated>2015-08-30T23:57:02+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,102 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[On Building AQL Query Strings]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/08/30/on-building-aql-query-strings/"/>
+    <updated>2015-08-30T23:14:42+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/08/30/on-building-aql-query-strings</id>
+    <content type="html"><![CDATA[<p>I recently wrote two recipes about generating AQL query
+strings. They are contained in the ArangoDB cookbook by now:</p>
+
+<ul>
+<li><a href="https://docs.arangodb.com/cookbook/AvoidingInjection.html">Avoiding parameter injection in AQL</a></li>
+<li><a href="https://docs.arangodb.com/cookbook/MultilineQueryStrings.html">Writing multi-line AQL queries</a></li>
+</ul>
+
+
+<p>After that, Github user <em>tracker1</em> suggested in <a href="https://github.com/arangodb/arangodb/issues/1457">Github issue 1457</a>
+to take the ES6 template string variant even further, using a generator function for
+string building, and also using promises and ES7 async/await.</p>
+
+<p>We can&rsquo;t use ES7 async/await in ArangoDB at the moment due to lacking support
+in V8, but the suggested template string generator function seemed to be an
+obvious improvement that deserved inclusion in ArangoDB.</p>
+
+<!-- more -->
+
+
+<p>Basically, the suggestion is to use regular JavaScript variables/expressions in
+the template string and have them substituted <em>safely</em>.</p>
+
+<p>With regular AQL bind parameters, a query looks like this:</p>
+
+<p><code>``js
+var bindVars = { name: "test" };
+var query =</code>FOR doc IN collection</p>
+
+<pre><code>         FILTER doc.name == @name 
+         RETURN doc._key`;
+</code></pre>
+
+<p>db._query(query, bindVars);
+```</p>
+
+<p>This is immune to parameter injection, because the query string and the bind parameter
+value are passed in separately. But it&rsquo;s <strong>not very ES6-y</strong>.</p>
+
+<p>Now, after partly implementing <em>tracker1</em>&rsquo;s suggestion, JavaScript values
+and expressions can be used much more <em>naturally</em> when building AQL query strings:</p>
+
+<p><code>``js
+var name = "test";
+var query = aqlQuery</code>FOR doc IN collection</p>
+
+<pre><code>                 FILTER doc.name == ${name} 
+                 RETURN doc._key`;
+</code></pre>
+
+<p>db._query(query);
+```</p>
+
+<p><code>${name}</code> is regular ES template string syntax and would normally be substituted
+with the value of JavaScript variable <code>name</code>. Such simple substitution would be unsafe,
+because it would make the query vulnerable to parameter injection. So we&rsquo;re also
+using a template string generator function named <code>aqlQuery</code>. This function comes
+bundled with ArangoDB 2.7.</p>
+
+<p>Under the hood, <code>aqlQuery</code> will create regular AQL bind parameters for each occurrence
+of a template string parameter. It will keep the query string and the actual bind
+parameter values separate, so it is safe to use.</p>
+
+<p>The function will return an object with that can directly be passed on to the
+<code>db._query()</code> function. Here&rsquo;s what <code>aqlQuery</code> will generate for the above example
+(note: some whitespace was removed from the output):</p>
+
+<p>```js
+{
+  &ldquo;query&rdquo; : &ldquo;FOR doc IN collection FILTER doc.name == @value0 RETURN doc._key&rdquo;,
+  &ldquo;bindVars&rdquo; : {</p>
+
+<pre><code>"value0" : "test" 
+</code></pre>
+
+<p>  }
+}
+```</p>
+
+<p>The <code>aqlQuery</code> template string generator function is available in 2.7, which is
+currently in development. The changes are contained in the <code>devel</code> branch only
+at the moment, but will become available in following 2.7 release. A pull request
+has been issued to have the cookbook recipes updated to include <code>aqlQuery</code>, too.</p>
+
+<p><code>aqlQuery</code> can be used in 2.7 from the ArangoShell, inside arangod (e.g. from inside
+Foxx actions) and from ArangoDB&rsquo;s web interface.</p>
+
+<p>All other variants for building AQL queries are still fully supported.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[How V8 Is Used in ArangoDB]]></title>
@@ -1187,189 +1283,6 @@ implemented by the V8 team in future versions of V8.</p>
 
 <p>Apart from that, a lot of nice ES6 features are there already and can be used
 in ArangoDB applications.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Understanding Where Operations Are Executed]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed/"/>
-    <updated>2014-08-30T22:38:42+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/08/30/understanding-where-operations-are-executed</id>
-    <content type="html"><![CDATA[<p>I recently had to deal with some data processing operation that took
-about 20 minutes to complete. When looking into this, I found that the
-easiest and most beneficial change to the whole setup was to make the
-operation a <em>server-side</em> operation instead of executing it <em>client-side</em>.</p>
-
-<p>This change reduced the operation&rsquo;s total execution time to a few seconds.</p>
-
-<!-- more -->
-
-
-<p>I can&rsquo;t show the original processing task here, so I&rsquo;ll start with a
-contrived example. Imagine the following <em>for</em> loop inserting 100K documents
-into a collection named <code>test</code>:
-<code>js inserting 100k documents
-for (i = 0; i &lt; 100000; ++i) {
-  db.test.save({ value: i });
-}
-</code>
-Now we only need a client application to execute the operation. As I don&rsquo;t
-have a presentable client application right now, I will use the ArangoShell as
-my client application.</p>
-
-<h2>What&rsquo;s in a for loop?</h2>
-
-<p>Running the above <em>for</em> loop inside the ArangoShell will lead to the loop being
-executed inside the <em>arangosh</em> process.</p>
-
-<p>In order to save a document in the collection, arangosh (our client) must make a
-call to the ArangoDB server. This means issuing an HTTP POST request
-to the server&rsquo;s REST API at <code>/_api/document/?collection=test</code>.
-The server process will receive this request, insert the document, and
-respond with an HTTP status code 201 or 202 to our client.
-The client will then continue the loop until all documents have been inserted.</p>
-
-<p>Now it&rsquo;s easy to see that the simple 3-line loop will issue 100,000 HTTP requests
-in total. This means lots of data being pushed through the network stack(s).
-It is pretty easy to imagine that this will come at a cost.</p>
-
-<p>If we instead execute the above loop directly inside the ArangoDB server, we
-can get rid of all the network overhead. The server has no need to send HTTP
-calls to itself. It can simply execute the 100K inserts and is then done.
-We therefore assume the loop to run somewhat faster when executed server-side.</p>
-
-<p>A quick test on a crap laptop produced the following execution times for running
-the loops:</p>
-
-<ul>
-<li>server-side execution (arangod): 1.34 seconds</li>
-<li>client-side execution (arangosh): 17.32 seconds</li>
-</ul>
-
-
-<p><strong>Ouch</strong>. It looks like the client-server request-response overhead matters.</p>
-
-<p>The following sections deal with how to get rid of some or even all the
-client-server ping pong.</p>
-
-<h2>Graph traversals</h2>
-
-<p>The above <em>for</em> loop example was contrived, but imagine running
-a client-side graph traversal instead. In fact, the original problem mentioned
-in the introduction has been a graph traversal.</p>
-
-<p>The problem of a graph traversal is that is often iterative and highly
-dynamic. Decisions are made during the traversal as nodes are encountered,
-leading to dynamic inclusion or exclusion etc. This means that it makes sense to
-process nodes and edges only when needed, at the point when they are visited.</p>
-
-<p>Even if the client can employ some sort of caching for already visited
-nodes, the client still needs to ask the server about each visited
-node&rsquo;s connections at least once. Otherwise it could not follow them.</p>
-
-<p>This normally means lots of requests and responses. Compare this to the
-<em>single</em> request-response alternative in which a client kicks off a server-side
-traversal, and finally receives the overal result once it is assembled.</p>
-
-<p><strong>Conclusion</strong>: traversals on anything but very small graphs should be run server-side.
-A server-side action (see below) is a good way to do this. Please note that
-running a server-side traversal does not mean giving up flexibility and
-control flow functionality. Server-side traversals remain highly configurable
-through custom JavaScript functions that allow implementation of user-defined
-business logic.</p>
-
-<h2>AQL queries</h2>
-
-<p>We won&rsquo;t have your application send a series of 100,000 individual
-insert statements to the relational database of our choice. We already
-know from the past that this is going to be rather slow, so we have
-learned to avoid this. In the relational context, we rather use SQL queries
-that create or modify many rows in one go, e.g. an <code>INSERT INTO ... SELECT ...</code>,
-bulk inserts etc.</p>
-
-<p>ArangoDB is no different. In general, you should try to avoid issuing lots
-of individual queries to the database from a client application. Instead and if
-the queries look alike, try converting multiple individual operations into a
-single AQL query. This will already save a lot of network overhead.</p>
-
-<p>AQL provides multi-document operations to insert, update, and remove data. An
-overview is given <a href="http://docs.arangodb.org/Aql/DataModification.html">here</a>.</p>
-
-<p>The above 100K inserts from the contrived example can easily be transformed
-into this single AQL query:
-<code>
-FOR i IN 1..100000 INSERT { value: i } INTO test
-</code></p>
-
-<h2>Bulk imports</h2>
-
-<p>For importing larger amounts of documents from files, there is the specialized
-<a href="http://docs.arangodb.org/Arangoimp/README.html">arangoimp</a> import tool. It can
-load data from JSON and CSV files into ArangoDB. The tool is shipped with
-ArangoDB.</p>
-
-<p>ArangoDB also provides a REST API for <a href="http://docs.arangodb.org/HttpBulkImports/README.html">bulk imports</a>
-of documents.</p>
-
-<h2>Joins</h2>
-
-<p>A special note about <em>joins</em>: the fact that several NoSQL databases do not
-provide join functionality has driven some people to emulate join functionality
-on the client-side, in their applications.</p>
-
-<p>This can be a recipe for disaster: client-side join implementation might lead
-to horrendous amounts of queries that might need to be sent to the database for
-fetching all the records. More than that, if data are queried individually,
-the overall result may lack consistency. By the way, the same is true for
-fetching referenced or linked documents.</p>
-
-<p>ArangoDB provides join functionality via AQL queries. Additionally, AQL queries
-can be used to fetch other documents with the original documents. Note that
-ArangoDB has no way of defining references or links between documents, but
-still AQL allows combining arbitrary documents in one query.</p>
-
-<p>In almost all cases it make more sense to use an AQL query that performs
-joins or reference-fetching server-side and close to the data than having to
-deal with that on the application-side of things.</p>
-
-<p>AQL joins are described <a href="http://docs.arangodb.org/AqlExamples/Join.html">here</a>.</p>
-
-<h2>Server-side actions</h2>
-
-<p>With <em>stored procedures</em>, relational databases provide another way for an
-application to trigger the execution of a large amount of queries. Stored
-procedures are executed server-side, too, so they allow avoiding a lot of
-request-response ping pong between the application and the database, at least
-for defined tasks. Additionally, stored procedures provide control flow
-functionality, which can also be handy when operations depend on each other.</p>
-
-<p>Coming back to ArangoDB: complex data-processing tasks that need to execute
-multiple operations or need control flow functionality might benefit if
-converted from multiple application-side operations into a single server-side
-action.</p>
-
-<p>Server-side actions run inside the ArangoDB server, closer to the data, and
-can be much faster than a series of client-side operations.
-A server-side action is called with just one HTTP request from the application,
-so it may lead to saving lots of request-response cycles and reduction in
-network overhead. Apart from that, server-side actions in ArangoDB can employ
-transactions and provide the necessary control over isolation and atomicity
-when executing a series of operations.</p>
-
-<p>Business logic and control flow functionality can be integrated
-easily because server-side actions in ArangoDB are JavaScript functions,
-with all of the language&rsquo;s programming features being available.</p>
-
-<p>But there&rsquo;s even more to it: a single server-side operation can be written
-to put together its result in a format most convenient for the client
-application. This can also lead to better encapsulation, because all an
-application needs to know about a server-side action is its API or contract.
-Any internals of the action can be hidden from the client application. Overall,
-this supports a service-oriented approach.</p>
-
-<p>To learn more about how to write server-side actions, please have a look
-at ArangoDB&rsquo;s <a href="http://docs.arangodb.org/Foxx/README.html">Foxx</a>. It is all
-about making server-side actions available via REST APIs.</p>
 ]]></content>
   </entry>
   

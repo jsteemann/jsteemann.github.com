@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-08-04T20:10:32+02:00</updated>
+  <updated>2015-08-30T23:57:02+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,109 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[On Building AQL Query Strings]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/08/30/on-building-aql-query-strings/"/>
+    <updated>2015-08-30T23:14:42+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/08/30/on-building-aql-query-strings</id>
+    <content type="html"><![CDATA[<p>I recently wrote two recipes about generating AQL query
+strings. They are contained in the ArangoDB cookbook by now:</p>
+
+<ul>
+<li><a href="https://docs.arangodb.com/cookbook/AvoidingInjection.html">Avoiding parameter injection in AQL</a></li>
+<li><a href="https://docs.arangodb.com/cookbook/MultilineQueryStrings.html">Writing multi-line AQL queries</a></li>
+</ul>
+
+
+<p>After that, Github user <em>tracker1</em> suggested in <a href="https://github.com/arangodb/arangodb/issues/1457">Github issue 1457</a>
+to take the ES6 template string variant even further, using a generator function for
+string building, and also using promises and ES7 async/await.</p>
+
+<p>We can&rsquo;t use ES7 async/await in ArangoDB at the moment due to lacking support
+in V8, but the suggested template string generator function seemed to be an
+obvious improvement that deserved inclusion in ArangoDB.</p>
+
+<!-- more -->
+
+
+<p>Basically, the suggestion is to use regular JavaScript variables/expressions in
+the template string and have them substituted <em>safely</em>.</p>
+
+<p>With regular AQL bind parameters, a query looks like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">bindVars</span> <span class="o">=</span> <span class="p">{</span> <span class="nx">name</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="p">};</span>
+</span><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span> <span class="err">`</span><span class="nx">FOR</span> <span class="nx">doc</span> <span class="nx">IN</span> <span class="nx">collection</span>
+</span><span class='line'>             <span class="nx">FILTER</span> <span class="nx">doc</span><span class="p">.</span><span class="nx">name</span> <span class="o">==</span> <span class="err">@</span><span class="nx">name</span>
+</span><span class='line'>             <span class="nx">RETURN</span> <span class="nx">doc</span><span class="p">.</span><span class="nx">_key</span><span class="err">`</span><span class="p">;</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">,</span> <span class="nx">bindVars</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This is immune to parameter injection, because the query string and the bind parameter
+value are passed in separately. But it&rsquo;s <strong>not very ES6-y</strong>.</p>
+
+<p>Now, after partly implementing <em>tracker1</em>&rsquo;s suggestion, JavaScript values
+and expressions can be used much more <em>naturally</em> when building AQL query strings:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">name</span> <span class="o">=</span> <span class="s2">&quot;test&quot;</span><span class="p">;</span>
+</span><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span> <span class="nx">aqlQuery</span><span class="err">`</span><span class="nx">FOR</span> <span class="nx">doc</span> <span class="nx">IN</span> <span class="nx">collection</span>
+</span><span class='line'>                     <span class="nx">FILTER</span> <span class="nx">doc</span><span class="p">.</span><span class="nx">name</span> <span class="o">==</span> <span class="nx">$</span><span class="p">{</span><span class="nx">name</span><span class="p">}</span>
+</span><span class='line'>                     <span class="nx">RETURN</span> <span class="nx">doc</span><span class="p">.</span><span class="nx">_key</span><span class="err">`</span><span class="p">;</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><code>${name}</code> is regular ES template string syntax and would normally be substituted
+with the value of JavaScript variable <code>name</code>. Such simple substitution would be unsafe,
+because it would make the query vulnerable to parameter injection. So we&rsquo;re also
+using a template string generator function named <code>aqlQuery</code>. This function comes
+bundled with ArangoDB 2.7.</p>
+
+<p>Under the hood, <code>aqlQuery</code> will create regular AQL bind parameters for each occurrence
+of a template string parameter. It will keep the query string and the actual bind
+parameter values separate, so it is safe to use.</p>
+
+<p>The function will return an object with that can directly be passed on to the
+<code>db._query()</code> function. Here&rsquo;s what <code>aqlQuery</code> will generate for the above example
+(note: some whitespace was removed from the output):</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="p">{</span>
+</span><span class='line'>  <span class="s2">&quot;query&quot;</span> <span class="o">:</span> <span class="s2">&quot;FOR doc IN collection FILTER doc.name == @value0 RETURN doc._key&quot;</span><span class="p">,</span>
+</span><span class='line'>  <span class="s2">&quot;bindVars&quot;</span> <span class="o">:</span> <span class="p">{</span>
+</span><span class='line'>    <span class="s2">&quot;value0&quot;</span> <span class="o">:</span> <span class="s2">&quot;test&quot;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The <code>aqlQuery</code> template string generator function is available in 2.7, which is
+currently in development. The changes are contained in the <code>devel</code> branch only
+at the moment, but will become available in following 2.7 release. A pull request
+has been issued to have the cookbook recipes updated to include <code>aqlQuery</code>, too.</p>
+
+<p><code>aqlQuery</code> can be used in 2.7 from the ArangoShell, inside arangod (e.g. from inside
+Foxx actions) and from ArangoDB&rsquo;s web interface.</p>
+
+<p>All other variants for building AQL queries are still fully supported.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[How V8 Is Used in ArangoDB]]></title>
@@ -851,7 +954,7 @@ iterates over, and optional projections.</p>
 we can now combine the star operator with an inline <code>FILTER</code> expression:</p>
 
 <figure class='code'><figcaption><span>star operator with inline FILTER</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes]</span></code></pre></td></tr></table></div></figure>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes]</span></code></pre></td></tr></table></div></figure>
 
 
 <p>The inline <code>FILTER</code> expression has access to the current array element via the
@@ -874,7 +977,7 @@ attributes and sub-attributes, and also use them in function expressions.</p>
 <p>It&rsquo;s also possible to extract just a specific sub-attribute of each result value:</p>
 
 <figure class='code'><figcaption><span>extracting just a sub-attribute</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes].name</span></code></pre></td></tr></table></div></figure>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes].name</span></code></pre></td></tr></table></div></figure>
 
 
 <p>This will return:</p>
@@ -901,7 +1004,7 @@ attribute:</p>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 <span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes RETURN { 
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes RETURN { 
 </span><span class='line'>  name: CURRENT.name, 
 </span><span class='line'>  likes: LENGTH(CURRENT.likes) 
 </span><span class='line'>}]</span></code></pre></td></tr></table></div></figure>
@@ -925,7 +1028,7 @@ with a <code>LIMIT</code> clause, too. This is useful for testing whether at lea
 array members satisfies a <code>FILTER</code> condition:</p>
 
 <figure class='code'><figcaption><span>limiting the number of results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER "garden" IN CURRENT.likes LIMIT 1]</span></code></pre></td></tr></table></div></figure>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN members[* FILTER "garden" IN CURRENT.likes LIMIT 1]</span></code></pre></td></tr></table></div></figure>
 
 
 <p>Overall, the star operator is now much more powerful than before, so in many queries
@@ -944,7 +1047,7 @@ return a nested array.</p>
 <p>Consider this query with the single star operator:</p>
 
 <figure class='code'><figcaption><span>extracting nested arrays</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[*]</span></code></pre></td></tr></table></div></figure>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN members[* FILTER CURRENT.age &gt;= 40].likes[*]</span></code></pre></td></tr></table></div></figure>
 
 
 <p>This will produce:</p>
@@ -963,7 +1066,7 @@ return a nested array.</p>
 <p>To get a collapsed array, we can employ the double star operator:</p>
 
 <figure class='code'><figcaption><span>extracting flattend arrays</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[**]</span></code></pre></td></tr></table></div></figure>
+</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN members[* FILTER CURRENT.age &gt;= 40].likes[**]</span></code></pre></td></tr></table></div></figure>
 
 
 <p>Then we&rsquo;ll get:</p>
@@ -3552,178 +3655,6 @@ for sending follow-up requests like this (assuming the returned id was <code>139
 
 <p>That&rsquo;s about it. Using the export API it should be fairly simple to ship bulk
 ArangoDB data to client applications or data processing tools.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Functions Improvements]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements/"/>
-    <updated>2015-04-23T10:24:53+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/04/23/aql-functions-improvements</id>
-    <content type="html"><![CDATA[<p>Waiting for a <code>git pull</code> to complete over an 8 KiB/s internet connection is boring.
-So I thought I&rsquo;d rather use the idle time and quickly write about some performance
-improvements for certain AQL functions that were recently completed and that will
-become available with ArangoDB 2.6.</p>
-
-<p>The improvements affect the following AQL functions:</p>
-
-<ul>
-<li><code>UNSET()</code>: remove specified attributes from an object/document</li>
-<li><code>KEEP()</code>: keep only specified attributes of an object/document</li>
-<li><code>MERGE()</code>: merge the attributes of multiple objects/documents</li>
-</ul>
-
-
-<p>This blog post shows a few example queries that will benefit from <strong>50 to more than 60 %
-reductions</strong> in query execution times due to the changes done to these functions.</p>
-
-<!-- more -->
-
-
-<h2>When to expect benefits</h2>
-
-<p>Reductions in execution time can be expected for AQL queries invoking one of the above
-AQL functions many times, and if the AQL function is used in a so-called <em>simple</em>
-calculation. Whether or not a calculation is considered <em>simple</em> is shown in the detailed
-JSON output of an <code>explain()</code>.</p>
-
-<p>Queries will not benefit if they invoke the AQL functions only a few times or when the
-function call is contained in an expression that is executed using the non-<em>simple</em> code path.</p>
-
-<h2>Example queries</h2>
-
-<p>Following are a few example queries for the three AQL functions, showing the reductions in
-execution times. They all use the <em>simple</em> code path so the benefits can be reaped.</p>
-
-<p>For comparing the execution times between 2.5 and 2.6, I have prepared a simple test setup.
-Here is a test function that will create a collection named <code>test</code> and populate it
-with a configurable amount documents. It will then run an AQL query that will update
-each document in the collection, using one of the named AQL functions. The function
-will return the execution time for the AQL query, excluding the collection setup time:</p>
-
-<figure class='code'><figcaption><span>test function</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">run</span> <span class="o">=</span> <span class="kd">function</span> <span class="p">(</span><span class="nx">n</span><span class="p">,</span> <span class="nx">query</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">time</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">time</span><span class="p">;</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">db</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb&quot;</span><span class="p">).</span><span class="nx">db</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="c1">// drop and re-create test collection </span>
-</span><span class='line'>  <span class="nx">db</span><span class="p">.</span><span class="nx">_drop</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">);</span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">c</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="c1">// insert n documents</span>
-</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">n</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>    <span class="nx">c</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">value1</span><span class="o">:</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">value2</span><span class="o">:</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">value3</span><span class="o">:</span> <span class="s1">&#39;foobar&#39;</span> <span class="o">+</span> <span class="nx">i</span> <span class="p">});</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="c1">// flush write-ahead log and wait a few seconds before running query</span>
-</span><span class='line'>  <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">wal</span><span class="p">.</span><span class="nx">flush</span><span class="p">();</span>
-</span><span class='line'>  <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">wait</span><span class="p">(</span><span class="mi">5</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'>  <span class="c1">// run query </span>
-</span><span class='line'>  <span class="kd">var</span> <span class="nx">s</span> <span class="o">=</span> <span class="nx">time</span><span class="p">();</span>
-</span><span class='line'>  <span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">);</span>
-</span><span class='line'>  <span class="k">return</span> <span class="nx">time</span><span class="p">()</span> <span class="o">-</span> <span class="nx">s</span><span class="p">;</span>
-</span><span class='line'><span class="p">};</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>UNSET()</h3>
-
-<p>Let&rsquo;s start with the <code>UNSET()</code> AQL function. Its purpose is to remove or multiple
-attributes from an object/document. Here is an example AQL query that removes
-attribute <code>value2</code> from each document in the <code>test</code> collection:</p>
-
-<figure class='code'><figcaption><span>invocation of UNSET()</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">run</span><span class="p">(</span><span class="nx">n</span><span class="p">,</span> <span class="s2">&quot;FOR t IN test LET modified = UNSET(t, &#39;value2&#39;) REPLACE t WITH modified IN test&quot;</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
-
-<figure class='code'><figcaption><span>execution times of UNSET() query in 2.5 and 2.6</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>value of n       time 2.5       time 2.6       speedup
-</span><span class='line'>------------------------------------------------------
-</span><span class='line'>   100,000         3.28 s         1.13 s          65 %
-</span><span class='line'>   500,000        16.93 s         5.38 s          68 %
-</span><span class='line'> 1,000,000        32.60 s        11.40 s          65 %</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>KEEP()</h3>
-
-<p>The purpose of <code>KEEP()</code> is to remove all attributes from an object/document but the
-specified ones. Here&rsquo;s an example query that uses <code>KEEP()</code> to remove all attributes
-from the documents in the <code>test</code> collectionn but attribute <code>value2</code>:</p>
-
-<figure class='code'><figcaption><span>invocation of KEEP()</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">run</span><span class="p">(</span><span class="nx">n</span><span class="p">,</span> <span class="s2">&quot;FOR t IN test LET modified = KEEP(t, &#39;value2&#39;) REPLACE t WITH modified IN test&quot;</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
-
-<figure class='code'><figcaption><span>execution times of KEEP() query in 2.5 and 2.6</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>value of n       time 2.5       time 2.6       speedup
-</span><span class='line'>------------------------------------------------------
-</span><span class='line'>   100,000         1.98 s         0.87 s          56 %
-</span><span class='line'>   500,000         9.34 s         4.09 s          56 %
-</span><span class='line'> 1,000,000        18.86 s         8.23 s          56 %</span></code></pre></td></tr></table></div></figure>
-
-
-<h3>MERGE()</h3>
-
-<p>Finally, the <code>MERGE()</code> function can be used to merge multiple objects/documents in a
-single one. The following query will add an attribute <code>value4</code> to all documents in
-collection <code>test</code>:</p>
-
-<figure class='code'><figcaption><span>invocation of MERGE()</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">run</span><span class="p">(</span><span class="nx">n</span><span class="p">,</span> <span class="s2">&quot;FOR t IN test LET modified = MERGE(t, { value4 : 1 }) REPLACE t WITH modified IN test&quot;</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The execution times (in seconds) for different <code>n</code> values in ArangoDB 2.5 and 2.6 are:</p>
-
-<figure class='code'><figcaption><span>execution times of MERGE() query in 2.5 and 2.6</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>value of n       time 2.5       time 2.6       speedup
-</span><span class='line'>------------------------------------------------------
-</span><span class='line'>   100,000         3.93 s         1.22 s          68 %
-</span><span class='line'>   500,000        19.17 s         5.91 s          69 %
-</span><span class='line'> 1,000,000        38.27 s        12.33 s          67 %</span></code></pre></td></tr></table></div></figure>
-
-
-
 ]]></content>
   </entry>
   

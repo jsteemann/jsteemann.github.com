@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-08-04T20:10:32+02:00</updated>
+  <updated>2015-08-30T23:57:02+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,102 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[On Building AQL Query Strings]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/08/30/on-building-aql-query-strings/"/>
+    <updated>2015-08-30T23:14:42+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/08/30/on-building-aql-query-strings</id>
+    <content type="html"><![CDATA[<p>I recently wrote two recipes about generating AQL query
+strings. They are contained in the ArangoDB cookbook by now:</p>
+
+<ul>
+<li><a href="https://docs.arangodb.com/cookbook/AvoidingInjection.html">Avoiding parameter injection in AQL</a></li>
+<li><a href="https://docs.arangodb.com/cookbook/MultilineQueryStrings.html">Writing multi-line AQL queries</a></li>
+</ul>
+
+
+<p>After that, Github user <em>tracker1</em> suggested in <a href="https://github.com/arangodb/arangodb/issues/1457">Github issue 1457</a>
+to take the ES6 template string variant even further, using a generator function for
+string building, and also using promises and ES7 async/await.</p>
+
+<p>We can&rsquo;t use ES7 async/await in ArangoDB at the moment due to lacking support
+in V8, but the suggested template string generator function seemed to be an
+obvious improvement that deserved inclusion in ArangoDB.</p>
+
+<!-- more -->
+
+
+<p>Basically, the suggestion is to use regular JavaScript variables/expressions in
+the template string and have them substituted <em>safely</em>.</p>
+
+<p>With regular AQL bind parameters, a query looks like this:</p>
+
+<p><code>``js
+var bindVars = { name: "test" };
+var query =</code>FOR doc IN collection</p>
+
+<pre><code>         FILTER doc.name == @name 
+         RETURN doc._key`;
+</code></pre>
+
+<p>db._query(query, bindVars);
+```</p>
+
+<p>This is immune to parameter injection, because the query string and the bind parameter
+value are passed in separately. But it&rsquo;s <strong>not very ES6-y</strong>.</p>
+
+<p>Now, after partly implementing <em>tracker1</em>&rsquo;s suggestion, JavaScript values
+and expressions can be used much more <em>naturally</em> when building AQL query strings:</p>
+
+<p><code>``js
+var name = "test";
+var query = aqlQuery</code>FOR doc IN collection</p>
+
+<pre><code>                 FILTER doc.name == ${name} 
+                 RETURN doc._key`;
+</code></pre>
+
+<p>db._query(query);
+```</p>
+
+<p><code>${name}</code> is regular ES template string syntax and would normally be substituted
+with the value of JavaScript variable <code>name</code>. Such simple substitution would be unsafe,
+because it would make the query vulnerable to parameter injection. So we&rsquo;re also
+using a template string generator function named <code>aqlQuery</code>. This function comes
+bundled with ArangoDB 2.7.</p>
+
+<p>Under the hood, <code>aqlQuery</code> will create regular AQL bind parameters for each occurrence
+of a template string parameter. It will keep the query string and the actual bind
+parameter values separate, so it is safe to use.</p>
+
+<p>The function will return an object with that can directly be passed on to the
+<code>db._query()</code> function. Here&rsquo;s what <code>aqlQuery</code> will generate for the above example
+(note: some whitespace was removed from the output):</p>
+
+<p>```js
+{
+  &ldquo;query&rdquo; : &ldquo;FOR doc IN collection FILTER doc.name == @value0 RETURN doc._key&rdquo;,
+  &ldquo;bindVars&rdquo; : {</p>
+
+<pre><code>"value0" : "test" 
+</code></pre>
+
+<p>  }
+}
+```</p>
+
+<p>The <code>aqlQuery</code> template string generator function is available in 2.7, which is
+currently in development. The changes are contained in the <code>devel</code> branch only
+at the moment, but will become available in following 2.7 release. A pull request
+has been issued to have the cookbook recipes updated to include <code>aqlQuery</code>, too.</p>
+
+<p><code>aqlQuery</code> can be used in 2.7 from the ArangoShell, inside arangod (e.g. from inside
+Foxx actions) and from ArangoDB&rsquo;s web interface.</p>
+
+<p>All other variants for building AQL queries are still fully supported.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Introducing RETURN DISTINCT]]></title>
@@ -155,7 +251,7 @@ iterates over, and optional projections.</p>
 we can now combine the star operator with an inline <code>FILTER</code> expression:</p>
 
 <p><code>plain star operator with inline FILTER
-RETURN @members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes]
+RETURN members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes]
 </code></p>
 
 <p>The inline <code>FILTER</code> expression has access to the current array element via the
@@ -174,7 +270,7 @@ attributes and sub-attributes, and also use them in function expressions.</p>
 <p>It&rsquo;s also possible to extract just a specific sub-attribute of each result value:</p>
 
 <p><code>plain extracting just a sub-attribute
-RETURN @members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes].name
+RETURN members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes].name
 </code></p>
 
 <p>This will return:</p>
@@ -194,7 +290,7 @@ returns each member&rsquo;s <code>age</code> attribute and the number of values 
 attribute:</p>
 
 <p><code>plain extracting with a FILTER and a projection
-RETURN @members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes RETURN {
+RETURN members[* FILTER CURRENT.age &gt;= 40 &amp;&amp; "tortoises" IN CURRENT.likes RETURN {
   name: CURRENT.name,
   likes: LENGTH(CURRENT.likes)
 }]
@@ -214,7 +310,7 @@ with a <code>LIMIT</code> clause, too. This is useful for testing whether at lea
 array members satisfies a <code>FILTER</code> condition:</p>
 
 <p><code>plain limiting the number of results
-RETURN @members[* FILTER "garden" IN CURRENT.likes LIMIT 1]
+RETURN members[* FILTER "garden" IN CURRENT.likes LIMIT 1]
 </code></p>
 
 <p>Overall, the star operator is now much more powerful than before, so in many queries
@@ -233,7 +329,7 @@ return a nested array.</p>
 <p>Consider this query with the single star operator:</p>
 
 <p><code>plain extracting nested arrays
-RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[*]
+RETURN members[* FILTER CURRENT.age &gt;= 40].likes[*]
 </code></p>
 
 <p>This will produce:</p>
@@ -248,7 +344,7 @@ RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[*]
 <p>To get a collapsed array, we can employ the double star operator:</p>
 
 <p><code>plain extracting flattend arrays
-RETURN @members[* FILTER CURRENT.age &gt;= 40].likes[**]
+RETURN members[* FILTER CURRENT.age &gt;= 40].likes[**]
 </code></p>
 
 <p>Then we&rsquo;ll get:</p>
@@ -462,75 +558,6 @@ or the result of an expression), or for parameters passed into user-defined AQL 
 Enabling it for user-defined AQL functions is not safe because in theory these might
 modify their arguments (and function arguments are passed by reference &ndash; passing them
 by value would also defeat the purpose of the optimization).</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[On Getting Unique Values]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/06/01/on-getting-unique-values/"/>
-    <updated>2015-06-01T13:27:13+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/06/01/on-getting-unique-values</id>
-    <content type="html"><![CDATA[<p>While paging through the issues in the <a href="https://github.com/arangodb/arangodb">ArangoDB issue tracker</a>
-I came across <a href="https://github.com/arangodb/arangodb/issues/987">issue #987</a>, titled
-<em>Trying to get distinct document attribute values from a large collection fails</em>.</p>
-
-<p>The issue was opened around 10 months ago when ArangoDB 2.2 was around. We improved AQL performance
-somewhat since then, so I was eager to see how the query would perform in ArangoDB 2.6, especially
-when comparing it to 2.2.</p>
-
-<!-- more -->
-
-
-<p>For reproduction I quickly put together some example data to run the query on:
-<code>js setting up example data
-var db = require("org/arangodb").db;
-var c = db._create("test");
-for (var i = 0; i &lt; 4 * 1000 * 1000; ++i) {
-  c.save({ _key: "test" + i, value: (i % 100) });
-}
-require("internal").wal.flush(true, true);
-</code></p>
-
-<p>This produces a collection named <code>test</code> with 4 million documents. Each document has a numeric <code>value</code>
-attribute, which in total has 100 unique values. I remembered from a conversation with the guy that
-opened the issue that the number of distinct values was 100 or even slightly lower. I didn&rsquo;t bother
-to create an index on the <code>value</code> attribute, which might have sped up the query.</p>
-
-<p>With data available, it was time to run the query and measure its execution time:
-<code>js running the query
-var time = require("internal").time;
-var start = time();
-db._query("FOR doc IN test COLLECT value = doc.value RETURN value");
-time() - start;
-</code></p>
-
-<p>Running this in 2.2.7 took 3 minutes and 18 seconds before bursting with the following error message:</p>
-
-<p>```plain 2.2.7 error message
-#</p>
-
-<h1>Fatal error in CALL_AND_RETRY_2</h1>
-
-<h1>Allocation failed &ndash; process out of memory</h1>
-
-<p>#
-```</p>
-
-<p>In the 2.2 branch AQL queries were fully transformed to JavaScript and executed using V8. Obviously
-that didn&rsquo;t work well with large collections. That was one of the reasons why version 2.3 saw a major
-rewrite of the AQL engine.</p>
-
-<p>As a consequence, running the query in 2.3 (2.3.5) worked fine. Execution took around 28 seconds.
-The same was true for 2.4 (2.4.8) and 2.5 (2.5.5).</p>
-
-<p>Finally, running the query in 2.6.0 completed in just 3.2 seconds.</p>
-
-<p>The reasons for the speedup are the optimizations done for <code>COLLECT</code> (see
-<a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing with a hash table</a>, the
-<a href="/blog/2015/05/04/return-value-optimization-for-aql/">Return value optimization for AQL</a> and some
-minor optimizations within AQL that didn&rsquo;t get a pretty working title.</p>
-
-<p>Looks like in sum all the optimizations put into 2.6 really pay out.</p>
 ]]></content>
   </entry>
   
