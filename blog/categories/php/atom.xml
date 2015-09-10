@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
 
-  <title><![CDATA[Category: PHP, | J@ArangoDB]]></title>
+  <title><![CDATA[Category: PHP | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/php/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-09-10T14:56:22+02:00</updated>
+  <updated>2015-09-10T14:57:26+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -101,6 +101,719 @@ Zend Engine v2.6.0, Copyright &copy; 1998-2014 Zend Technologies</p>
 The improvements may not be noticable for applications that issue only a few
 requests with the driver, but they will be significant when performing lots of
 requests, as in the above examples.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Parsing PHP Arrays With PHP]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/06/16/parsing-php-arrays-with-php/"/>
+    <updated>2015-06-16T23:37:48+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/06/16/parsing-php-arrays-with-php</id>
+    <content type="html"><![CDATA[<p>By accident I found <a href="http://stackoverflow.com/questions/30877671/how-i-can-convert-a-string-format-array-to-array-type-in-php">this StackOverflow question</a>
+about how to convert a PHP string with array data into an actual PHP array variable.</p>
+
+<p>For example, if your application gets this string from somewhere:</p>
+
+<p><code>php example string data
+$string = "array(array('aaa','bbb','ccc','ddd'),array('AAA','BBB','CCC','DDD'))";
+</code></p>
+
+<p>How do you convert this into a PHP array variable so you can access the individual
+array elements? This is what we want to be able to do:</p>
+
+<p><code>php
+$result = magicallyConvertStringToArray($string);
+var_dump($result[0][0]);  // should be 'aaa'
+</code></p>
+
+<p>How do we get to our variable?</p>
+
+<!-- more -->
+
+
+<p>The obvious solution #1 is to agree on another data exchange format (e.g. JSON)
+and simply use that. PHP has built-in functions for <a href="http://www.php.net/manual/en/function.json-encode.php">JSON stringification</a>
+and <a href="http://www.php.net/manual/en/function.json-decode.php">JSON parsing</a>.</p>
+
+<h2>Eval?</h2>
+
+<p>But what if the data format really has to stay like this and you cannot change it?
+Then the obvious simple solution would be to <code>eval()</code> the string and capture the result
+in a new variable.</p>
+
+<p>Voila le array:</p>
+
+<p><code>php using eval
+$result = eval($string);
+var_dump($result[0][0]);  // 'aaa'
+</code></p>
+
+<p>But everyone knows that <code>eval</code> is evil and should be avoided wherever possible &ndash; especially when
+being run on strings fetched from remote data sources.</p>
+
+<h2>Writing a PHP data parser in PHP</h2>
+
+<p>Remembering that PHP has a built-in tokenizer for PHP code, we could also make use of
+this and write a small parser for PHP array data.
+Note that I wouldn&rsquo;t recommend writing your own parser if there are other options. But it&rsquo;s
+a last resort, and for the task at hand it should be relatively easy.</p>
+
+<p>This is because we&rsquo;ll only have to deal with arbitrarily nested arrays and some scalar value
+types (strings, numbers, bool, null). We don&rsquo;t expect to see serialized object instances in our
+data. And, not to forget, PHP comes with a built-in tokenizer for PHP code, and we&rsquo;ll let
+it do most of the work.</p>
+
+<p>Before the string can be parsed, it must be turned into PHP code. This can be achieved
+by prepending <code>&lt;?php</code> to it (otherwise the tokenizer would interpret the string as an HTML
+string). We can then use PHP&rsquo;s <code>token_get_all()</code> function to tokenize the string contents for us.</p>
+
+<p>We can immediately remove all T_WHITESPACE tokens from the list of tokens, because whitespace
+is irrelevant for our parsing. For easier handling of tokens, we let a class <code>Tokens</code> handle
+the tokens. This class provides functions for matching, consuming and peeking into tokens:</p>
+
+<p>```php class for managing the tokens
+// class to manage tokens
+class Tokens {
+  private $tokens;</p>
+
+<p>  public function __construct ($code) {</p>
+
+<pre><code>// construct PHP code from string and tokenize it
+$tokens = token_get_all("&lt;?php " . $code);
+// kick out whitespace tokens
+$this-&gt;tokens = array_filter($tokens, function ($token) { 
+  return (! is_array($token) || $token[0] !== T_WHITESPACE);
+});
+// remove start token (&lt;?php)
+$this-&gt;pop();
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function done () {</p>
+
+<pre><code>return count($this-&gt;tokens) === 0;
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function pop () {</p>
+
+<pre><code>// consume the token and return it
+if ($this-&gt;done()) {
+  throw new Exception("already at end of tokens!");
+}
+return array_shift($this-&gt;tokens);
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function peek () {</p>
+
+<pre><code>// return next token, don't consume it
+if ($this-&gt;done()) {
+  throw new Exception("already at end of tokens!");
+}
+return $this-&gt;tokens[0];
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function doesMatch ($what) {</p>
+
+<pre><code>$token = $this-&gt;peek();
+
+if (is_string($what) &amp;&amp; ! is_array($token) &amp;&amp; $token === $what) {
+  return true;
+}
+if (is_int($what) &amp;&amp; is_array($token) &amp;&amp; $token[0] === $what) {
+  return true;
+}
+return false;
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function forceMatch ($what) {</p>
+
+<pre><code>if (! $this-&gt;doesMatch($what)) {
+  if (is_int($what)) {
+    throw new Exception("unexpected token - expecting " . token_name($what));
+  }
+  throw new Exception("unexpected token - expecting " . $what);
+}
+// consume the token
+$this-&gt;pop();
+</code></pre>
+
+<p>  }
+}
+```</p>
+
+<p>With all the tokenization being done, we need a parser that understands the meaning
+of the individual tokens and puts them together in a meaningful way. Here&rsquo;s a parser
+class that can handle simple PHP arrays, string values, int, double and boolean values
+plus <code>null</code>:</p>
+
+<p>```php simple parser class
+// parser for simple PHP arrays
+class Parser {
+  private static $CONSTANTS = array(</p>
+
+<pre><code>"null" =&gt; null, 
+"true" =&gt; true, 
+"false" =&gt; false
+</code></pre>
+
+<p>  );</p>
+
+<p>  private $tokens;</p>
+
+<p>  public function __construct(Tokens $tokens) {</p>
+
+<pre><code>$this-&gt;tokens = $tokens;
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function parseValue () {</p>
+
+<pre><code>if ($this-&gt;tokens-&gt;doesMatch(T_CONSTANT_ENCAPSED_STRING)) {
+  // strings
+  $token = $this-&gt;tokens-&gt;pop();
+  return stripslashes(substr($token[1], 1, -1));
+}
+
+if ($this-&gt;tokens-&gt;doesMatch(T_STRING)) {
+  // built-in string literals: null, false, true
+  $token = $this-&gt;tokens-&gt;pop();
+  $value = strtolower($token[1]);
+  if (array_key_exists($value, self::$CONSTANTS)) {
+    return self::$CONSTANTS[$value];
+  }
+  throw new Exception("unexpected string literal " . $token[1]);
+}
+
+// the rest...
+// we expect a number here
+$uminus = 1;
+
+if ($this-&gt;tokens-&gt;doesMatch("-")) {
+  // unary minus
+  $this-&gt;tokens-&gt;forceMatch("-");
+  $uminus = -1;
+}
+
+if ($this-&gt;tokens-&gt;doesMatch(T_LNUMBER)) {
+  // long number
+  $value = $this-&gt;tokens-&gt;pop();
+  return $uminus * (int) $value[1];
+}
+if ($this-&gt;tokens-&gt;doesMatch(T_DNUMBER)) {
+  // double number
+  $value = $this-&gt;tokens-&gt;pop();
+  return $uminus * (double) $value[1];
+}
+
+throw new Exception("unexpected value token");
+</code></pre>
+
+<p>  }</p>
+
+<p>  public function parseArray () {</p>
+
+<pre><code>$found = 0;
+$result = array();
+
+$this-&gt;tokens-&gt;forceMatch(T_ARRAY);
+$this-&gt;tokens-&gt;forceMatch("(");
+
+while (true) {
+  if ($this-&gt;tokens-&gt;doesMatch(")")) {
+    // reached the end of the array
+    $this-&gt;tokens-&gt;forceMatch(")");
+    break;
+  }
+
+  if ($found &gt; 0) {
+    // we must see a comma following the first element
+    $this-&gt;tokens-&gt;forceMatch(",");
+  }
+
+  if ($this-&gt;tokens-&gt;doesMatch(T_ARRAY)) {
+    // nested array
+    $result[] = $this-&gt;parseArray();
+  }
+  else if ($this-&gt;tokens-&gt;doesMatch(T_CONSTANT_ENCAPSED_STRING)) {
+    // string
+    $string = $this-&gt;parseValue();
+    if ($this-&gt;tokens-&gt;doesMatch(T_DOUBLE_ARROW)) {
+      // array key (key =&gt; value)
+      $this-&gt;tokens-&gt;pop();
+      $result[$string] = $this-&gt;parseValue();
+    }
+    else {
+      // simple string
+      $result[] = $string;
+    }
+  }
+  else {
+    $result[] = $this-&gt;parseValue();
+  }
+
+  ++$found;
+}
+return $result;
+</code></pre>
+
+<p>  }
+}
+```</p>
+
+<p>And finally we need some code to invoke the parser:</p>
+
+<p>```php parser invokation
+// here&rsquo;s our test string (with intentionally wild usage of whitespace)
+$string = &ldquo; array (\"test\&rdquo; => \&ldquo;someValue\&rdquo;,
+  array\n(&lsquo;aaa&rsquo;, &lsquo;bbb&rsquo;, &lsquo;ccc&rsquo;, array(&lsquo;ddd&rsquo;)),
+array(&lsquo;AAA&rsquo;, &lsquo;BBB&rsquo;,&lsquo;CCC&rsquo;,&lsquo;DDD&rsquo;, null,1, 2, 3,-4, -42.99, -4e32, true, false))&ldquo;;</p>
+
+<p>$tokens = new Tokens($string);
+$parser = new Parser($tokens);
+$result = $parser->parseArray();</p>
+
+<p>// check if the parser matched the whole string or if there&rsquo;s something left at the end
+if (! $tokens->done()) {
+  throw new Exception(&ldquo;still tokens left after parsing&rdquo;);
+}</p>
+
+<p>var_dump(&ldquo;RESULT: &rdquo;, $result);
+```</p>
+
+<p>This will give us the data in a ready-to-use PHP variable <code>$result</code>, with all the
+nested data structures being built correctly.</p>
+
+<p>A few things to note:</p>
+
+<ul>
+<li><p>Parsing PHP data with PHP is quite easy because PHP already comes with a tokenizer
+for PHP. Parsing a different language with PHP is quite harder, as we would have to
+write a language-specific tokenizer first!</p></li>
+<li><p>The above code was quickly put together for demonstration purposes. I am pretty sure
+it will not cover all cases. Apart from that, it was written to be intuitive and not
+to be efficient (i.e. instead modifying the <code>tokens</code> array in place with <code>array_shift()</code>,
+we would rather leave that array constant and work with an index into it).</p></li>
+<li><p>For grammars more complex than this simple one, don&rsquo;t go with hand-written parsers
+but use a parser generator. I am not sure what parser generators are available in the
+PHP world, but in C and C++ most people will go with <a href="http://www.gnu.org/software/bison/">GNU Bison</a>
+and <a href="http://flex.sourceforge.net/">Flex</a>.</p></li>
+<li><p>Writing your own parsers is error-prone even with a parser generator, so <strong>don&rsquo;t do
+it if you don&rsquo;t have to</strong>. If you can, use a widely supported data format such as JSON
+instead and let <code>json_decode()</code> do all the heavy lifting for you.</p></li>
+</ul>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Exporting Data for Offline Processing]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/04/24/exporting-data-for-offline-processing/"/>
+    <updated>2015-04-24T15:47:31+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/04/24/exporting-data-for-offline-processing</id>
+    <content type="html"><![CDATA[<p>A few weeks ago I wrote about ArangoDB&rsquo;s
+<a href="https://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/">specialized export API</a>.</p>
+
+<p>The export API is useful when the goal is to extract all documents from a given collection
+and to process them outside of ArangoDB.</p>
+
+<p>The export API can provide quick and memory-efficient snapshots of the data in the underlying
+collection, making it suitable for extract all documents of the collection. It will be able
+to provide data much faster than with an AQL query that will extract all documents.</p>
+
+<p>In this post I&rsquo;ll show how to use the export API to extract data and process it with PHP.</p>
+
+<!-- more -->
+
+
+<p>A prerequiste for using the export API is using an ArangoDB server with version 2.6
+or higher. As there hasn&rsquo;t been an official 2.6 release yet, this currently requires
+building the <code>devel</code> branch of ArangoDB from source. When there is a regular 2.6
+release, this should be used instead.</p>
+
+<h2>Importing example data</h2>
+
+<p>First we need some data in an ArangoDB collection that we can process externally.</p>
+
+<p>For the following examples, I&rsquo;ll use a collection named <code>users</code> which I&rsquo;ll populate
+with 100k <a href="/downloads/code/users-100000.json.tar.gz">example documents</a>. Here&rsquo;s how
+to get this data into ArangoDB:</p>
+
+<p>```bash commands for fetching and importing data</p>
+
+<h1>download data file</h1>
+
+<p>wget <a href="https://jsteemann.github.io/downloads/code/users-100000.json.tar.gz">https://jsteemann.github.io/downloads/code/users-100000.json.tar.gz</a></p>
+
+<h1>uncompress it</h1>
+
+<p>tar xvfz users-100000.json.tar.gz</p>
+
+<h1>import into ArangoDB</h1>
+
+<p>arangoimp &mdash;file users-100000.json &mdash;collection users &mdash;create-collection true
+```</p>
+
+<p>There should now be 100K documents present in a collection named <code>users</code>. You can
+quickly verify that by peeking into the collection using the web interface.</p>
+
+<h2>Setting up ArangoDB-PHP</h2>
+
+<p>An easy way of trying the export API is to use it from PHP. We therefore clone the
+devel branch of the <strong>arangodb-php</strong> Github repository into a local directory:</p>
+
+<p><code>bash cloning arangodb-php
+git clone -b devel "https://github.com/arangodb/arangodb-php.git"
+</code></p>
+
+<p>Note: when there is an official 2.6 release, the <code>2.6</code> branch of arangodb-php should
+be used instead of the <code>devel</code> branch.</p>
+
+<p>We now write a simple PHP script that establishes a connection to the ArangoDB
+server running on localhost. We&rsquo;ll extend that file gradually. Here&rsquo;s a skeleton
+file to start with. The code can be downloaded <a href="/downloads/code/export-skeleton.php">here</a>:</p>
+
+<p>```php skeleton file for establishing a connection
+&lt;?php</p>
+
+<p>namespace triagens\ArangoDb;</p>
+
+<p>// use the driver&rsquo;s autoloader to load classes
+require &lsquo;arangodb-php/autoload.php&rsquo;;
+Autoloader::init();</p>
+
+<p>// set up connection options
+$connectionOptions = array(
+  // endpoint to connect to
+  ConnectionOptions::OPTION_ENDPOINT     => &lsquo;tcp://localhost:8529&rsquo;,
+  // can use Keep-Alive connection
+  ConnectionOptions::OPTION_CONNECTION   => &lsquo;Keep-Alive&rsquo;,         <br/>
+  // use basic authorization
+  ConnectionOptions::OPTION_AUTH_TYPE    => &lsquo;Basic&rsquo;,               <br/>
+  // user for basic authorization
+  ConnectionOptions::OPTION_AUTH_USER    => &lsquo;root&rsquo;,                    <br/>
+  // password for basic authorization
+  ConnectionOptions::OPTION_AUTH_PASSWD  => &lsquo;&rsquo;,                    <br/>
+  // timeout in seconds
+  ConnectionOptions::OPTION_TIMEOUT      => 30,
+  // database name
+  ConnectionOptions::OPTION_DATABASE     => &lsquo;_system&rsquo;
+);</p>
+
+<p>try {
+  // establish connection
+  $connection = new Connection($connectionOptions);</p>
+
+<p>  echo &lsquo;Connected!&rsquo; . PHP_EOL;</p>
+
+<p>  // TODO: now do something useful with the connection!</p>
+
+<p>} catch (ConnectException $e) {
+  print $e . PHP_EOL;
+} catch (ServerException $e) {
+  print $e . PHP_EOL;
+} catch (ClientException $e) {
+  print $e . PHP_EOL;
+}
+```</p>
+
+<p>Running that script should simply print <code>Connected!</code>. This means the PHP script
+can connect to ArangoDB and we can go on.</p>
+
+<h2>Extracting the data</h2>
+
+<p>With a working database connection we can now start with the actual processing.
+In place of the <code>TODO</code> in the skeleton file, we can actually run an export of
+the data in collection <code>users</code>. The following simple function extracts all
+documents from the collection and writes them to an output file <code>output.json</code>
+in JSON format.</p>
+
+<p>It will also print some statistics about the number of documents and the total
+data size. The full script can be downloaded <a href="/downloads/code/export.php">here</a>:</p>
+
+<p>```php exporting data into a file
+function export($collection, Connection $connection) {
+  $fp = fopen(&lsquo;output.json&rsquo;, &lsquo;w&rsquo;);</p>
+
+<p>  if (! $fp) {</p>
+
+<pre><code>throw new Exception('could not open output file!');
+</code></pre>
+
+<p>  }</p>
+
+<p>  // settings to use for the export
+  $settings = array(</p>
+
+<pre><code>'batchSize' =&gt; 5000,  // export in chunks of 5K documents
+'_flat' =&gt; true       // use simple PHP arrays
+</code></pre>
+
+<p>  );</p>
+
+<p>  $export = new Export($connection, $collection, $settings);</p>
+
+<p>  // execute the export. this will return an export cursor
+  $cursor = $export->execute();</p>
+
+<p>  // statistics
+  $count   = 0;
+  $batches = 0;
+  $bytes   = 0;</p>
+
+<p>  // now we can fetch the documents from the collection in batches
+  while ($docs = $cursor->getNextBatch()) {</p>
+
+<pre><code>$output = '';
+foreach ($docs as $doc) {
+  $output .= json_encode($doc) . PHP_EOL;
+} 
+
+// write out chunk
+fwrite($fp, $output);
+
+// update statistics
+$count += count($docs);
+$bytes += strlen($output);
+++$batches;
+</code></pre>
+
+<p>  }</p>
+
+<p>  fclose($fp);</p>
+
+<p>  echo sprintf(&lsquo;written %d documents in %d batches with %d total bytes&rsquo;,</p>
+
+<pre><code>           $count,
+           $batches, 
+           $bytes) . PHP_EOL;
+</code></pre>
+
+<p>}</p>
+
+<p>// run the export
+export(&lsquo;users&rsquo;, $connection);
+```</p>
+
+<p>Running this version of the script should print something similar to the following
+and also produce a file named <code>output.json</code>. Each line in the file should be a JSON
+object representing a document in the collection.</p>
+
+<p><code>plain script output
+written 100000 documents in 20 batches with 40890013 total bytes
+</code></p>
+
+<h2>Applying some transformations</h2>
+
+<p>We now use PHP to transform data as we extract it. With an example script, we&rsquo;ll apply
+the following transformations on the data:</p>
+
+<ul>
+<li>rewrite the contents of the <code>gender</code> attribute:
+
+<ul>
+<li><code>female</code> should become <code>f</code></li>
+<li><code>male</code> should become <code>m</code></li>
+</ul>
+</li>
+<li>rename attribute <code>birthday</code> to <code>dob</code></li>
+<li>change date formats in <code>dob</code> and <code>memberSince</code> from YYYY-MM-DD to MM/DD/YYYY</li>
+<li>concatenate the contents of the <code>name.first</code> and <code>name.last</code> subattributes</li>
+<li>transform array in <code>contact.email</code> into a flat string</li>
+<li>remove all other attributes</li>
+</ul>
+
+
+<p>Here&rsquo;s a transformation function that does this, and a slightly simplified export
+function. This version of the script can also be downloaded <a href="/downloads/code/export-transform.php">here</a>:</p>
+
+<p>```php transformation and export functions
+function transformDate($value) {
+  return preg_replace(&lsquo;/^(\d+)&ndash;(\d+)&ndash;(\d+)$/&rsquo;, &lsquo;\2/\3/\1&rsquo;, $value);
+}</p>
+
+<p>function transform(array $document) {
+  static $genders = array(&lsquo;male&rsquo; => &rsquo;m', &lsquo;female&rsquo; => &lsquo;f&rsquo;);</p>
+
+<p>  $transformed = array(</p>
+
+<pre><code>'gender'      =&gt; $genders[$document['gender']],
+'dob'         =&gt; transformDate($document['birthday']),
+'memberSince' =&gt; transformDate($document['memberSince']),
+'fullName'    =&gt; $document['name']['first'] . ' ' . $document['name']['last'],
+'email'       =&gt; $document['contact']['email'][0]
+</code></pre>
+
+<p>  );</p>
+
+<p>  return $transformed;
+}</p>
+
+<p>function export($collection, Connection $connection) {
+  $fp = fopen(&lsquo;output-transformed.json&rsquo;, &lsquo;w&rsquo;);</p>
+
+<p>  if (! $fp) {</p>
+
+<pre><code>throw new Exception('could not open output file!');
+</code></pre>
+
+<p>  }</p>
+
+<p>  // settings to use for the export
+  $settings = array(</p>
+
+<pre><code>'batchSize' =&gt; 5000,  // export in chunks of 5K documents
+'_flat' =&gt; true       // use simple PHP arrays
+</code></pre>
+
+<p>  );</p>
+
+<p>  $export = new Export($connection, $collection, $settings);</p>
+
+<p>  // execute the export. this will return an export cursor
+  $cursor = $export->execute();</p>
+
+<p>  // now we can fetch the documents from the collection in batches
+  while ($docs = $cursor->getNextBatch()) {</p>
+
+<pre><code>$output = '';
+foreach ($docs as $doc) {
+  $output .= json_encode(transform($doc)) . PHP_EOL;
+} 
+
+// write out chunk
+fwrite($fp, $output);
+</code></pre>
+
+<p>  }</p>
+
+<p>  fclose($fp);
+}</p>
+
+<p>// run the export
+export(&lsquo;users&rsquo;, $connection);
+```</p>
+
+<p>The adjusted version of the PHP script will now produce an output file named
+<code>output-transformed.json</code>.</p>
+
+<h2>Filtering attributes</h2>
+
+<p>In the last example we discarded a few attributes of each document. Instead of
+filtering out these attributes with PHP, we can configure the export to already
+exclude these attributes server-side. This way we can save some traffic.</p>
+
+<p>Here&rsquo;s an adjusted configuration that will exclude the unneeded attributes <code>_id</code>,
+<code>_rev</code>, <code>_key</code> and <code>likes</code>:</p>
+
+<p>```php configuration for attribute exclusion
+// settings to use for the export
+$settings = array(
+  &lsquo;batchSize&rsquo; => 5000,  // export in chunks of 5K documents
+  &lsquo;_flat&rsquo; => true,      // use simple PHP arrays
+  &lsquo;restrict&rsquo; => array(</p>
+
+<pre><code>'type' =&gt; 'exclude',
+'fields' =&gt; array('_id', '_rev', '_key', 'likes')
+</code></pre>
+
+<p>  )
+);
+```</p>
+
+<p>The full script that employs the adjusted configuration can be downloaded
+<a href="/downloads/code/export-exclude.php">here</a>.</p>
+
+<p>Instead of excluding specific attributes we can also do it the other way and only
+include certain attributes in an export. The following script demonstrates this by
+extracting only the <code>_key</code> and <code>name</code> attributes of each document. It then prints the
+key/name pairs in CSV format.</p>
+
+<p>The full script can be downloaded <a href="/downloads/code/export-csv.php">here</a>.</p>
+
+<p>```php export function that prints key/name pairs in CSV format
+function export($collection, Connection $connection) {
+  // settings to use for the export
+  $settings = array(</p>
+
+<pre><code>'batchSize' =&gt; 5000,  // export in chunks of 5K documents
+'_flat' =&gt; true,      // use simple PHP arrays
+'restrict' =&gt; array(
+  'type' =&gt; 'include',
+  'fields' =&gt; array('_key', 'name')
+)
+</code></pre>
+
+<p>  );</p>
+
+<p>  $export = new Export($connection, $collection, $settings);</p>
+
+<p>  // execute the export. this will return an export cursor
+  $cursor = $export->execute();</p>
+
+<p>  // now we can fetch the documents from the collection in batches
+  while ($docs = $cursor->getNextBatch()) {</p>
+
+<pre><code>$output = '';
+
+foreach ($docs as $doc) {
+  $values = array(
+    $doc['_key'], 
+    $doc['name']['first'] . ' ' . $doc['name']['last']
+  );
+
+  $output .= '"' . implode('","', $values) . '"' . PHP_EOL;
+}
+
+// print out the data directly 
+print $output;
+</code></pre>
+
+<p>  }
+}</p>
+
+<p>// run the export
+export(&lsquo;users&rsquo;, $connection);
+```</p>
+
+<h2>Using the API without PHP</h2>
+
+<p>The export API REST interface is simple and it can be used with any client that can
+speak HTTP. This includes <em>curl</em> obviously:</p>
+
+<p>The following command fetches the initial 5K documents from the <code>users</code> collection
+using <em>curl</em>:</p>
+
+<p><code>bash using the export API with curl
+curl                                                   \
+  -X POST                                              \
+  http://localhost:8529/_api/export?collection=users   \
+  --data '{"batchSize":5000}'
+</code></p>
+
+<p>The HTTP response will contain a <code>result</code> attribute that contains the actual
+documents. It will also contain an attribute <code>hasMore</code> that will indicate whether
+there are more documents for the client to fetch. If it is set to <code>true</code>, the
+HTTP response will also contain an attribute <code>id</code>. The client can use this id
+for sending follow-up requests like this (assuming the returned id was <code>13979338067709</code>):</p>
+
+<p><code>bash sending a follow-up request with curl
+curl                                                   \
+  -X PUT                                               \
+  http://localhost:8529/_api/export/13979338067709  
+</code></p>
+
+<p>That&rsquo;s about it. Using the export API it should be fairly simple to ship bulk
+ArangoDB data to client applications or data processing tools.</p>
 ]]></content>
   </entry>
   
