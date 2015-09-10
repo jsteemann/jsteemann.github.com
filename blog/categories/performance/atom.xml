@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-08-30T23:57:02+02:00</updated>
+  <updated>2015-09-10T14:47:47+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,97 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[ArangoDB-PHP Driver Improvements]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/09/10/arangodb-php-driver-improvements/"/>
+    <updated>2015-09-10T14:05:40+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/09/10/arangodb-php-driver-improvements</id>
+    <content type="html"><![CDATA[<p>While preparing the release of ArangoDB 2.7, some improvements were made for the
+<a href="https://github.com/arangodb/arangodb-php">PHP driver for ArangoDB</a>.</p>
+
+<p>The 2.7 version of the PHP driver now supports the AQL query results cache. The
+cache can be turned on or off globally, or be set to demand mode. The demand mode will
+allow controlling caching on a per-AQL-query basis.</p>
+
+<p>Additionally, the HTTP transport layer in the PHP driver was improved. Some internal
+string handling methods were optimized so that the transport part becomes cheaper. All
+driver operations that communicate with the ArangoDB server will benefit from this.</p>
+
+<p>For a demonstration of the improvements, here is a script that creates 100,000
+documents in a local ArangoDB database via the PHP driver. As we&rsquo;re interested in assessing
+the HTTP layer improvements, the script intentionally issues 100,000 HTTP requests
+instead of using the specialized <code>import</code> method provided by the driver.</p>
+
+<p>The script code can be found <a href="https://github.com/arangodb/arangodb-php/blob/devel/examples/http-test.php">here</a>.</p>
+
+<p>The baseline for the improvments is the (non-optimized) 2.6 version of the PHP
+driver. Here are the results for issuing 100,000 requests with the 2.6 driver
+(script was run twice to see if there are variations in execution time):</p>
+
+<p>```plain execution times with 2.6 driver
+creating 100000 documents
+creating documents took 55.144556999207 s</p>
+
+<p>creating 100000 documents
+creating documents took 54.476955890656 s
+```</p>
+
+<p>Running it with the 2.7 version of the PHP driver now shows the improvements.
+Execution time for the same script goes down from 54 seconds to 42 seconds:
+```plain execution times with 2.7 driver
+creating 100000 documents
+creating documents took 42.886090040207 s</p>
+
+<p>creating 100000 documents
+creating documents took 42.578990936279 s
+```</p>
+
+<p>The PHP version used here was:
+```plain PHP version details
+PHP 5.5.12-2ubuntu4.6 (cli) (built: Jul  2 2015 15:27:14)
+Copyright &copy; 1997-2014 The PHP Group
+Zend Engine v2.5.0, Copyright &copy; 1998-2014 Zend Technologies</p>
+
+<pre><code>with Zend OPcache v7.0.4-dev, Copyright (c) 1999-2014, by Zend Technologies
+</code></pre>
+
+<p>```</p>
+
+<p>Following are the results from a different machine, this time using PHP 5.6:
+```plain execution times with 2.6 driver
+creating 100000 documents
+creating documents took 48.394731044769 s</p>
+
+<p>creating 100000 documents
+creating documents took 47.618598937988 s
+```</p>
+
+<p>```plain execution times with 2.7 driver
+creating 100000 documents
+creating documents took 40.535583972931 s</p>
+
+<p>creating 100000 documents
+creating documents took 40.041265010834 s
+```</p>
+
+<p>The PHP version details for this machine were:
+```plain PHP version details
+PHP 5.6.4-4ubuntu6.2 (cli) (built: Jul  2 2015 15:29:28)
+Copyright &copy; 1997-2014 The PHP Group
+Zend Engine v2.6.0, Copyright &copy; 1998-2014 Zend Technologies</p>
+
+<pre><code>with Zend OPcache v7.0.4-dev, Copyright (c) 1999-2014, by Zend Technologies
+</code></pre>
+
+<p>```</p>
+
+<p>The actual improvements depend on many factors, so your exact mileage may vary.
+The improvements may not be noticable for applications that issue only a few
+requests with the driver, but they will be significant when performing lots of
+requests, as in the above examples.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Throughput Enhancements]]></title>
@@ -570,98 +661,6 @@ using <code>WITH COUNT INTO</code></li>
 
 
 <p>Further implementation details can be checked in the <a href="/downloads/code/arango-25-26-shootout-script.js">test script</a>.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Bulk Document Lookups]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/07/bulk-document-lookups/"/>
-    <updated>2015-05-07T17:48:21+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/07/bulk-document-lookups</id>
-    <content type="html"><![CDATA[<p>ArangoDB 2.6 comes with a specialized API for bulk document lookups.</p>
-
-<p>The new API allows fetching multiple documents from the server using a single
-request, making bulk document retrieval more efficient than when using
-one request per document to fetch.</p>
-
-<!-- more -->
-
-
-<p>The straight-forward implementation of a client application that needs to
-fetch several documents from an ArangoDB server looks like this:</p>
-
-<p>```js fetching multiple documents from the server one by one
-// list of document keys
-var keys = [ &ldquo;foo&rdquo;, &ldquo;bar&rdquo;, &ldquo;baz&rdquo;, &hellip;];</p>
-
-<p>// sequentially fetch all documents from the server
-var results = [ ];
-for (var i = 0; i &lt; keys.length; ++i) {
-  results.push(db.test.document(keys[i]));
-}
-// now all documents are contained in variable &lsquo;results&rsquo;
-```</p>
-
-<p>This works fine but causes excessive HTTP communication between the client
-application and the server when many documents need to be fetched. In fact,
-the above code will issue as many HTTP requests as there are documents to fetch.</p>
-
-<p>From the performance point of view, it would be much better to reduce the
-number of HTTP requests, and retrieve multiple documents from the server in
-one go, using a single request.</p>
-
-<p>This is where the new document lookup function comes into play. Provided the
-documents keys are known, all the client application needs to do is to call the
-collection&rsquo;s <code>lookupByKeys</code> method:</p>
-
-<p>```js bulk method: fetching multiple documents at once
-// list of document keys
-var keys = [ &ldquo;foo&rdquo;, &ldquo;bar&rdquo;, &ldquo;baz&rdquo;, &hellip;];</p>
-
-<p>var results = db.test.lookupByKeys(keys);
-// now all documents are contained in variable &lsquo;results&rsquo;
-```</p>
-
-<p>Following is a comparison of the execution times for the two different methds.
-All test runs were conducted in the same ArangoDB 2.6 instance. The tests were
-run from the ArangoShell. The ArangoShell and the ArangoDB server were located on
-the same physical host.</p>
-
-<p>```plain comparing single document requests and bulk requests</p>
-
-<h2>Number of keys     Single documents        Bulk</h2>
-
-<pre><code>     1,000               0.24 s      0.04 s
-    10,000               1.23 s      0.31 s
-   100,000              10.89 s      2.13 s
-</code></pre>
-
-<p>```</p>
-
-<p>As can be seen, the bulk method can provide a substantial speedup in case lots
-of documents need to be fetched by their keys at once. The actual speedups might be
-even higher when using a remote ArangoDB server instead of a localhost connection.</p>
-
-<p>In 2.6 there is currently an ArangoShell implementation for bulk document lookups.
-Other drivers will follow.</p>
-
-<p>Additionally, the server-side REST API method for bulk document lookups can be
-invoked directly via HTTP as follows:</p>
-
-<p><code>plain invoking bulk document lookups via HTTP
-curl                                                  \
-  -X PUT                                              \
-  http://127.0.0.1:8529/_api/simple/lookup-by-keys    \
-  --data '{"collection":"test","keys":["foo","bar","baz"]}'
-</code></p>
-
-<p>Restrictions: the bulk document API works only with document keys, not document ids.
-Additionally, it works on a single collection at a time and cannot be leveraged to fetch
-documents from multiple collections. Still, a client application can group document keys
-by collection beforehand and send one bulk request per involved collection. Finally,
-trying to fetch a document using a non-existing key will not produce an error with the
-bulk API. Using the one-by-one method, trying to fetch a non-existing document will throw
-an exception.</p>
 ]]></content>
   </entry>
   

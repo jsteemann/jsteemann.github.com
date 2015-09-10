@@ -11,8 +11,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="Waiting for a git pull to complete over an 8 KiB/s internet connection is boring.
-So I thought I&rsquo;d rather use the idle time and quickly write &hellip;">
+  <meta name="description" content="A few weeks ago I wrote about ArangoDB&rsquo;s
+specialized export API. The export API is useful when the goal is to extract all documents from a &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -82,6 +82,57 @@ So I thought I&rsquo;d rather use the idle time and quickly write &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/04/24/exporting-data-for-offline-processing/">Exporting Data for Offline Processing</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-24T15:47:31+02:00" pubdate data-updated="true">Apr 24<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>A few weeks ago I wrote about ArangoDB&rsquo;s
+<a href="https://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/">specialized export API</a>.</p>
+
+<p>The export API is useful when the goal is to extract all documents from a given collection
+and to process them outside of ArangoDB.</p>
+
+<p>The export API can provide quick and memory-efficient snapshots of the data in the underlying
+collection, making it suitable for extract all documents of the collection. It will be able
+to provide data much faster than with an AQL query that will extract all documents.</p>
+
+<p>In this post I&rsquo;ll show how to use the export API to extract data and process it with PHP.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/04/24/exporting-data-for-offline-processing/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -543,68 +594,6 @@ applicable with any other Git repository.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/02/26/more-es6-features/">More ES6 Features</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-02-26T12:00:46+01:00" pubdate data-updated="true">Feb 26<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>ArangoDB 2.5 comes with an upgraded version of V8, Google&rsquo;s open source JavaScript engine.</p>
-
-<p>The built-in version of V8 has been upgraded from 3.29.54 to 3.31.74.1.</p>
-
-<p>In addition to several already usable ES6 features (detailed in
-<a href="https://jsteemann.github.io/blog/2014/12/19/using-es6-features-in-arangodb/">this blog</a>,
-the following ES6 features are activated in ArangoDB 2.5 by default:</p>
-
-<ul>
-<li>iterators and generators</li>
-<li>template strings</li>
-<li>enhanced object literals</li>
-<li>enhanced numeric literals</li>
-<li>block scoping with <code>let</code> and constant variables using <code>const</code></li>
-<li>additional String methods (such as <code>startsWith</code>, <code>repeat</code> etc.)</li>
-</ul>
-
-
-<p>The above features are available in ArangoDB 2.5, and can now be used for scripting purposes
-in the ArangoShell and in server-side Foxx actions inside the database.</p>
-
-<p>This blog post briefly explains the features provides some quick examples for using them.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/02/26/more-es6-features/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/4/">&larr; Older</a>
@@ -629,6 +618,10 @@ in the ArangoShell and in server-side Foxx actions inside the database.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/09/10/arangodb-php-driver-improvements/">ArangoDB-PHP Driver Improvements</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/08/30/on-building-aql-query-strings/">On Building AQL Query Strings</a>
       </li>
     
@@ -648,10 +641,6 @@ in the ArangoShell and in server-side Foxx actions inside the database.</p>
         <a href="/blog/2015/07/27/introducing-return-distinct/">Introducing RETURN DISTINCT</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/07/27/aql-object-literal-simplification/">AQL Object Literal Simplification</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -660,11 +649,11 @@ in the ArangoShell and in server-side Foxx actions inside the database.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (28)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (48)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (6)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (7)</a></li><li><a href='/blog/categories/concepts/'>Concepts (7)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (18)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (28)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (48)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB, (1)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (6)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (7)</a></li><li><a href='/blog/categories/concepts/'>Concepts (7)</a></li><li><a href='/blog/categories/development/'>Development (6)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (19)</a></li><li><a href='/blog/categories/php/'>PHP (2)</a></li><li><a href='/blog/categories/php/'>PHP, (1)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (38)</li><ul class="month_list"><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (39)</li><ul class="month_list"><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>
