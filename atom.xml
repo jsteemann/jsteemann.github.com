@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-09-10T14:57:26+02:00</updated>
+  <updated>2015-09-25T19:34:29+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -650,7 +650,8 @@ wouldn&rsquo;t work, so I put together some dedicated completions files for <em>
 
 
 <p>The files can be downloaded here:
-<a href="http://jsteemann.github.io/downloads/code/completions-fish-2.5">2.5</a> <a href="http://jsteemann.github.io/downloads/code/completions-fish-2.6">2.6</a></p>
+<a href="http://jsteemann.github.io/downloads/code/completions-fish-2.5">2.5</a> <a href="http://jsteemann.github.io/downloads/code/completions-fish-2.6">2.6</a>
+<a href="http://jsteemann.github.io/downloads/code/completions-fish-2.7">2.7</a></p>
 
 <p>To activate these completions, copy the appropriate file into <code>~/.arangodb-completions</code>
 and source it from <em>fish</em>:</p>
