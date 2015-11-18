@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-11-18T01:27:06+01:00</updated>
+  <updated>2015-11-18T22:17:00+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,153 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Improved Deadlock Detection]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/18/improved-deadlock-detection/"/>
+    <updated>2015-11-18T19:24:24+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/18/improved-deadlock-detection</id>
+    <content type="html"><![CDATA[<p>The upcoming ArangoDB version 2.8 (currently in devel) will
+provide a much better deadlock detection mechanism than its
+predecessors.</p>
+
+<p>The new deadlock detection mechanism will kick in automatically
+when it detects operations that are mutually waiting for each other.
+In case it finds such deadlock, it will abort one of the operations
+so that the others can continue and overall progress can be made.</p>
+
+<!-- more -->
+
+
+<p>In previous versions of ArangoDB, deadlocks could make operations
+wait forever, requiring the server to be stopped and restarted.</p>
+
+<h2>How deadlocks can occur</h2>
+
+<p>Here&rsquo;s a simple example for getting into a deadlock state:</p>
+
+<p>Transaction A wants to write to collection c1 and to read from collection
+c2. In parallel, transaction B wants to write to collection c2 and read
+from collection c1. If the sequence of operations is interleaved as follows,
+then the two transactions prevent each other from making progress:</p>
+
+<ul>
+<li>transaction A successfully acquires write-lock on c1</li>
+<li>transaction B sucessfull acquires write-lock on c2</li>
+<li>transaction A tries to acquire read-lock on c2 (and must wait for B)</li>
+<li>transaction B tries to acquire read-lock on c1 (and must wait for A)</li>
+</ul>
+
+
+<p>Here&rsquo;s these such two transactions being started from two ArangoShell
+instances in parallel (left is A, right is B):</p>
+
+<p><img src="http://jsteemann.github.io/downloads/screenshots/deadlock.png"></p>
+
+<p>In general, deadlocks can occur only when multiple operations (AQL
+queries or other transactions) try to access the same resources
+(collections) at the same time, and only if the operations already
+have already acquired some locks on these resources. And finally
+each operation needs to involve more than one collection, so there
+is the potential for already having acquired some locks but having
+to wait for others.</p>
+
+<h2>Dynamically added collections</h2>
+
+<p>Most operations will just work fine and will not cause any deadlocks.
+This is especially true for all operations that involve only a single
+collection. This leaves multi-collection AQL queries and multi-collection
+userland transactions.</p>
+
+<p>Normally these will also work fine. This is because when a query or
+transaction starts, it will tell the transaction manager about the resources
+(collections) it will need. The transaction manager can then acquire the
+required resources in a deterministic fashion that prevents deadlocks.
+If all queries and transactions properly announce upfront which collections
+they will access, there will also be no deadlocks.</p>
+
+<p>But for some operations its hard to predict at transaction start which
+collections will be accessed. This includes some AQL functions that
+can dynamically access collection data without having to specify the
+collection name anywhere in the query.</p>
+
+<p>A good example for this is the <code>GRAPH_EDGES</code> AQL function, which will get
+a graph name as its first input parameter, but not the names of the underlying
+edge collection(s). When this function is used in an AQL query, the
+query parser will just find a function parameter containing a graph name
+but doesn&rsquo;t know it&rsquo;s a collection name.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>GRAPH_EDGES("myEdges", [ { type: "friend" } ])</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The <code>"myEdges"</code> graph name will look like any other string to the parser.
+It does not know about the contexts in which strings may have special meanings.</p>
+
+<p>Note that even if this would be fixed, the problem won&rsquo;t go away entirely:
+a function call parameter in a query isn&rsquo;t necessarily a constant but can
+be an arbitrary expression:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  RETURN GRAPH_EDGES(CONCAT(doc.graphName, '-test'), [ doc.example ])</span></code></pre></td></tr></table></div></figure>
+
+
+<p>At least in this case the AQL query parser won&rsquo;t find a collection name,
+so when the AQL query starts it is yet unknown which collections will be
+accessed. Only at runtime when the function is actually executed, the
+collection names will be looked up by finding the graph description in the
+<code>_graphs</code>system collection. Then the edge collections participating in
+the graph will be added to the query dynamically. Only this dynamic addition
+adds the potential for deadlock.</p>
+
+<p>This dynamic addition of collections in unavoidable for conveniently
+querying data from collections whose names are unknown when the query starts.</p>
+
+<h2>Deadlock detection</h2>
+
+<p>Whenever transaction manager detects a deadlock in ArangoDB 2.8, it will
+automatically abort one of the blocking transactions. The transaction will
+be rolled back and all modifications it has made will be reverted. The
+operation will fail with error code 29 (<em>deadlock detected</em>) and raise an
+exception that the user can handle in the calling code.</p>
+
+<p>Deadlocks will be found if two transactions mutually lock each other as
+seen in the screenshot above, but also for more complex setups. The following
+screenshot shows four parallel transactions that block each other indirectly.</p>
+
+<p><img src="http://jsteemann.github.io/downloads/screenshots/threeway-deadlock.png"></p>
+
+<p>The top left window (transaction 1) will block the one in the top right
+(transaction 2), and is itself blocked by the transaction in the bottom left
+(transaction 3).</p>
+
+<p>The transaction in the top right window (transaction 2) blocks the one in the
+bottom left (transaction 3), and is itself blocked by the one in the top left
+(transaction 1).</p>
+
+<p>Transaction 3 (bottom left) is blocked by transaction 2 (top right).
+Transaction 4 (bottom right) does exactly the same as transaction 3.</p>
+
+<p>With these transactions, we end up in this waiting state:</p>
+
+<ul>
+<li>T1 waits for T3 and T4</li>
+<li>T2 waits for T1</li>
+<li>T3 waits for T2</li>
+<li>T4 waits for T2</li>
+</ul>
+
+
+<p>This waiting state is cyclic (T1 &lt; T3 &lt; T2 &lt; T1) and therefore no progress
+can be made. This is exactly a situation in which the transaction manager
+will abort one of the transactions.</p>
+
+<p>No configuration is required for the deadlock detection mechanism. It will
+always be active and cannot be configured or turned off.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[C++ Constructors and Memory Leaks]]></title>
@@ -3682,84 +3829,6 @@ complex documents can be queried:</p>
 </span><span class='line'><span class="p">]</span>
 </span></code></pre></td></tr></table></div></figure>
 
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Subquery Optimizations]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations/"/>
-    <updated>2015-05-04T13:26:00+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/04/subquery-optimizations</id>
-    <content type="html"><![CDATA[<p>This is another post demonstrating some of the AQL query performance improvements
-that can be expected in ArangoDB 2.6. Specifically, this post is about an optimization
-for subqueries. AQL queries with multiple subqueries will likely benefit from it.</p>
-
-<!-- more -->
-
-
-<p>The following example queries use the same <code>users</code> collection with 100,000 documents
-that was used in the <a href="http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql/">previous post about return value optimizations</a>.
-Again, the source data for the collection can be found <a href="http://jsteemann.github.io/downloads/code/users-100000.json.tar.gz">here</a>.</p>
-
-<p>We&rsquo;ll start with a query that uses a single subquery extracting all users from the
-collection into a flat result array:</p>
-
-<figure class='code'><figcaption><span>example query with single subquery</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN [ 
-</span><span class='line'>  (FOR u IN users RETURN u) 
-</span><span class='line'>]</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This query is equally fast with ArangoDB 2.5 and 2.6, no changes here.</p>
-
-<p>Let&rsquo;s ramp it up to using two subqueries, one for users with a <code>gender</code> attribute value
-of <code>male</code>, and one for users with <code>gender</code> attribute value <code>female</code>. No indexes were used
-for the extraction in 2.5 nor 2.6:</p>
-
-<figure class='code'><figcaption><span>example query with two subqueries</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN [ 
-</span><span class='line'>  (FOR u IN users FILTER u.gender == 'male' RETURN u), 
-</span><span class='line'>  (FOR u IN users FILTER u.gender == 'female' RETURN u) 
-</span><span class='line'>]</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The query takes 16.6 seconds to execute in 2.5, but only 2.95 seconds with ArangoDB 2.6.
-This 80 % reduction in execution time is due to ArangoDB 2.6 being a bit smarter about
-subqueries than 2.5 is.</p>
-
-<p>In the above query, the two subqueries are independent, so not only can they be executed in
-any order, but they also do not rely on each other&rsquo;s results. ArangoDB 2.6 will detect that
-and avoid copying variables and intermediate results into subqueries if they are actually not
-needed there. 2.5 copied all variables into subqueries unconditionally, even if variables
-were not needed there.</p>
-
-<p>In 2.6, any AQL query with multiple subqueries will benefit from this optimization. The
-performance improvements will be greater if subqueries late in the execution pipeline have a lot of
-intermediate results created in front of them, but do not rely on these intermediate results.</p>
-
-<p>Another nice example for a 2.6 speedup is extracting a single attribute per subquery, as is done
-for the <code>name</code> attribute in the following query:</p>
-
-<figure class='code'><figcaption><span>extracting a single attribute in two subqueries</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN [ 
-</span><span class='line'>  (FOR u IN users FILTER u.gender == 'male' RETURN u.name), 
-</span><span class='line'>  (FOR u IN users FILTER u.gender == 'female' RETURN u.name) 
-</span><span class='line'>]</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This takes 42 seconds to execute in 2.5, and only 0.86 seconds in 2.6. This is a more than
-95 % reduction in execution time. It is caused by a mix of factors, one of them again being
-the subquery optimization that avoids copying unneeded intermediate results.</p>
-
-<p>Enjoy!</p>
 ]]></content>
   </entry>
   

@@ -11,8 +11,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="By accident I found this StackOverflow question
-about how to convert a PHP string with array data into an actual PHP array variable. For example, if &hellip;">
+  <meta name="description" content="With ArangoDB 2.6 being in beta already, it&rsquo;s time to look at some
+features scheduled for 2.7. Today I&rsquo;ll showcase a few AQL parser &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -82,6 +82,50 @@ about how to convert a PHP string with array data into an actual PHP array varia
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/06/17/aql-improvements-for-27/">AQL Improvements for 2.7</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-06-17T12:35:16+02:00" pubdate data-updated="true">Jun 17<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>With ArangoDB 2.6 being in beta already, it&rsquo;s time to look at some
+features scheduled for 2.7. Today I&rsquo;ll showcase a few AQL parser
+improvements that are present in the <code>devel</code> branch already, which will
+be the foundation for the 2.7 release.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/06/17/aql-improvements-for-27/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -555,49 +599,6 @@ and objects!</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/05/04/subquery-optimizations/">Subquery Optimizations</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-05-04T13:26:00+02:00" pubdate data-updated="true">May 4<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>This is another post demonstrating some of the AQL query performance improvements
-that can be expected in ArangoDB 2.6. Specifically, this post is about an optimization
-for subqueries. AQL queries with multiple subqueries will likely benefit from it.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/05/04/subquery-optimizations/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/3/">&larr; Older</a>
@@ -622,6 +623,10 @@ for subqueries. AQL queries with multiple subqueries will likely benefit from it
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/11/18/improved-deadlock-detection/">Improved Deadlock Detection</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/11/18/on-exception-handling/">C++ Constructors and Memory Leaks</a>
       </li>
     
@@ -641,10 +646,6 @@ for subqueries. AQL queries with multiple subqueries will likely benefit from it
         <a href="/blog/2015/07/30/throughput-enhancements/">Throughput Enhancements</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/">How to Set Up Fish Completion for ArangoDB</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -653,11 +654,11 @@ for subqueries. AQL queries with multiple subqueries will likely benefit from it
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (28)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (49)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (6)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (7)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (19)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (29)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (50)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (7)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (19)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (40)</li><ul class="month_list"><li class="month"><a href='/blog/2015/11/'>NOV (1)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (41)</li><ul class="month_list"><li class="month"><a href='/blog/2015/11/'>NOV (2)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

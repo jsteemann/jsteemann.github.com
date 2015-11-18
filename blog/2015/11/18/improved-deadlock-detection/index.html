@@ -1,0 +1,400 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>Improved Deadlock Detection - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="The upcoming ArangoDB version 2.8 (currently in devel) will
+provide a much better deadlock detection mechanism than its
+predecessors. The new &hellip;">
+  <meta name="keywords" content="ArangoDB, database, AQL, ArangoShell, Deadlocks">
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/11/18/improved-deadlock-detection">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>{ "subject" : "ArangoDB", "tags": [ "multi-model", "nosql", "database" ] }</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Improved Deadlock Detection</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-11-18T19:24:24+01:00" pubdate data-updated="true">Nov 18<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>The upcoming ArangoDB version 2.8 (currently in devel) will
+provide a much better deadlock detection mechanism than its
+predecessors.</p>
+
+<p>The new deadlock detection mechanism will kick in automatically
+when it detects operations that are mutually waiting for each other.
+In case it finds such deadlock, it will abort one of the operations
+so that the others can continue and overall progress can be made.</p>
+
+<!-- more -->
+
+
+<p>In previous versions of ArangoDB, deadlocks could make operations
+wait forever, requiring the server to be stopped and restarted.</p>
+
+<h2>How deadlocks can occur</h2>
+
+<p>Here&rsquo;s a simple example for getting into a deadlock state:</p>
+
+<p>Transaction A wants to write to collection c1 and to read from collection
+c2. In parallel, transaction B wants to write to collection c2 and read
+from collection c1. If the sequence of operations is interleaved as follows,
+then the two transactions prevent each other from making progress:</p>
+
+<ul>
+<li>transaction A successfully acquires write-lock on c1</li>
+<li>transaction B sucessfull acquires write-lock on c2</li>
+<li>transaction A tries to acquire read-lock on c2 (and must wait for B)</li>
+<li>transaction B tries to acquire read-lock on c1 (and must wait for A)</li>
+</ul>
+
+
+<p>Here&rsquo;s these such two transactions being started from two ArangoShell
+instances in parallel (left is A, right is B):</p>
+
+<p><img src="/downloads/screenshots/deadlock.png"></p>
+
+<p>In general, deadlocks can occur only when multiple operations (AQL
+queries or other transactions) try to access the same resources
+(collections) at the same time, and only if the operations already
+have already acquired some locks on these resources. And finally
+each operation needs to involve more than one collection, so there
+is the potential for already having acquired some locks but having
+to wait for others.</p>
+
+<h2>Dynamically added collections</h2>
+
+<p>Most operations will just work fine and will not cause any deadlocks.
+This is especially true for all operations that involve only a single
+collection. This leaves multi-collection AQL queries and multi-collection
+userland transactions.</p>
+
+<p>Normally these will also work fine. This is because when a query or
+transaction starts, it will tell the transaction manager about the resources
+(collections) it will need. The transaction manager can then acquire the
+required resources in a deterministic fashion that prevents deadlocks.
+If all queries and transactions properly announce upfront which collections
+they will access, there will also be no deadlocks.</p>
+
+<p>But for some operations its hard to predict at transaction start which
+collections will be accessed. This includes some AQL functions that
+can dynamically access collection data without having to specify the
+collection name anywhere in the query.</p>
+
+<p>A good example for this is the <code>GRAPH_EDGES</code> AQL function, which will get
+a graph name as its first input parameter, but not the names of the underlying
+edge collection(s). When this function is used in an AQL query, the
+query parser will just find a function parameter containing a graph name
+but doesn&rsquo;t know it&rsquo;s a collection name.</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>GRAPH_EDGES("myEdges", [ { type: "friend" } ])</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The <code>"myEdges"</code> graph name will look like any other string to the parser.
+It does not know about the contexts in which strings may have special meanings.</p>
+
+<p>Note that even if this would be fixed, the problem won&rsquo;t go away entirely:
+a function call parameter in a query isn&rsquo;t necessarily a constant but can
+be an arbitrary expression:</p>
+
+<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  RETURN GRAPH_EDGES(CONCAT(doc.graphName, '-test'), [ doc.example ])</span></code></pre></td></tr></table></div></figure>
+
+
+<p>At least in this case the AQL query parser won&rsquo;t find a collection name,
+so when the AQL query starts it is yet unknown which collections will be
+accessed. Only at runtime when the function is actually executed, the
+collection names will be looked up by finding the graph description in the
+<code>_graphs</code>system collection. Then the edge collections participating in
+the graph will be added to the query dynamically. Only this dynamic addition
+adds the potential for deadlock.</p>
+
+<p>This dynamic addition of collections in unavoidable for conveniently
+querying data from collections whose names are unknown when the query starts.</p>
+
+<h2>Deadlock detection</h2>
+
+<p>Whenever transaction manager detects a deadlock in ArangoDB 2.8, it will
+automatically abort one of the blocking transactions. The transaction will
+be rolled back and all modifications it has made will be reverted. The
+operation will fail with error code 29 (<em>deadlock detected</em>) and raise an
+exception that the user can handle in the calling code.</p>
+
+<p>Deadlocks will be found if two transactions mutually lock each other as
+seen in the screenshot above, but also for more complex setups. The following
+screenshot shows four parallel transactions that block each other indirectly.</p>
+
+<p><img src="/downloads/screenshots/threeway-deadlock.png"></p>
+
+<p>The top left window (transaction 1) will block the one in the top right
+(transaction 2), and is itself blocked by the transaction in the bottom left
+(transaction 3).</p>
+
+<p>The transaction in the top right window (transaction 2) blocks the one in the
+bottom left (transaction 3), and is itself blocked by the one in the top left
+(transaction 1).</p>
+
+<p>Transaction 3 (bottom left) is blocked by transaction 2 (top right).
+Transaction 4 (bottom right) does exactly the same as transaction 3.</p>
+
+<p>With these transactions, we end up in this waiting state:</p>
+
+<ul>
+<li>T1 waits for T3 and T4</li>
+<li>T2 waits for T1</li>
+<li>T3 waits for T2</li>
+<li>T4 waits for T2</li>
+</ul>
+
+
+<p>This waiting state is cyclic (T1 &lt; T3 &lt; T2 &lt; T1) and therefore no progress
+can be made. This is exactly a situation in which the transaction manager
+will abort one of the transactions.</p>
+
+<p>No configuration is required for the deadlock detection mechanism. It will
+always be active and cannot be configured or turned off.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-11-18T19:24:24+01:00" pubdate data-updated="true">Nov 18<span>th</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/arangoshell/'>ArangoShell</a>, <a class='category' href='/blog/categories/concepts/'>Concepts</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/11/18/improved-deadlock-detection/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/11/18/improved-deadlock-detection/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/11/18/on-exception-handling/" title="Previous Post: C++ constructors and memory leaks">&laquo; C++ constructors and memory leaks</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/11/18/improved-deadlock-detection/">Improved Deadlock Detection</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/11/18/on-exception-handling/">C++ Constructors and Memory Leaks</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/09/10/arangodb-php-driver-improvements/">ArangoDB-PHP Driver Improvements</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/08/30/on-building-aql-query-strings/">On Building AQL Query Strings</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/08/01/how-v8-is-used-in-arangodb/">How V8 Is Used in ArangoDB</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/07/30/throughput-enhancements/">Throughput Enhancements</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (29)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (50)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (7)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (5)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (19)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (41)</li><ul class="month_list"><li class="month"><a href='/blog/2015/11/'>NOV (2)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2015 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
