@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Development | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/development/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-11-18T01:24:50+01:00</updated>
+  <updated>2015-11-18T01:27:06+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -32,6 +32,9 @@ easily in practice, so memory leaks can be avoided?</p>
 <p>This post will start with a few seemingly working but subtly ill-formed
 techniques that a few common pitfalls. Later on it will provide a few
 very simple solutions for getting it right.</p>
+
+<!--more -->
+
 
 <p>None of the solutions here are new or original.</p>
 
