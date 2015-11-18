@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-09-25T19:34:29+02:00</updated>
+  <updated>2015-11-18T01:24:50+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,628 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[C++ Constructors and Memory Leaks]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/18/on-exception-handling/"/>
+    <updated>2015-11-18T01:10:51+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/18/on-exception-handling</id>
+    <content type="html"><![CDATA[<h2>Preventing leaks in throwing constructors</h2>
+
+<p>The easiest way to prevent memory leaks is to create all objects on
+the stack and not using dynamic memory at all. However, often this is not
+possible, for example because stack size is limited or objects need to
+outlive the caller&rsquo;s scope.</p>
+
+<p>Another way to prevent memory leaks and leaks of other resources is
+obviously to employ the RAII pattern. How can it be used safely and
+easily in practice, so memory leaks can be avoided?</p>
+
+<p>This post will start with a few seemingly working but subtly ill-formed
+techniques that a few common pitfalls. Later on it will provide a few
+very simple solutions for getting it right.</p>
+
+<p>None of the solutions here are new or original.</p>
+
+<p>I took some inspiration from the excellent <a href="http://gotw.ca/gotw/066.htm">constructor failures GotW post</a>.
+That doesn&rsquo;t cover smart pointers and is not explicitly about preventing
+preventing memory leak, so I put together this overview myself.</p>
+
+<h2>Naive implementation</h2>
+
+<p>Let&rsquo;s pretend we have a simple test program <code>main.cpp</code>, which
+creates an object of class <em>MyClass</em> on the stack like this:</p>
+
+<figure class='code'><figcaption><span>main.cpp</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="cp">#include &lt;iostream&gt;</span>
+</span><span class='line'><span class="cp">#include &quot;MyClass.h&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="kt">int</span> <span class="n">main</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">try</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">MyClass</span> <span class="n">myClass</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;NO EXCEPTION&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">catch</span> <span class="p">(...)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;CAUGHT EXCEPTION&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The above code creates the <em>myClass</em> instance on the stack, so
+itself will not leak any memory. When the creating of the <em>myClass</em>
+instance fails for whatever reason, the instance newer existed so
+the memory for holding a <em>MyClass</em> object will be freed automatically.
+If object creation succeeds and the object goes out of scope at the
+end of the <em>try</em> block, then the object&rsquo;s destructor will be called
+and resources can be freed, too.</p>
+
+<p>Obviously this is already good, so let&rsquo;s keep it as it is and have a
+look at the implementation of <em>MyClass</em> now. This class will manage
+two heap objects of type <em>A</em>, which are created using the helper
+function <em>createInstance</em>:</p>
+
+<figure class='code'><figcaption><span>MyClass.h</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="cp">#include &lt;iostream&gt;</span>
+</span><span class='line'><span class="cp">#include &quot;A.h&quot;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">struct</span> <span class="n">MyClass</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">A</span><span class="o">*</span> <span class="n">a1</span><span class="p">;</span>
+</span><span class='line'>  <span class="n">A</span><span class="o">*</span> <span class="n">a2</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">MyClass</span> <span class="p">()</span>
+</span><span class='line'>    <span class="o">:</span> <span class="n">a1</span><span class="p">(</span><span class="n">createInstance</span><span class="p">()),</span>
+</span><span class='line'>      <span class="n">a2</span><span class="p">(</span><span class="n">createInstance</span><span class="p">())</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;CTOR MYCLASS&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="o">~</span><span class="n">MyClass</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;DTOR MYCLASS&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">delete</span> <span class="n">a1</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">delete</span> <span class="n">a2</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>For completeness, here is class <em>A</em>. It won&rsquo;t manage any resources
+itself:</p>
+
+<figure class='code'><figcaption><span>A.h</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="cp">#include &lt;iostream&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">struct</span> <span class="n">A</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">A</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;CTOR A&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="o">~</span><span class="n">A</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;DTOR A&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">};</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// helper method for creating an instance of A</span>
+</span><span class='line'><span class="n">A</span><span class="o">*</span> <span class="n">createInstance</span> <span class="p">(</span><span class="kt">bool</span> <span class="n">shouldThrow</span> <span class="o">=</span> <span class="kc">false</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">if</span> <span class="p">(</span><span class="n">shouldThrow</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">throw</span> <span class="s">&quot;THROWING AN EXCEPTION&quot;</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="k">new</span> <span class="n">A</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>During this complete post, the code of <em>A.h</em> will remain unchanged.</p>
+
+<p>Compiling and running the initial version of <code>main.cpp</code> will produce the
+following output:</p>
+
+<figure class='code'><figcaption><span>output of naive implementation</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>CTOR A
+</span><span class='line'>CTOR A
+</span><span class='line'>CTOR MYCLASS
+</span><span class='line'>NO EXCEPTION
+</span><span class='line'>DTOR MYCLASS
+</span><span class='line'>DTOR A
+</span><span class='line'>DTOR A</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Valgrind also reports no memory leaks. Are we done already?</p>
+
+<h2>Introducing exceptions</h2>
+
+<p>No, because everything still went well. Let&rsquo;s introduce exceptions into
+the picture and check what happens then.</p>
+
+<p>Let&rsquo;s first introduce an exception in the constructor of <em>MyClass</em>.
+We&rsquo;ll make the <em>createInstance</em> function throw on second invocation (we do
+this by passing a value of <em>true</em> to it):</p>
+
+<figure class='code'><figcaption><span>constructor throwing an exception</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="n">MyClass</span> <span class="p">()</span>
+</span><span class='line'>  <span class="o">:</span> <span class="n">a1</span><span class="p">(</span><span class="n">createInstance</span><span class="p">()),</span>
+</span><span class='line'>    <span class="n">a2</span><span class="p">(</span><span class="n">createInstance</span><span class="p">(</span><span class="kc">true</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;CTOR MYCLASS&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Running the program will now emit the following:</p>
+
+<figure class='code'><figcaption><span>output of naive implementation, with exception</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>CTOR A
+</span><span class='line'>CAUGHT EXCEPTION</span></code></pre></td></tr></table></div></figure>
+
+
+<p>As we&rsquo;re throwing in the initializer list already, we don&rsquo;t even
+reach the constructor body. This is no problem, but worse is that the
+destructor for class <em>MyClass</em> is not being called at all.
+Valgrind therefore reports the memory for first <em>A</em> instance as leaked.</p>
+
+<p>By the way, the destructor for the <em>MyClass</em> instance is intentionally
+not being called as the object hasn&rsquo;t been fully constructed and logically
+never existed.</p>
+
+<p>Will it help if we move the heap allocations from the initializer list
+into the constructor body like this?</p>
+
+<figure class='code'><figcaption><span>using the constructor body instead of the initializer list</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="n">MyClass</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;CTOR MYCLASS&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>  <span class="n">a1</span> <span class="o">=</span> <span class="n">createInstance</span><span class="p">();</span>
+</span><span class='line'>  <span class="n">a2</span> <span class="o">=</span> <span class="n">createInstance</span><span class="p">(</span><span class="kc">true</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Unfortunately not. Still no destructor invocations:</p>
+
+<figure class='code'><figcaption><span>output of constructor body variant</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>CTOR MYCLASS
+</span><span class='line'>CTOR A
+</span><span class='line'>CAUGHT EXCEPTION</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Remember: an object&rsquo;s destructor won&rsquo;t be called if its constructor threw
+and the exception wasn&rsquo;t caught. That also means releasing an object&rsquo;s
+resources solely via the destructor as in implementation above will not be
+sufficient if resources are allocated in the constructor and the constructor
+can throw.</p>
+
+<p>What can be done about that?</p>
+
+<p>Obviously all resource allocations can be moved into the constructor body so
+exceptions can be caught there:</p>
+
+<figure class='code'><figcaption><span>catching exceptions in constructor of MyClass</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="n">MyClass</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;CTOR MYCLASS&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>  <span class="n">a1</span> <span class="o">=</span> <span class="n">createInstance</span><span class="p">();</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="k">try</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">a2</span> <span class="o">=</span> <span class="n">createInstance</span><span class="p">(</span><span class="kc">true</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">catch</span> <span class="p">(...)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="c1">// must clean up a1 to prevent a leak</span>
+</span><span class='line'>    <span class="k">delete</span> <span class="n">a1</span><span class="p">;</span>
+</span><span class='line'>    <span class="c1">// and re-throw the exception</span>
+</span><span class='line'>    <span class="k">throw</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>While the above will work, it&rsquo;s clumsy, verbose and error-prone. If
+more objects need to be managed this will make us end up in deeply
+nested try&hellip;catch blocks.</p>
+
+<h2>try&hellip;catch for the initializer list</h2>
+
+<p>But wait, wasn&rsquo;t there a try&hellip;catch feature especially for initializer
+list code? Sounds like it could be useful. Maybe we can use this instead
+so we can catch exceptions during initialization?</p>
+
+<p>There is indeed something like that: exceptions thrown from the initializer
+list  can be caught using the following special syntax:</p>
+
+<figure class='code'><figcaption><span>catching exceptions thrown in the initializer list</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="n">MyClass</span> <span class="p">()</span>
+</span><span class='line'>  <span class="k">try</span> <span class="o">:</span> <span class="n">a1</span><span class="p">(</span><span class="n">createInstance</span><span class="p">()),</span>
+</span><span class='line'>        <span class="n">a2</span><span class="p">(</span><span class="n">createInstance</span><span class="p">(</span><span class="kc">true</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;CTOR MYCLASS&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">catch</span> <span class="p">(...)</span> <span class="p">{</span>  <span class="c1">// catch block for initializer list code</span>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;CATCH BLOCK MYCLASS&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">delete</span> <span class="n">a1</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Running the program with the above <em>MyClass</em> constructor will also
+do what is expected: when creating the second <em>A</em> instance, the
+initializer list code will throw, invoking its catch block. Again
+code execution won&rsquo;t make it into the constructor body, and we don&rsquo;t
+see the destructor code in action.</p>
+
+<p>The output of the program is:</p>
+
+<figure class='code'><figcaption><span>output of initializer list variant </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>CTOR A
+</span><span class='line'>CATCH BLOCK MYCLASS
+</span><span class='line'>DTOR A
+</span><span class='line'>CAUGHT EXCEPTION</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Valgrind does not report a leak, so are we done now?</p>
+
+<p>No, as the above code has a severe problem. It worked only
+because we knew the second invocation of <em>createInstance</em> would fail.</p>
+
+<p>But in the general case, either the first call or the second call
+can fail. If the first call fails, then the initializer hasn&rsquo;t
+initialized any of the object&rsquo;s members, and it would be unsafe to
+delete any object members in the initializer&rsquo;s catch block. If the
+second <em>createInstance</em> call fails, then the initializer has created
+<em>a1</em> but not <em>a2</em>. To prevent a leak in this case, we should delete <em>a1</em>,
+but we better don&rsquo;t delete <em>a2</em> yet.</p>
+
+<p>But how do we tell in the catch block at what stage the initializer
+list had thrown? There is no natural way to do this correctly without
+introducing more state. And without that, we have the choice between
+undefined behavior when deleting the not-yet-initialized object
+members, and memory leaks when ignoring them.</p>
+
+<h2>Not using pointers at all</h2>
+
+<p>Note that if we wouldn&rsquo;t have used pointers for our managed <em>A</em> objects,
+then we could have used the fact that destructors for all initialized
+object members <strong>are</strong> actually called when object construction fails.</p>
+
+<p>However, simple pointers don&rsquo;t have a destructor, so the objects they
+point to remain and the memory is lost.</p>
+
+<p>So one obvious solution for preventing memory leaks is to not use pointers,
+and get rid of all <code>new</code> and <code>delete</code> statements.</p>
+
+<p>In some situations we can probably get away with making the managed objects
+regular class members of the class that manages them:</p>
+
+<figure class='code'><figcaption><span>not using pointers</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="k">struct</span> <span class="n">MyClass</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">A</span> <span class="n">a1</span><span class="p">;</span> <span class="c1">// no pointer anymore!</span>
+</span><span class='line'>  <span class="n">A</span> <span class="n">a2</span><span class="p">;</span> <span class="c1">// no pointer anymore!</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">MyClass</span> <span class="p">()</span>
+</span><span class='line'>    <span class="o">:</span> <span class="n">a1</span><span class="p">(),</span>
+</span><span class='line'>      <span class="n">a2</span><span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;CTOR MYCLASS&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="o">~</span><span class="n">MyClass</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;DTOR MYCLASS&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>    <span class="c1">// no delete statements needed anymore!</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now if any of the <em>A</em> constructors will throw an exception during
+initialization, everything will be cleaned up properly. Now we can make
+use of the destructor of <em>A</em>. If <em>A</em> instances are not pointers but
+regular objects, the destructors for already created instances will
+be called normally, and no destructors will be called for the not-yet-initialized
+<em>A</em> instances. That&rsquo;s how it should be. We don&rsquo;t get this benefit with
+regular pointers, which don&rsquo;t have a destructor.</p>
+
+<p>As an aside, we got rid of the <code>delete</code> statements in the destructor
+and may even get away with the default destructor.</p>
+
+<p>Obviously this is an easy and safe solution, but it also has a few
+downsides. Here are a few (incomplete list):</p>
+
+<ul>
+<li>when compiling <em>MyClass</em>, the compiler will now need to know the
+definition for class <em>A</em>. You can&rsquo;t get away with a simple forward
+declaration for class <em>A</em> anymore as in the case when the class
+only contained pointers to <em>A</em>.
+So this solution increases the source code dependencies and coupling.</li>
+<li>instances of managed objects (e.g. <em>A</em>) will need to be created when
+the managing object (e.g. <em>MyClass</em>) is created. There is no way to
+postpone the object creation as in the case of when using pointers.</li>
+<li>in general, the lifetime of the managed objects is tied to the lifetime
+of the managing object. This may or may not be ok, depending on
+requirements.</li>
+</ul>
+
+
+<h2>Using smart pointers (e.g. std::unique_ptr)</h2>
+
+<p>In many cases the superior alternative to all the above is using one
+of the available smart pointer classes for managing resources.</p>
+
+<p>The promise of smart pointers is that resource management becomes easier,
+safer and more flexible with them.</p>
+
+<p>Really useful smart pointers (this excludes <code>std::auto_ptr</code>) are part
+of standard C++ since C++11, and to my knowledge they can be used in
+all C++11-compatible compilers and even in some older ones. Apart from
+that, smart pointers are available in Boost for a long time already.</p>
+
+<p>In the following snippets, I&rsquo;ll be using smart pointers of type
+<code>std::unique_ptr</code> as it is the perfect fit for this particular problem.
+I won&rsquo;t cover <code>shared_ptr</code>, <code>weak_ptr</code> or other types of smart pointers
+here.</p>
+
+<p>When using an <code>std::unique_ptr</code> for managing the resources of <em>MyClass</em>,
+the <em>MyClass</em> code becomes:</p>
+
+<figure class='code'><figcaption><span>using std::unique_ptr</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="cp">#include &lt;memory&gt;</span>
+</span><span class='line'>
+</span><span class='line'><span class="k">struct</span> <span class="n">MyClass</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">A</span><span class="o">&gt;</span> <span class="n">a1</span><span class="p">;</span>
+</span><span class='line'>  <span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">A</span><span class="o">&gt;</span> <span class="n">a2</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">MyClass</span> <span class="p">()</span> <span class="o">:</span>
+</span><span class='line'>    <span class="n">a1</span><span class="p">(</span><span class="n">createInstance</span><span class="p">()),</span>
+</span><span class='line'>    <span class="n">a2</span><span class="p">(</span><span class="n">createInstance</span><span class="p">(</span><span class="kc">true</span><span class="p">))</span> <span class="p">{</span>
+</span><span class='line'>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;CTOR MYCLASS&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="o">~</span><span class="n">MyClass</span> <span class="p">()</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">std</span><span class="o">::</span><span class="n">cout</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;DTOR MYCLASS&quot;</span> <span class="o">&lt;&lt;</span> <span class="n">std</span><span class="o">::</span><span class="n">endl</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">};</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>With a <code>unique_ptr</code>, we can still create resources when needed,
+either in the initializer list, the constructor or even later. The
+resources can still be created dynamically using <code>new</code> (as is still done
+by function <em>createInstance</em>). When we&rsquo;re not taking the resources
+away from the <code>unique_ptr</code>s, then they will free their managed
+objects automatically and safely. We don&rsquo;t need to bother with <code>delete</code>.</p>
+
+<p>And we don&rsquo;t need to bother with nested try&hellip;catch blocks either. If
+anything goes wrong during object creation, any already assigned
+<code>unique_ptr</code>s will happily release the resources they manage in their
+own destructors.</p>
+
+<p>It does not matter if the above code throws an exception in the first
+invocation of <em>createInstance</em>, in the second or not at all: in every
+case any allocated resources are released properly, and still there
+is no need for any explicit exception handling or cleanup code. This is
+what a smart pointer will do for us, behind the scenes.</p>
+
+<p>Simply compare the following two code snippets, which both create three
+instances of <em>A</em> while making sure no memory will be leaked if the
+initialization goes wrong:</p>
+
+<figure class='code'><figcaption><span>solution using smart pointers</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">A</span><span class="o">&gt;</span> <span class="n">a1</span><span class="p">(</span><span class="n">createInstance</span><span class="p">());</span>
+</span><span class='line'><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">A</span><span class="o">&gt;</span> <span class="n">a2</span><span class="p">(</span><span class="n">createInstance</span><span class="p">());</span>
+</span><span class='line'><span class="n">std</span><span class="o">::</span><span class="n">unique_ptr</span><span class="o">&lt;</span><span class="n">A</span><span class="o">&gt;</span> <span class="n">a3</span><span class="p">(</span><span class="n">createInstance</span><span class="p">());</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// now do something with a1, a2, a3</span>
+</span><span class='line'><span class="c1">// managed objects will be released automatically when</span>
+</span><span class='line'><span class="c1">// the unique_ptrs go out of scope</span>
+</span><span class='line'><span class="c1">// note: they may go out of scope unintentionally if</span>
+</span><span class='line'><span class="c1">// some code below will throw an exception...</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>solution using nested try&#8230;catch blocks</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="n">A</span><span class="o">*</span> <span class="n">a1</span> <span class="o">=</span> <span class="n">nullptr</span><span class="p">;</span>
+</span><span class='line'><span class="n">A</span><span class="o">*</span> <span class="n">a2</span> <span class="o">=</span> <span class="n">nullptr</span><span class="p">;</span>
+</span><span class='line'><span class="n">A</span><span class="o">*</span> <span class="n">a3</span> <span class="o">=</span> <span class="n">nullptr</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'><span class="n">a1</span> <span class="o">=</span> <span class="k">new</span> <span class="n">A</span><span class="p">;</span>
+</span><span class='line'><span class="k">try</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">a2</span> <span class="o">=</span> <span class="k">new</span> <span class="n">A</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">try</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">a3</span> <span class="o">=</span> <span class="k">new</span> <span class="n">A</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">catch</span> <span class="p">(...)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">delete</span> <span class="n">a2</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">throw</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'><span class="k">catch</span> <span class="p">(...)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">delete</span> <span class="n">a1</span><span class="p">;</span>
+</span><span class='line'>  <span class="k">throw</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="c1">// now do something with a1, a2, a3</span>
+</span><span class='line'><span class="c1">// objects a1, a2, a3 will not be released automatically</span>
+</span><span class='line'><span class="c1">// when a1, a2, a3 go out of scope. any user of a1, a2, a3</span>
+</span><span class='line'><span class="c1">// below must make sure to release the objects when they</span>
+</span><span class='line'><span class="c1">// go out of scope or when an exception is thrown...</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Obviously the smart pointer-based solution is less verbose,
+but it is also safer and hard to get wrong. It is especially
+useful for initializing and managing dynamically allocated
+object members, because as we&rsquo;ve seen most of the other
+ways to do this are either subtly broken or much more complex.</p>
+
+<p>Apart from that, we can take the managed object from out of a
+<code>unique_ptr</code> and take over responsibility for managing its
+lifetime.</p>
+
+<p>Further on the plus side, a class definition that contains
+<code>unique_ptr</code>s can be compiled with only forward declarations
+for the managed types. However, when the <code>unique_ptr</code> is a
+regular object member, at least the class destructor
+implementation will need to know the size of the managed type
+so it can call <code>delete</code> properly.</p>
+
+<p>The downside of using smart pointers is that they may impose
+minimal overhead when compared to the pure pointer-based
+solution. However in most cases this overhead should be
+absolutely negligible or even be optimized away by the compiler.
+It may make a difference though when compiling without any
+optimizations, but this shouldn&rsquo;t matter too much in reality.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[ArangoDB-PHP Driver Improvements]]></title>
@@ -3135,76 +3757,6 @@ for the <code>name</code> attribute in the following query:</p>
 the subquery optimization that avoids copying unneeded intermediate results.</p>
 
 <p>Enjoy!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Return Value Optimization for AQL]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql/"/>
-    <updated>2015-05-04T10:32:43+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql</id>
-    <content type="html"><![CDATA[<p>While in search for further AQL query optimizations last week, we found that intermediate AQL
-query results were copied one time too often in some cases. Precisely, the data that a query&rsquo;s
-<code>ReturnNode</code> will return to the caller was copied into the <code>ReturnNode</code>&rsquo;s own register. With
-<code>ReturnNode</code>s never modifying their input data, this demanded for something that is called
-<em>return-value optimization</em> in compilers.</p>
-
-<p>2.6 will now optimize away these copies in many cases, and this post shows which performance
-benefits can be expected due to the optimization.</p>
-
-<!-- more -->
-
-
-<p>The effect of the optimization can be demonstrated easily with a few simple AQL queries.
-Let&rsquo;s start with a query that simply returns all 100,000 documents from a collection <code>users</code>:
-<code>FOR u IN users RETURN u</code> (the source data for the collection can be found <a href="http://jsteemann.github.io/downloads/code/users-100000.json.tar.gz">here</a>).</p>
-
-<p>This query&rsquo;s execution plan is already straight-forward and simple:</p>
-
-<p><img src="http://jsteemann.github.io/downloads/screenshots/return.png"></p>
-
-<p>So where&rsquo;s the problem?</p>
-
-<p>The <code>ReturnNode</code> in this query (and other queries too) will copy its input data into its own output
-register, only to finally hand the results to the query&rsquo;s caller. This copying is most often unnecessary
-as the <code>ReturnNode</code> will not modify its input. So the idea was to get rid of the copying action and
-tell the query&rsquo;s calling code in which (now different) register to look for the results.</p>
-
-<p>Optimizing away the copying inside the <code>ReturnNode</code> made the query run faster already.
-The same query now returns the 100,000 documents in 0.24 to 0.26 seconds, compared to 0.27 to 0.30 s
-before applying the optimization.</p>
-
-<p>Returning just an attribute of each document shows about the same improvement rates. The execution
-times of the query <code>FOR u IN users RETURN u._key</code> drop to between 0.13 and 0.14 seconds with the
-optimization, from initially between 0.15 and 0.17 seconds.</p>
-
-<p>Another example query, <code>FOR i IN 1..1000000 RETURN i</code>, now runs in 0.58 to 0.61 seconds with
-the optimization, compared to between 0.77 and 0.81 seconds without it.</p>
-
-<p>These absolute figures may not look overly impressive, but they indicate relative improvements of
-between 10 and 25 %, which is quite nice. This is effectively saved CPU time that can now be used
-for something more productive.</p>
-
-<p>Of course the performance improvements may not be that high for every imaginable AQL query.
-Though the optimization may be active in most AQL queries, its effect will only be measurable
-for queries that return a significant number of documents/values. Otherwise the share of the
-<code>ReturnNode</code>&rsquo;s work in the query&rsquo;s overall computations may be too low to have any effect.
-Additionally, the more work a query spends in performing other operations (e.g. filtering,
-sorting, collecting), the less relevant will be the overall effect of the optimized <code>ReturnNode</code>.
-Finally, when query results need to be shipped from the server to the client over a network,
-the relative effect of the optimization may diminish further.</p>
-
-<p>So your mileage may vary. But the optimization will not do any harm, and together with some
-other query optimizations already finished for 2.6 it will contribute to many AQL queries
-running faster than before.</p>
-
-<p>AQL queries will benefit from the optimization automatically in ArangoDB 2.6, without requiring
-any adjustments to the query string, the server configuration etc. The optimizer will automatically
-apply the optimization for the main-level <code>ReturnNode</code> of every AQL query.</p>
-
-<p>On a side note: the optimization will not be shown in the list of applied optimizer rules for the
-query. This is because the optimization is performed in some different place in the query
-executor, after applying the optimizer rules.</p>
 ]]></content>
   </entry>
   

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: C++ | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/c-plus-plus/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-09-25T19:34:29+02:00</updated>
+  <updated>2015-11-18T01:24:50+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,521 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[C++ Constructors and Memory Leaks]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/18/on-exception-handling/"/>
+    <updated>2015-11-18T01:10:51+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/18/on-exception-handling</id>
+    <content type="html"><![CDATA[<h2>Preventing leaks in throwing constructors</h2>
+
+<p>The easiest way to prevent memory leaks is to create all objects on
+the stack and not using dynamic memory at all. However, often this is not
+possible, for example because stack size is limited or objects need to
+outlive the caller&rsquo;s scope.</p>
+
+<p>Another way to prevent memory leaks and leaks of other resources is
+obviously to employ the RAII pattern. How can it be used safely and
+easily in practice, so memory leaks can be avoided?</p>
+
+<p>This post will start with a few seemingly working but subtly ill-formed
+techniques that a few common pitfalls. Later on it will provide a few
+very simple solutions for getting it right.</p>
+
+<p>None of the solutions here are new or original.</p>
+
+<p>I took some inspiration from the excellent <a href="http://gotw.ca/gotw/066.htm">constructor failures GotW post</a>.
+That doesn&rsquo;t cover smart pointers and is not explicitly about preventing
+preventing memory leak, so I put together this overview myself.</p>
+
+<h2>Naive implementation</h2>
+
+<p>Let&rsquo;s pretend we have a simple test program <code>main.cpp</code>, which
+creates an object of class <em>MyClass</em> on the stack like this:</p>
+
+<p>```cpp main.cpp</p>
+
+<h1>include <iostream></h1>
+
+<h1>include &ldquo;MyClass.h&rdquo;</h1>
+
+<p>int main () {
+  try {</p>
+
+<pre><code>MyClass myClass;
+std::cout &lt;&lt; "NO EXCEPTION" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }
+  catch (&hellip;) {</p>
+
+<pre><code>std::cout &lt;&lt; "CAUGHT EXCEPTION" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }
+}
+```</p>
+
+<p>The above code creates the <em>myClass</em> instance on the stack, so
+itself will not leak any memory. When the creating of the <em>myClass</em>
+instance fails for whatever reason, the instance newer existed so
+the memory for holding a <em>MyClass</em> object will be freed automatically.
+If object creation succeeds and the object goes out of scope at the
+end of the <em>try</em> block, then the object&rsquo;s destructor will be called
+and resources can be freed, too.</p>
+
+<p>Obviously this is already good, so let&rsquo;s keep it as it is and have a
+look at the implementation of <em>MyClass</em> now. This class will manage
+two heap objects of type <em>A</em>, which are created using the helper
+function <em>createInstance</em>:</p>
+
+<p>```cpp MyClass.h</p>
+
+<h1>include <iostream></h1>
+
+<h1>include &ldquo;A.h&rdquo;</h1>
+
+<p>struct MyClass {
+  A<em> a1;
+  A</em> a2;</p>
+
+<p>  MyClass ()</p>
+
+<pre><code>: a1(createInstance()),
+  a2(createInstance()) {
+
+std::cout &lt;&lt; "CTOR MYCLASS" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }</p>
+
+<p>  ~MyClass () {</p>
+
+<pre><code>std::cout &lt;&lt; "DTOR MYCLASS" &lt;&lt; std::endl;
+delete a1;
+delete a2;
+</code></pre>
+
+<p>  }
+};
+```</p>
+
+<p>For completeness, here is class <em>A</em>. It won&rsquo;t manage any resources
+itself:</p>
+
+<p>```cpp A.h</p>
+
+<h1>include <iostream></h1>
+
+<p>struct A {
+  A () {</p>
+
+<pre><code>std::cout &lt;&lt; "CTOR A" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }
+  ~A () {</p>
+
+<pre><code>std::cout &lt;&lt; "DTOR A" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }
+};</p>
+
+<p>// helper method for creating an instance of A
+A* createInstance (bool shouldThrow = false) {
+  if (shouldThrow) {</p>
+
+<pre><code>throw "THROWING AN EXCEPTION";
+</code></pre>
+
+<p>  }
+  return new A;
+}
+```</p>
+
+<p>During this complete post, the code of <em>A.h</em> will remain unchanged.</p>
+
+<p>Compiling and running the initial version of <code>main.cpp</code> will produce the
+following output:</p>
+
+<p><code>plain output of naive implementation
+CTOR A
+CTOR A
+CTOR MYCLASS
+NO EXCEPTION
+DTOR MYCLASS
+DTOR A
+DTOR A
+</code></p>
+
+<p>Valgrind also reports no memory leaks. Are we done already?</p>
+
+<h2>Introducing exceptions</h2>
+
+<p>No, because everything still went well. Let&rsquo;s introduce exceptions into
+the picture and check what happens then.</p>
+
+<p>Let&rsquo;s first introduce an exception in the constructor of <em>MyClass</em>.
+We&rsquo;ll make the <em>createInstance</em> function throw on second invocation (we do
+this by passing a value of <em>true</em> to it):</p>
+
+<p>```cpp constructor throwing an exception
+MyClass ()
+  : a1(createInstance()),</p>
+
+<pre><code>a2(createInstance(true)) {
+</code></pre>
+
+<p>  std::cout &lt;&lt; &ldquo;CTOR MYCLASS&rdquo; &lt;&lt; std::endl;
+}
+```</p>
+
+<p>Running the program will now emit the following:</p>
+
+<p><code>plain output of naive implementation, with exception
+CTOR A
+CAUGHT EXCEPTION
+</code></p>
+
+<p>As we&rsquo;re throwing in the initializer list already, we don&rsquo;t even
+reach the constructor body. This is no problem, but worse is that the
+destructor for class <em>MyClass</em> is not being called at all.
+Valgrind therefore reports the memory for first <em>A</em> instance as leaked.</p>
+
+<p>By the way, the destructor for the <em>MyClass</em> instance is intentionally
+not being called as the object hasn&rsquo;t been fully constructed and logically
+never existed.</p>
+
+<p>Will it help if we move the heap allocations from the initializer list
+into the constructor body like this?</p>
+
+<p><code>cpp using the constructor body instead of the initializer list
+MyClass () {
+  std::cout &lt;&lt; "CTOR MYCLASS" &lt;&lt; std::endl;
+  a1 = createInstance();
+  a2 = createInstance(true);
+}
+</code></p>
+
+<p>Unfortunately not. Still no destructor invocations:</p>
+
+<p><code>plain output of constructor body variant
+CTOR MYCLASS
+CTOR A
+CAUGHT EXCEPTION
+</code></p>
+
+<p>Remember: an object&rsquo;s destructor won&rsquo;t be called if its constructor threw
+and the exception wasn&rsquo;t caught. That also means releasing an object&rsquo;s
+resources solely via the destructor as in implementation above will not be
+sufficient if resources are allocated in the constructor and the constructor
+can throw.</p>
+
+<p>What can be done about that?</p>
+
+<p>Obviously all resource allocations can be moved into the constructor body so
+exceptions can be caught there:</p>
+
+<p>```cpp catching exceptions in constructor of MyClass
+MyClass () {
+  std::cout &lt;&lt; &ldquo;CTOR MYCLASS&rdquo; &lt;&lt; std::endl;
+  a1 = createInstance();</p>
+
+<p>  try {</p>
+
+<pre><code>a2 = createInstance(true);
+</code></pre>
+
+<p>  }
+  catch (&hellip;) {</p>
+
+<pre><code>// must clean up a1 to prevent a leak
+delete a1;
+// and re-throw the exception
+throw;
+</code></pre>
+
+<p>  }
+}
+```</p>
+
+<p>While the above will work, it&rsquo;s clumsy, verbose and error-prone. If
+more objects need to be managed this will make us end up in deeply
+nested try&hellip;catch blocks.</p>
+
+<h2>try&hellip;catch for the initializer list</h2>
+
+<p>But wait, wasn&rsquo;t there a try&hellip;catch feature especially for initializer
+list code? Sounds like it could be useful. Maybe we can use this instead
+so we can catch exceptions during initialization?</p>
+
+<p>There is indeed something like that: exceptions thrown from the initializer
+list  can be caught using the following special syntax:</p>
+
+<p>```cpp catching exceptions thrown in the initializer list
+MyClass ()
+  try : a1(createInstance()),</p>
+
+<pre><code>    a2(createInstance(true)) {
+
+std::cout &lt;&lt; "CTOR MYCLASS" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }
+  catch (&hellip;) {  // catch block for initializer list code</p>
+
+<pre><code>std::cout &lt;&lt; "CATCH BLOCK MYCLASS" &lt;&lt; std::endl;
+delete a1;
+</code></pre>
+
+<p>  }
+```</p>
+
+<p>Running the program with the above <em>MyClass</em> constructor will also
+do what is expected: when creating the second <em>A</em> instance, the
+initializer list code will throw, invoking its catch block. Again
+code execution won&rsquo;t make it into the constructor body, and we don&rsquo;t
+see the destructor code in action.</p>
+
+<p>The output of the program is:</p>
+
+<p><code>plain output of initializer list variant
+CTOR A
+CATCH BLOCK MYCLASS
+DTOR A
+CAUGHT EXCEPTION
+</code></p>
+
+<p>Valgrind does not report a leak, so are we done now?</p>
+
+<p>No, as the above code has a severe problem. It worked only
+because we knew the second invocation of <em>createInstance</em> would fail.</p>
+
+<p>But in the general case, either the first call or the second call
+can fail. If the first call fails, then the initializer hasn&rsquo;t
+initialized any of the object&rsquo;s members, and it would be unsafe to
+delete any object members in the initializer&rsquo;s catch block. If the
+second <em>createInstance</em> call fails, then the initializer has created
+<em>a1</em> but not <em>a2</em>. To prevent a leak in this case, we should delete <em>a1</em>,
+but we better don&rsquo;t delete <em>a2</em> yet.</p>
+
+<p>But how do we tell in the catch block at what stage the initializer
+list had thrown? There is no natural way to do this correctly without
+introducing more state. And without that, we have the choice between
+undefined behavior when deleting the not-yet-initialized object
+members, and memory leaks when ignoring them.</p>
+
+<h2>Not using pointers at all</h2>
+
+<p>Note that if we wouldn&rsquo;t have used pointers for our managed <em>A</em> objects,
+then we could have used the fact that destructors for all initialized
+object members <strong>are</strong> actually called when object construction fails.</p>
+
+<p>However, simple pointers don&rsquo;t have a destructor, so the objects they
+point to remain and the memory is lost.</p>
+
+<p>So one obvious solution for preventing memory leaks is to not use pointers,
+and get rid of all <code>new</code> and <code>delete</code> statements.</p>
+
+<p>In some situations we can probably get away with making the managed objects
+regular class members of the class that manages them:</p>
+
+<p>```cpp not using pointers
+struct MyClass {
+  A a1; // no pointer anymore!
+  A a2; // no pointer anymore!</p>
+
+<p>  MyClass ()</p>
+
+<pre><code>: a1(),
+  a2() {
+
+std::cout &lt;&lt; "CTOR MYCLASS" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }</p>
+
+<p>  ~MyClass () {</p>
+
+<pre><code>std::cout &lt;&lt; "DTOR MYCLASS" &lt;&lt; std::endl;
+// no delete statements needed anymore!
+</code></pre>
+
+<p>  }
+};
+```</p>
+
+<p>Now if any of the <em>A</em> constructors will throw an exception during
+initialization, everything will be cleaned up properly. Now we can make
+use of the destructor of <em>A</em>. If <em>A</em> instances are not pointers but
+regular objects, the destructors for already created instances will
+be called normally, and no destructors will be called for the not-yet-initialized
+<em>A</em> instances. That&rsquo;s how it should be. We don&rsquo;t get this benefit with
+regular pointers, which don&rsquo;t have a destructor.</p>
+
+<p>As an aside, we got rid of the <code>delete</code> statements in the destructor
+and may even get away with the default destructor.</p>
+
+<p>Obviously this is an easy and safe solution, but it also has a few
+downsides. Here are a few (incomplete list):</p>
+
+<ul>
+<li>when compiling <em>MyClass</em>, the compiler will now need to know the
+definition for class <em>A</em>. You can&rsquo;t get away with a simple forward
+declaration for class <em>A</em> anymore as in the case when the class
+only contained pointers to <em>A</em>.
+So this solution increases the source code dependencies and coupling.</li>
+<li>instances of managed objects (e.g. <em>A</em>) will need to be created when
+the managing object (e.g. <em>MyClass</em>) is created. There is no way to
+postpone the object creation as in the case of when using pointers.</li>
+<li>in general, the lifetime of the managed objects is tied to the lifetime
+of the managing object. This may or may not be ok, depending on
+requirements.</li>
+</ul>
+
+
+<h2>Using smart pointers (e.g. std::unique_ptr)</h2>
+
+<p>In many cases the superior alternative to all the above is using one
+of the available smart pointer classes for managing resources.</p>
+
+<p>The promise of smart pointers is that resource management becomes easier,
+safer and more flexible with them.</p>
+
+<p>Really useful smart pointers (this excludes <code>std::auto_ptr</code>) are part
+of standard C++ since C++11, and to my knowledge they can be used in
+all C++11-compatible compilers and even in some older ones. Apart from
+that, smart pointers are available in Boost for a long time already.</p>
+
+<p>In the following snippets, I&rsquo;ll be using smart pointers of type
+<code>std::unique_ptr</code> as it is the perfect fit for this particular problem.
+I won&rsquo;t cover <code>shared_ptr</code>, <code>weak_ptr</code> or other types of smart pointers
+here.</p>
+
+<p>When using an <code>std::unique_ptr</code> for managing the resources of <em>MyClass</em>,
+the <em>MyClass</em> code becomes:</p>
+
+<p>```cpp using std::unique_ptr</p>
+
+<h1>include <memory></h1>
+
+<p>struct MyClass {
+  std::unique_ptr<A> a1;
+  std::unique_ptr<A> a2;</p>
+
+<p>  MyClass () :</p>
+
+<pre><code>a1(createInstance()),
+a2(createInstance(true)) {
+
+std::cout &lt;&lt; "CTOR MYCLASS" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }</p>
+
+<p>  ~MyClass () {</p>
+
+<pre><code>std::cout &lt;&lt; "DTOR MYCLASS" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }
+};
+```</p>
+
+<p>With a <code>unique_ptr</code>, we can still create resources when needed,
+either in the initializer list, the constructor or even later. The
+resources can still be created dynamically using <code>new</code> (as is still done
+by function <em>createInstance</em>). When we&rsquo;re not taking the resources
+away from the <code>unique_ptr</code>s, then they will free their managed
+objects automatically and safely. We don&rsquo;t need to bother with <code>delete</code>.</p>
+
+<p>And we don&rsquo;t need to bother with nested try&hellip;catch blocks either. If
+anything goes wrong during object creation, any already assigned
+<code>unique_ptr</code>s will happily release the resources they manage in their
+own destructors.</p>
+
+<p>It does not matter if the above code throws an exception in the first
+invocation of <em>createInstance</em>, in the second or not at all: in every
+case any allocated resources are released properly, and still there
+is no need for any explicit exception handling or cleanup code. This is
+what a smart pointer will do for us, behind the scenes.</p>
+
+<p>Simply compare the following two code snippets, which both create three
+instances of <em>A</em> while making sure no memory will be leaked if the
+initialization goes wrong:</p>
+
+<p>```cpp solution using smart pointers
+std::unique_ptr<A> a1(createInstance());
+std::unique_ptr<A> a2(createInstance());
+std::unique_ptr<A> a3(createInstance());</p>
+
+<p>// now do something with a1, a2, a3
+// managed objects will be released automatically when
+// the unique_ptrs go out of scope
+// note: they may go out of scope unintentionally if
+// some code below will throw an exception&hellip;
+```</p>
+
+<p>```cpp solution using nested try&hellip;catch blocks
+A<em> a1 = nullptr;
+A</em> a2 = nullptr;
+A* a3 = nullptr;</p>
+
+<p>a1 = new A;
+try {
+  a2 = new A;
+  try {</p>
+
+<pre><code>a3 = new A;
+</code></pre>
+
+<p>  }
+  catch (&hellip;) {</p>
+
+<pre><code>delete a2;
+throw;
+</code></pre>
+
+<p>  }
+}
+catch (&hellip;) {
+  delete a1;
+  throw;
+}</p>
+
+<p>// now do something with a1, a2, a3
+// objects a1, a2, a3 will not be released automatically
+// when a1, a2, a3 go out of scope. any user of a1, a2, a3
+// below must make sure to release the objects when they
+// go out of scope or when an exception is thrown&hellip;
+```</p>
+
+<p>Obviously the smart pointer-based solution is less verbose,
+but it is also safer and hard to get wrong. It is especially
+useful for initializing and managing dynamically allocated
+object members, because as we&rsquo;ve seen most of the other
+ways to do this are either subtly broken or much more complex.</p>
+
+<p>Apart from that, we can take the managed object from out of a
+<code>unique_ptr</code> and take over responsibility for managing its
+lifetime.</p>
+
+<p>Further on the plus side, a class definition that contains
+<code>unique_ptr</code>s can be compiled with only forward declarations
+for the managed types. However, when the <code>unique_ptr</code> is a
+regular object member, at least the class destructor
+implementation will need to know the size of the managed type
+so it can call <code>delete</code> properly.</p>
+
+<p>The downside of using smart pointers is that they may impose
+minimal overhead when compared to the pure pointer-based
+solution. However in most cases this overhead should be
+absolutely negligible or even be optimized away by the compiler.
+It may make a difference though when compiling without any
+optimizations, but this shouldn&rsquo;t matter too much in reality.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[How V8 Is Used in ArangoDB]]></title>
@@ -492,318 +1007,6 @@ Otherwise backtraces might reveal less useful information for debugging.</p>
 
 <p>On a side note: the <a href="http://lint.travis-ci.org/">Travis WebLint</a> is a
 handy tool for validating <code>.travis.yml</code> files <em>before</em> pushing them.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[What I Most Like About C++11]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11/"/>
-    <updated>2014-10-23T23:02:12+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/10/23/what-i-most-like-about-c-plus-plus-11</id>
-    <content type="html"><![CDATA[<p>About half a year ago we started compiling our code with <code>-std=c++11</code>.</p>
-
-<p>We had to fix a few, but not too many code parts for this. That was
-the easy part.</p>
-
-<p>Getting C++11 to work on all supported platforms, build and testing
-environments was a bit more challenging, but we finally managed to do it.</p>
-
-<p>Having used C++11 for some time now, I think it&rsquo;s time to share a few
-of improvements in C++11 that solve common problems.</p>
-
-<!-- more -->
-
-
-<p>First of all, I don&rsquo;t regret we changed to it. In my opinion,
-<strong>C++11 makes coding easier and safer.</strong> I will try to demonstrate that
-with a few examples in a second.</p>
-
-<p>Before I go into details, just let me state that I will only show a few
-of my personal favorites here. There are so many more improvements in C++11
-that are all worth having a look. If you haven&rsquo;t looked into C++11 much,
-I recommend getting started at the <a href="http://en.wikipedia.org/wiki/C%2B%2B11">Wikipedia page about C++11</a>.</p>
-
-<h2>Auto</h2>
-
-<p>From a developer perspective, one of the most compelling features of
-C++11 is the revamped <code>auto</code> keyword. Consider the following C++98/C++03 code:</p>
-
-<p><code>c++ C++03 version
-std::map&lt;std::string, std::string&gt;::iterator it = resultHeaders.find(value);
-if (it != resultHeaders.end()) {
-  // do something with value
-}
-</code></p>
-
-<p>In C++11 this code can be simplified to:
-<code>c++ C++11 version with auto
-auto it = resultHeaders.find(value);
-if (it != resultHeaders.end()) {
-  // do something with value
-}
-</code>
-In the C++11 version of the code, the compiler can figure out the type of
-variable <code>it</code> all by itself. This allows writing less (i.e. better) code.</p>
-
-<p>The more complex the types are, the more helpful this gets. Compare the
-following two lines and check for yourself which one you prefer:</p>
-
-<p><code>c++ C++03 version
-std::map&lt;CollectionID, std::shared_ptr&lt;std::vector&lt;std::string&gt; &gt; &gt;::iterator it = shards.find(collectionID);
-</code></p>
-
-<p><code>c++ C++11 version with auto
-auto it = shards.find(collectionID);
-</code></p>
-
-<p><code>auto</code> provides an <em>extra benefit</em>:
-when using <code>auto</code> it is not necessary to repeat the type information
-throughout the code. This is helpful when types need to be changed and the
-change needs to be reflected everywhere. With <code>auto</code>, chances are that less
-code needs to be adjusted. And it is not necessary to set up extra
-typedefs for this.</p>
-
-<p>If you think <code>auto</code> obfuscates the meaning too much, you can be a bit more
-expressive, e.g.</p>
-
-<p><code>c++ C++11 version with auto, const reference
-auto const&amp; it = resultHeaders.find(value);
-if (it != resultHeaders.end()) {
-  // do something with value
-}
-</code></p>
-
-<h2>Range-based loops</h2>
-
-<p>We all have written a lot of code that iterates over a ranges, like this:</p>
-
-<p><code>c++ C++03: iterating over a range
-std::map&lt;string, AgencyCommResultEntry&gt;::iterator it;
-for (it = result.values.begin(); it != result.values.end(); ++it) {
-  // do something with it
-}
-</code></p>
-
-<p>C++11 provides a special range-based syntax for <code>for</code> loops, which makes
-this a lot easier and compact:
-<code>c++ C++11: iterating over a range
-for (auto it : result.values) {
-  // do something with it
-}
-</code></p>
-
-<h2>Decltype</h2>
-
-<p>As we have seen, the compiler can deduce the type of expressions
-automatically. C++11 also allows using this type information with the
-<code>decltype</code> keyword. This allows to write more generic and maintainable code.</p>
-
-<p>In the following code, the type of variable <code>document</code> is a pointer to a
-<code>Document</code>. Variable <code>myDocument</code> has the same type:</p>
-
-<p><code>c++ C++03 explicit type specification
-Document* document = res-&gt;getDocumentCollection(registerId);
-Document* myDocument = document;
-</code></p>
-
-<p>In C++03, we couldn&rsquo;t tell the compiler that the two variables should
-always have the same types. In C++11, we can explicitly give <code>myDocument</code>
-the same type as <code>document</code>, without any typedefs:</p>
-
-<p><code>c++ C++11 automatic type deduction
-</code>c++ C++11 automatic type deduction
-auto* document = res->getDocumentCollection(registerId);
-decltype(document) myDocument = document;  // myDocument has same type as document
-```</p>
-
-<p><code>decltype</code> can also be used to deduce the type of expressions.</p>
-
-<h2>Lambdas / Closures</h2>
-
-<p>Lambdas are available in most other mainstream languages today, and they
-are available in C++11, too.</p>
-
-<p>Probably one of the most common use cases for a lambda is a custom
-comparator function for sorting:</p>
-
-<p>```c++ custom comparator function using a lambda
-std::sort(operations.begin(),</p>
-
-<pre><code>      operations.end(), 
-      [] (Operation const* left, Operation const* right) {
-</code></pre>
-
-<p>  return (left->id &lt; right->id);
-});
-```</p>
-
-<p>In the above example, the lambda has two input parameters and produces a
-boolean result. Note that the type of the result was not explicitly specified.
-Again the compiler is able to figure it out automatically.</p>
-
-<p>A lambda can be assigned to a variable, and it can be passed as a parameter
-to another function/method. Lambdas can optionally have access to the
-variables of the scope they were created in.</p>
-
-<p>The following code defines a struct <code>ScopeGuard</code> that executes a lambda
-in its constructor and another lambda in its destructor:</p>
-
-<p>```c++ lambdas as function parameters
-// define ScopeGuard struct
-struct ScopeGuard {
-  ScopeGuard (std::function&lt;void()> onEnter,</p>
-
-<pre><code>          std::function&lt;void()&gt; onExit) 
-: onExit(onExit) {
-  onEnter();
-</code></pre>
-
-<p>  }</p>
-
-<p>  ~ScopeGuard () {</p>
-
-<pre><code>onExit();
-</code></pre>
-
-<p>  }</p>
-
-<p>  std::function&lt;void()> onExit;
-};</p>
-
-<p>// lambda to be executed in constructor
-auto onEnter = <a href="">&amp;engine</a> &ndash;> void {
-  engine->getQuery()&ndash;>enterContext();
-};</p>
-
-<p>// lambda to be executed in destructor
-auto onExit = <a href="">&amp;</a> &ndash;> void {
-  for (auto expression : allVariableBoundExpressions) {</p>
-
-<pre><code>expression-&gt;invalidate();
-</code></pre>
-
-<p>  }
-  engine->getQuery()&ndash;>exitContext();
-}</p>
-
-<p>// create guard object with the lambdas
-// this will instantly execute <code>onEnter</code>
-ScopeGuard guard(onEnter, onExit);</p>
-
-<p>// do something&hellip;</p>
-
-<p>// when scope is left, <code>onExit</code> will be executed
-```</p>
-
-<p>As mentioned before, <code>decltype</code> can be used to determine the
-return type of a function automatically. Here&rsquo;s an example:</p>
-
-<p><code>c++ function with automatic return type deduction
-auto add = [](int a, int b) -&gt; decltype(a + b) {
-  return a + b;
-};
-</code></p>
-
-<p>As can be seen in the examples above, C++11 has introduced an
-alternative function declaration syntax, with the type of the
-function result following a <code>-&gt;</code>. The return type can be omitted
-if it can be unambiguously determined by the compiler. The new
-function declaration syntax is mainly useful for lambdas, but
-it can be used for regular functions, too.</p>
-
-<h2>Enum class</h2>
-
-<p>Enums in C++ are useful but just <em>don&rsquo;t feel right</em>: persisting a
-struct that contains an enum value is not portable as the
-underlying data type for the enum is implementation-dependent.</p>
-
-<p>Additionally, enum values can be compared to almost any other values,
-which in most cases doesn&rsquo;t make sense but obfuscates coding errors.
-There were also <em>scoping issues</em> with enum values.</p>
-
-<p>C++11 enum classes fix these problems. First of all, the underlying
-data type for an enum can be specified. For example, this creates
-an enum based with its value stored in an <code>std::uint8_t</code>:</p>
-
-<p>```c++ enum class with specified data type
-enum class StatusType : std::uint8_t {
-  UNINITIALIZED = 0,
-  STARTING,
-  RUNNING,
-  STOPPING,
-  STOPPED
-};</p>
-
-<p>StatusType status;
-```</p>
-
-<p>Regarding the comparison of enum values to other values, C++11
-enum classes are much stronger typed than regular enums.
-Comparing the <code>status</code> variable from the above example to anything
-but a value from its enum class won&rsquo;t even compile.</p>
-
-<p>This provides much greater type safety than when using the old,
-implicitly converting enums:</p>
-
-<p><code>c++ invalid usage of enums
-if (status == 0) {  // won't compile in C++11
-  // ...
-}
-if (status == StatusType::UNINITIALIZED) {  // this would work
-  // ...
-}
-</code></p>
-
-<p>Finally, enum classes fix the scoping problems of regular enums.
-In C++03, the following code did not complile because two enums
-contained the same member name:</p>
-
-<p>```c++ two enums with same member name
-enum DirectionType {
-  LEFT,
-  RIGHT
-};</p>
-
-<p>enum AnswerType {
-  RIGHT,  // won&rsquo;t compile in C++03 and C++11
-  WRONG
-};
-```</p>
-
-<p>With C++11 enum classes, the following code is all fine:
-```c++ two enums class with same member name
-enum class DirectionType {
-  LEFT,
-  RIGHT
-};</p>
-
-<p>enum class AnswerType {
-  RIGHT,  // works!
-  WRONG
-};
-```</p>
-
-<h2>Additional containers</h2>
-
-<p>C++11 provides the hash-based containers <code>std::unordered_map</code>
-and <code>std::unordered_set</code> (plus their non-unique counterparts).
-These containers are not sorted, so they can be more efficient
-than <code>std::map</code> and <code>std::set</code>.</p>
-
-<p>Turning an <code>std::map</code> into an <code>std::unordered_map</code> is simple as
-the APIs are more or less identical.</p>
-
-<p>There is now also a singly-linked list container, named
-<code>std::forward_list</code>. This obviously allows forward iteration
-only, but is more space efficient than the already existing
-doubly-linked list container.</p>
-
-<h2>More</h2>
-
-<p>Other improvements include move semantics, atomic variables and
-operations, a dedicated type for NULL pointers, STL support for
-threads and mutexes, regular expressions, more Unicode support,
-override, final &ndash; to name only a few&hellip;</p>
 ]]></content>
   </entry>
   

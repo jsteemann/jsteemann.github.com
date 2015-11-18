@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Development | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/development/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-09-25T19:34:29+02:00</updated>
+  <updated>2015-11-18T01:24:50+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,521 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[C++ Constructors and Memory Leaks]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/18/on-exception-handling/"/>
+    <updated>2015-11-18T01:10:51+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/18/on-exception-handling</id>
+    <content type="html"><![CDATA[<h2>Preventing leaks in throwing constructors</h2>
+
+<p>The easiest way to prevent memory leaks is to create all objects on
+the stack and not using dynamic memory at all. However, often this is not
+possible, for example because stack size is limited or objects need to
+outlive the caller&rsquo;s scope.</p>
+
+<p>Another way to prevent memory leaks and leaks of other resources is
+obviously to employ the RAII pattern. How can it be used safely and
+easily in practice, so memory leaks can be avoided?</p>
+
+<p>This post will start with a few seemingly working but subtly ill-formed
+techniques that a few common pitfalls. Later on it will provide a few
+very simple solutions for getting it right.</p>
+
+<p>None of the solutions here are new or original.</p>
+
+<p>I took some inspiration from the excellent <a href="http://gotw.ca/gotw/066.htm">constructor failures GotW post</a>.
+That doesn&rsquo;t cover smart pointers and is not explicitly about preventing
+preventing memory leak, so I put together this overview myself.</p>
+
+<h2>Naive implementation</h2>
+
+<p>Let&rsquo;s pretend we have a simple test program <code>main.cpp</code>, which
+creates an object of class <em>MyClass</em> on the stack like this:</p>
+
+<p>```cpp main.cpp</p>
+
+<h1>include <iostream></h1>
+
+<h1>include &ldquo;MyClass.h&rdquo;</h1>
+
+<p>int main () {
+  try {</p>
+
+<pre><code>MyClass myClass;
+std::cout &lt;&lt; "NO EXCEPTION" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }
+  catch (&hellip;) {</p>
+
+<pre><code>std::cout &lt;&lt; "CAUGHT EXCEPTION" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }
+}
+```</p>
+
+<p>The above code creates the <em>myClass</em> instance on the stack, so
+itself will not leak any memory. When the creating of the <em>myClass</em>
+instance fails for whatever reason, the instance newer existed so
+the memory for holding a <em>MyClass</em> object will be freed automatically.
+If object creation succeeds and the object goes out of scope at the
+end of the <em>try</em> block, then the object&rsquo;s destructor will be called
+and resources can be freed, too.</p>
+
+<p>Obviously this is already good, so let&rsquo;s keep it as it is and have a
+look at the implementation of <em>MyClass</em> now. This class will manage
+two heap objects of type <em>A</em>, which are created using the helper
+function <em>createInstance</em>:</p>
+
+<p>```cpp MyClass.h</p>
+
+<h1>include <iostream></h1>
+
+<h1>include &ldquo;A.h&rdquo;</h1>
+
+<p>struct MyClass {
+  A<em> a1;
+  A</em> a2;</p>
+
+<p>  MyClass ()</p>
+
+<pre><code>: a1(createInstance()),
+  a2(createInstance()) {
+
+std::cout &lt;&lt; "CTOR MYCLASS" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }</p>
+
+<p>  ~MyClass () {</p>
+
+<pre><code>std::cout &lt;&lt; "DTOR MYCLASS" &lt;&lt; std::endl;
+delete a1;
+delete a2;
+</code></pre>
+
+<p>  }
+};
+```</p>
+
+<p>For completeness, here is class <em>A</em>. It won&rsquo;t manage any resources
+itself:</p>
+
+<p>```cpp A.h</p>
+
+<h1>include <iostream></h1>
+
+<p>struct A {
+  A () {</p>
+
+<pre><code>std::cout &lt;&lt; "CTOR A" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }
+  ~A () {</p>
+
+<pre><code>std::cout &lt;&lt; "DTOR A" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }
+};</p>
+
+<p>// helper method for creating an instance of A
+A* createInstance (bool shouldThrow = false) {
+  if (shouldThrow) {</p>
+
+<pre><code>throw "THROWING AN EXCEPTION";
+</code></pre>
+
+<p>  }
+  return new A;
+}
+```</p>
+
+<p>During this complete post, the code of <em>A.h</em> will remain unchanged.</p>
+
+<p>Compiling and running the initial version of <code>main.cpp</code> will produce the
+following output:</p>
+
+<p><code>plain output of naive implementation
+CTOR A
+CTOR A
+CTOR MYCLASS
+NO EXCEPTION
+DTOR MYCLASS
+DTOR A
+DTOR A
+</code></p>
+
+<p>Valgrind also reports no memory leaks. Are we done already?</p>
+
+<h2>Introducing exceptions</h2>
+
+<p>No, because everything still went well. Let&rsquo;s introduce exceptions into
+the picture and check what happens then.</p>
+
+<p>Let&rsquo;s first introduce an exception in the constructor of <em>MyClass</em>.
+We&rsquo;ll make the <em>createInstance</em> function throw on second invocation (we do
+this by passing a value of <em>true</em> to it):</p>
+
+<p>```cpp constructor throwing an exception
+MyClass ()
+  : a1(createInstance()),</p>
+
+<pre><code>a2(createInstance(true)) {
+</code></pre>
+
+<p>  std::cout &lt;&lt; &ldquo;CTOR MYCLASS&rdquo; &lt;&lt; std::endl;
+}
+```</p>
+
+<p>Running the program will now emit the following:</p>
+
+<p><code>plain output of naive implementation, with exception
+CTOR A
+CAUGHT EXCEPTION
+</code></p>
+
+<p>As we&rsquo;re throwing in the initializer list already, we don&rsquo;t even
+reach the constructor body. This is no problem, but worse is that the
+destructor for class <em>MyClass</em> is not being called at all.
+Valgrind therefore reports the memory for first <em>A</em> instance as leaked.</p>
+
+<p>By the way, the destructor for the <em>MyClass</em> instance is intentionally
+not being called as the object hasn&rsquo;t been fully constructed and logically
+never existed.</p>
+
+<p>Will it help if we move the heap allocations from the initializer list
+into the constructor body like this?</p>
+
+<p><code>cpp using the constructor body instead of the initializer list
+MyClass () {
+  std::cout &lt;&lt; "CTOR MYCLASS" &lt;&lt; std::endl;
+  a1 = createInstance();
+  a2 = createInstance(true);
+}
+</code></p>
+
+<p>Unfortunately not. Still no destructor invocations:</p>
+
+<p><code>plain output of constructor body variant
+CTOR MYCLASS
+CTOR A
+CAUGHT EXCEPTION
+</code></p>
+
+<p>Remember: an object&rsquo;s destructor won&rsquo;t be called if its constructor threw
+and the exception wasn&rsquo;t caught. That also means releasing an object&rsquo;s
+resources solely via the destructor as in implementation above will not be
+sufficient if resources are allocated in the constructor and the constructor
+can throw.</p>
+
+<p>What can be done about that?</p>
+
+<p>Obviously all resource allocations can be moved into the constructor body so
+exceptions can be caught there:</p>
+
+<p>```cpp catching exceptions in constructor of MyClass
+MyClass () {
+  std::cout &lt;&lt; &ldquo;CTOR MYCLASS&rdquo; &lt;&lt; std::endl;
+  a1 = createInstance();</p>
+
+<p>  try {</p>
+
+<pre><code>a2 = createInstance(true);
+</code></pre>
+
+<p>  }
+  catch (&hellip;) {</p>
+
+<pre><code>// must clean up a1 to prevent a leak
+delete a1;
+// and re-throw the exception
+throw;
+</code></pre>
+
+<p>  }
+}
+```</p>
+
+<p>While the above will work, it&rsquo;s clumsy, verbose and error-prone. If
+more objects need to be managed this will make us end up in deeply
+nested try&hellip;catch blocks.</p>
+
+<h2>try&hellip;catch for the initializer list</h2>
+
+<p>But wait, wasn&rsquo;t there a try&hellip;catch feature especially for initializer
+list code? Sounds like it could be useful. Maybe we can use this instead
+so we can catch exceptions during initialization?</p>
+
+<p>There is indeed something like that: exceptions thrown from the initializer
+list  can be caught using the following special syntax:</p>
+
+<p>```cpp catching exceptions thrown in the initializer list
+MyClass ()
+  try : a1(createInstance()),</p>
+
+<pre><code>    a2(createInstance(true)) {
+
+std::cout &lt;&lt; "CTOR MYCLASS" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }
+  catch (&hellip;) {  // catch block for initializer list code</p>
+
+<pre><code>std::cout &lt;&lt; "CATCH BLOCK MYCLASS" &lt;&lt; std::endl;
+delete a1;
+</code></pre>
+
+<p>  }
+```</p>
+
+<p>Running the program with the above <em>MyClass</em> constructor will also
+do what is expected: when creating the second <em>A</em> instance, the
+initializer list code will throw, invoking its catch block. Again
+code execution won&rsquo;t make it into the constructor body, and we don&rsquo;t
+see the destructor code in action.</p>
+
+<p>The output of the program is:</p>
+
+<p><code>plain output of initializer list variant
+CTOR A
+CATCH BLOCK MYCLASS
+DTOR A
+CAUGHT EXCEPTION
+</code></p>
+
+<p>Valgrind does not report a leak, so are we done now?</p>
+
+<p>No, as the above code has a severe problem. It worked only
+because we knew the second invocation of <em>createInstance</em> would fail.</p>
+
+<p>But in the general case, either the first call or the second call
+can fail. If the first call fails, then the initializer hasn&rsquo;t
+initialized any of the object&rsquo;s members, and it would be unsafe to
+delete any object members in the initializer&rsquo;s catch block. If the
+second <em>createInstance</em> call fails, then the initializer has created
+<em>a1</em> but not <em>a2</em>. To prevent a leak in this case, we should delete <em>a1</em>,
+but we better don&rsquo;t delete <em>a2</em> yet.</p>
+
+<p>But how do we tell in the catch block at what stage the initializer
+list had thrown? There is no natural way to do this correctly without
+introducing more state. And without that, we have the choice between
+undefined behavior when deleting the not-yet-initialized object
+members, and memory leaks when ignoring them.</p>
+
+<h2>Not using pointers at all</h2>
+
+<p>Note that if we wouldn&rsquo;t have used pointers for our managed <em>A</em> objects,
+then we could have used the fact that destructors for all initialized
+object members <strong>are</strong> actually called when object construction fails.</p>
+
+<p>However, simple pointers don&rsquo;t have a destructor, so the objects they
+point to remain and the memory is lost.</p>
+
+<p>So one obvious solution for preventing memory leaks is to not use pointers,
+and get rid of all <code>new</code> and <code>delete</code> statements.</p>
+
+<p>In some situations we can probably get away with making the managed objects
+regular class members of the class that manages them:</p>
+
+<p>```cpp not using pointers
+struct MyClass {
+  A a1; // no pointer anymore!
+  A a2; // no pointer anymore!</p>
+
+<p>  MyClass ()</p>
+
+<pre><code>: a1(),
+  a2() {
+
+std::cout &lt;&lt; "CTOR MYCLASS" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }</p>
+
+<p>  ~MyClass () {</p>
+
+<pre><code>std::cout &lt;&lt; "DTOR MYCLASS" &lt;&lt; std::endl;
+// no delete statements needed anymore!
+</code></pre>
+
+<p>  }
+};
+```</p>
+
+<p>Now if any of the <em>A</em> constructors will throw an exception during
+initialization, everything will be cleaned up properly. Now we can make
+use of the destructor of <em>A</em>. If <em>A</em> instances are not pointers but
+regular objects, the destructors for already created instances will
+be called normally, and no destructors will be called for the not-yet-initialized
+<em>A</em> instances. That&rsquo;s how it should be. We don&rsquo;t get this benefit with
+regular pointers, which don&rsquo;t have a destructor.</p>
+
+<p>As an aside, we got rid of the <code>delete</code> statements in the destructor
+and may even get away with the default destructor.</p>
+
+<p>Obviously this is an easy and safe solution, but it also has a few
+downsides. Here are a few (incomplete list):</p>
+
+<ul>
+<li>when compiling <em>MyClass</em>, the compiler will now need to know the
+definition for class <em>A</em>. You can&rsquo;t get away with a simple forward
+declaration for class <em>A</em> anymore as in the case when the class
+only contained pointers to <em>A</em>.
+So this solution increases the source code dependencies and coupling.</li>
+<li>instances of managed objects (e.g. <em>A</em>) will need to be created when
+the managing object (e.g. <em>MyClass</em>) is created. There is no way to
+postpone the object creation as in the case of when using pointers.</li>
+<li>in general, the lifetime of the managed objects is tied to the lifetime
+of the managing object. This may or may not be ok, depending on
+requirements.</li>
+</ul>
+
+
+<h2>Using smart pointers (e.g. std::unique_ptr)</h2>
+
+<p>In many cases the superior alternative to all the above is using one
+of the available smart pointer classes for managing resources.</p>
+
+<p>The promise of smart pointers is that resource management becomes easier,
+safer and more flexible with them.</p>
+
+<p>Really useful smart pointers (this excludes <code>std::auto_ptr</code>) are part
+of standard C++ since C++11, and to my knowledge they can be used in
+all C++11-compatible compilers and even in some older ones. Apart from
+that, smart pointers are available in Boost for a long time already.</p>
+
+<p>In the following snippets, I&rsquo;ll be using smart pointers of type
+<code>std::unique_ptr</code> as it is the perfect fit for this particular problem.
+I won&rsquo;t cover <code>shared_ptr</code>, <code>weak_ptr</code> or other types of smart pointers
+here.</p>
+
+<p>When using an <code>std::unique_ptr</code> for managing the resources of <em>MyClass</em>,
+the <em>MyClass</em> code becomes:</p>
+
+<p>```cpp using std::unique_ptr</p>
+
+<h1>include <memory></h1>
+
+<p>struct MyClass {
+  std::unique_ptr<A> a1;
+  std::unique_ptr<A> a2;</p>
+
+<p>  MyClass () :</p>
+
+<pre><code>a1(createInstance()),
+a2(createInstance(true)) {
+
+std::cout &lt;&lt; "CTOR MYCLASS" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }</p>
+
+<p>  ~MyClass () {</p>
+
+<pre><code>std::cout &lt;&lt; "DTOR MYCLASS" &lt;&lt; std::endl;
+</code></pre>
+
+<p>  }
+};
+```</p>
+
+<p>With a <code>unique_ptr</code>, we can still create resources when needed,
+either in the initializer list, the constructor or even later. The
+resources can still be created dynamically using <code>new</code> (as is still done
+by function <em>createInstance</em>). When we&rsquo;re not taking the resources
+away from the <code>unique_ptr</code>s, then they will free their managed
+objects automatically and safely. We don&rsquo;t need to bother with <code>delete</code>.</p>
+
+<p>And we don&rsquo;t need to bother with nested try&hellip;catch blocks either. If
+anything goes wrong during object creation, any already assigned
+<code>unique_ptr</code>s will happily release the resources they manage in their
+own destructors.</p>
+
+<p>It does not matter if the above code throws an exception in the first
+invocation of <em>createInstance</em>, in the second or not at all: in every
+case any allocated resources are released properly, and still there
+is no need for any explicit exception handling or cleanup code. This is
+what a smart pointer will do for us, behind the scenes.</p>
+
+<p>Simply compare the following two code snippets, which both create three
+instances of <em>A</em> while making sure no memory will be leaked if the
+initialization goes wrong:</p>
+
+<p>```cpp solution using smart pointers
+std::unique_ptr<A> a1(createInstance());
+std::unique_ptr<A> a2(createInstance());
+std::unique_ptr<A> a3(createInstance());</p>
+
+<p>// now do something with a1, a2, a3
+// managed objects will be released automatically when
+// the unique_ptrs go out of scope
+// note: they may go out of scope unintentionally if
+// some code below will throw an exception&hellip;
+```</p>
+
+<p>```cpp solution using nested try&hellip;catch blocks
+A<em> a1 = nullptr;
+A</em> a2 = nullptr;
+A* a3 = nullptr;</p>
+
+<p>a1 = new A;
+try {
+  a2 = new A;
+  try {</p>
+
+<pre><code>a3 = new A;
+</code></pre>
+
+<p>  }
+  catch (&hellip;) {</p>
+
+<pre><code>delete a2;
+throw;
+</code></pre>
+
+<p>  }
+}
+catch (&hellip;) {
+  delete a1;
+  throw;
+}</p>
+
+<p>// now do something with a1, a2, a3
+// objects a1, a2, a3 will not be released automatically
+// when a1, a2, a3 go out of scope. any user of a1, a2, a3
+// below must make sure to release the objects when they
+// go out of scope or when an exception is thrown&hellip;
+```</p>
+
+<p>Obviously the smart pointer-based solution is less verbose,
+but it is also safer and hard to get wrong. It is especially
+useful for initializing and managing dynamically allocated
+object members, because as we&rsquo;ve seen most of the other
+ways to do this are either subtly broken or much more complex.</p>
+
+<p>Apart from that, we can take the managed object from out of a
+<code>unique_ptr</code> and take over responsibility for managing its
+lifetime.</p>
+
+<p>Further on the plus side, a class definition that contains
+<code>unique_ptr</code>s can be compiled with only forward declarations
+for the managed types. However, when the <code>unique_ptr</code> is a
+regular object member, at least the class destructor
+implementation will need to know the size of the managed type
+so it can call <code>delete</code> properly.</p>
+
+<p>The downside of using smart pointers is that they may impose
+minimal overhead when compared to the pure pointer-based
+solution. However in most cases this overhead should be
+absolutely negligible or even be optimized away by the compiler.
+It may make a difference though when compiling without any
+optimizations, but this shouldn&rsquo;t matter too much in reality.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Less Intrusive Linking]]></title>
@@ -549,57 +1064,6 @@ doubly-linked list container.</p>
 operations, a dedicated type for NULL pointers, STL support for
 threads and mutexes, regular expressions, more Unicode support,
 override, final &ndash; to name only a few&hellip;</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Using Travis CI for a C++11 Project]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/"/>
-    <updated>2014-10-17T19:36:57+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project</id>
-    <content type="html"><![CDATA[<p><a href="http://travis-ci.com">TravisCI</a> is a very useful cloud service
-for continous integration. It can be integrated with Github, with each
-commit triggering a new build and reporting back when it broke something.</p>
-
-<p>Travis has support for many programming languages, among them C++.
-But it lacks support for C++11 features.</p>
-
-<!-- more -->
-
-
-<p>Travis provides basic support for C++ projects. <a href="http://docs.travis-ci.com/user/languages/cpp/">It comes with gcc, clang,
-the autotools, make, cmake and scons</a>.</p>
-
-<p>While writing this post, Travis CI build machines run on Ubuntu 12.04
-LTS 64 bit. This version of Ubuntu is rather old already, and does not bring
-too many packages for C++11 development. For example, the default
-C++ compiler installed on TravisCI is g++-4.6.3. This version
-doesn&rsquo;t even understand the compile option <code>-std=c++11</code>.</p>
-
-<p>Official C++11 support <a href="https://gcc.gnu.org/projects/cxx0x.html">started in g++ 4.7</a>,
-though C++0x features were supported way earlier. But to get decent C++11 support
-in g++, it is best to use g++4.8 or higher.</p>
-
-<p>Fortunately TravisCI allows installing other software. To get
-a more recent C++ compiler, it can simply be added from a PPA.
-This can be achieved by putting the PPA in the <code>.travis.yml</code> file of your
-Github repository, e.g.</p>
-
-<p>```yaml
-language: cpp
-compiler: g++</p>
-
-<p>before_install:
-&ndash; sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-&ndash; sudo apt-get update -qq</p>
-
-<p>install:
-&ndash; sudo apt-get install -qq g++-4.8
-&ndash; export CXX=&ldquo;g++-4.8&rdquo;
-```</p>
-
-<p>I have set up an <a href="https://github.com/jsteemann/travis-cxx11">example project on Github</a>
-that demonstrates how to use it.</p>
 ]]></content>
   </entry>
   
