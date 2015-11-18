@@ -146,6 +146,9 @@ instances in parallel (left is A, right is B):</p>
 
 <p><img src="/downloads/screenshots/deadlock.png"></p>
 
+<p>(note that this screenshot is from 2.8 and the automatic deadlock detection
+had already detected the deadlock and aborted one of the transactions)</p>
+
 <p>In general, deadlocks can occur only when multiple operations (AQL
 queries or other transactions) try to access the same resources
 (collections) at the same time, and only if the operations already

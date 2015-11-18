@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-11-18T22:17:00+01:00</updated>
+  <updated>2015-11-18T22:19:22+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -54,6 +54,9 @@ then the two transactions prevent each other from making progress:</p>
 instances in parallel (left is A, right is B):</p>
 
 <p><img src="/downloads/screenshots/deadlock.png"></p>
+
+<p>(note that this screenshot is from 2.8 and the automatic deadlock detection
+had already detected the deadlock and aborted one of the transactions)</p>
 
 <p>In general, deadlocks can occur only when multiple operations (AQL
 queries or other transactions) try to access the same resources
