@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-11-19T00:43:32+01:00</updated>
+  <updated>2015-11-20T16:20:12+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,357 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Using Multiple Indexes Per Collection]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection/"/>
+    <updated>2015-11-20T15:30:05+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection</id>
+    <content type="html"><![CDATA[<p>The query optimizer in ArangoDB 2.8 has been improved in terms of how it can
+make use of indexes. In previous versions of ArangoDB, the query optimizer could
+use only one index per collection used in an AQL query. When using a logical OR
+in a FILTER condition, the optimizer did not use any index for the collection in
+order to ensure the result is still correct.</p>
+
+<p>This is much better in 2.8. Now the query optimizer can use multiple indexes on
+the same collection for FILTER conditions that are combined with a logical OR.</p>
+
+<!-- more -->
+
+
+<p>For all following queries, I have set up a collection named <code>test</code>, which has
+two isolated hash indexes on the attributes <code>value1</code> and <code>value2</code>, and a skiplist
+index on attribute <code>value3</code>.</p>
+
+<p>Let&rsquo;s first try an AQL queries that uses a logical OR on two different attributes of the
+collection:</p>
+
+<figure class='code'><figcaption><span>example query </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN test
+</span><span class='line'>  FILTER doc.value1 == 11 || doc.value2 == 19 
+</span><span class='line'>  RETURN doc</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The execution plan for this query in 2.7 reveals that query will perform a full
+collection scan and cannot use indexes because of the logical OR on two different
+attributes:</p>
+
+<figure class='code'><figcaption><span>2.7 query execution plan</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>Execution plan:
+</span><span class='line'> Id   NodeType                  Est.   Comment
+</span><span class='line'>  1   SingletonNode                1   * ROOT
+</span><span class='line'>  2   EnumerateCollectionNode      0     - FOR doc IN test   /* full collection scan */
+</span><span class='line'>  3   CalculationNode              0       - LET #1 = doc.`value1` == 11 || doc.`value2` == 19
+</span><span class='line'>  4   FilterNode                   0       - FILTER #1
+</span><span class='line'>  5   ReturnNode                   0       - RETURN doc
+</span><span class='line'>
+</span><span class='line'>Indexes used:
+</span><span class='line'> none
+</span><span class='line'>
+</span><span class='line'>Optimization rules applied:
+</span><span class='line'> none</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<p>Running the same query in 2.8 / devel will produce a much better execution plan:</p>
+
+<figure class='code'><figcaption><span>2.8 query execution plan</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>Execution plan:
+</span><span class='line'> Id   NodeType          Est.   Comment
+</span><span class='line'>  1   SingletonNode        1   * ROOT
+</span><span class='line'>  6   IndexNode            2     - FOR doc IN test   /* hash index scan, hash index scan */
+</span><span class='line'>  3   CalculationNode      2       - LET #1 = doc.`value1` == 11 || doc.`value2` == 19  
+</span><span class='line'>  4   FilterNode           2       - FILTER #1
+</span><span class='line'>  5   ReturnNode           2       - RETURN doc
+</span><span class='line'>
+</span><span class='line'>Indexes used:
+</span><span class='line'> By   Type   Collection   Unique   Sparse   Selectivity   Fields         Ranges
+</span><span class='line'>  6   hash   test         false    false       100.00 %   [ `value1` ]   doc.`value1` == 11
+</span><span class='line'>  6   hash   test         false    false       100.00 %   [ `value2` ]   doc.`value2` == 19
+</span><span class='line'>
+</span><span class='line'>Optimization rules applied:
+</span><span class='line'> Id   RuleName
+</span><span class='line'>  1   use-indexes</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Multiple indexes will also be used if different index types are accessed, or for non-equality
+filter conditions. For example, the following query will make use of the two hash indexes
+and also the skiplist index:</p>
+
+<figure class='code'><figcaption><span>example query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN test 
+</span><span class='line'>  FILTER doc.value1 == 11 || doc.value2 == 19 || doc.value3 &gt; 42 
+</span><span class='line'>  RETURN doc</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Here is its execution plan from 2.8:</p>
+
+<figure class='code'><figcaption><span>2.8 query execution plan</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>Execution plan:
+</span><span class='line'> Id   NodeType          Est.   Comment
+</span><span class='line'>  1   SingletonNode        1   * ROOT
+</span><span class='line'>  6   IndexNode            3     - FOR doc IN test   /* hash index scan, hash index scan, skiplist index scan */
+</span><span class='line'>  3   CalculationNode      3       - LET #1 = doc.`value1` == 11 || doc.`value2` == 19 || doc.`value3` &gt; 42 
+</span><span class='line'>  4   FilterNode           3       - FILTER #1
+</span><span class='line'>  5   ReturnNode           3       - RETURN doc
+</span><span class='line'>
+</span><span class='line'>Indexes used:
+</span><span class='line'> By   Type       Collection   Unique   Sparse   Selectivity   Fields         Ranges
+</span><span class='line'>  6   hash       test         false    false       100.00 %   [ `value1` ]   doc.`value1` == 11
+</span><span class='line'>  6   hash       test         false    false       100.00 %   [ `value2` ]   doc.`value2` == 19
+</span><span class='line'>  6   skiplist   test         false    false            n/a   [ `value3` ]   doc.`value3` &gt; 42
+</span><span class='line'>
+</span><span class='line'>Optimization rules applied:
+</span><span class='line'> Id   RuleName
+</span><span class='line'>  1   use-indexes</span></code></pre></td></tr></table></div></figure>
+
+
+<p>For comparison, here is the non-optimized plan from 2.7 for the same query:</p>
+
+<figure class='code'><figcaption><span>2.7 query execution plan</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>Execution plan:
+</span><span class='line'> Id   NodeType                  Est.   Comment
+</span><span class='line'>  1   SingletonNode                1   * ROOT
+</span><span class='line'>  2   EnumerateCollectionNode      0     - FOR doc IN test   /* full collection scan */
+</span><span class='line'>  3   CalculationNode              0       - LET #1 = doc.`value1` == 11 || doc.`value2` == 19 || doc.`value3` &gt; 42
+</span><span class='line'>  4   FilterNode                   0       - FILTER #1
+</span><span class='line'>  5   ReturnNode                   0       - RETURN doc
+</span><span class='line'>
+</span><span class='line'>Indexes used:
+</span><span class='line'> none
+</span><span class='line'>
+</span><span class='line'>Optimization rules applied:
+</span><span class='line'> none</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Still the query optimizer will not be able to use any indexes on a collection when
+there are multiple FILTER conditions combined with logical OR and at least one of them
+is not satisfisable by an index of the collection. In this case it has no other choice
+but to do a full collection scan.</p>
+
+<p>For queries that combine multiple FILTER conditions with a logical AND, the optimizer
+will still try to pick the most selective index for the query and use it for the collection.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Index Speedups in 2.8]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28/"/>
+    <updated>2015-11-20T15:11:00+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28</id>
+    <content type="html"><![CDATA[<p>The upcoming 2.8 version of ArangoDB will provide several improvements in
+the area of index usage and query optimization.</p>
+
+<p>First of all, hash and skiplist indexes can now index individual array values.
+A dedicated post on this will follow shortly. Second, the query optimizer can
+make use multiple indexes per collection for queries with OR-combined filter
+conditions. This again is a subject for <a href="http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection/">another post</a>.
+Third, there have been some speed improvements due to changes in the general
+index handling code. This is what this post is about.</p>
+
+<!-- more -->
+
+
+<p>In order to assess the speedups in 2.8, I have run some already existing performance
+tests that I initially ran when comparing ArangoDB 2.5 with 2.6. The test cases and
+methodology are detailed in <a href="http://jsteemann.github.io/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">this earlier blog post</a>.</p>
+
+<p>For measuring the index-related performance improvements, I simply re-ran the
+index related tests in 2.7 and in 2.8 / devel. I did not bother re-running all
+tests from the original blog article because only some are index-related. In
+particular, I only ran these tests again:</p>
+
+<ul>
+<li><em>join-key</em>: for each document in the collection, perform a join on the <code>_key</code> attribute on the collection
+ itself (i.e. <code>FOR c1 IN @@c FOR c2 IN @@c FILTER c1._key == c2._key RETURN c1</code>)</li>
+<li><em>join-id</em>: ditto, but perform the join using the <code>_id</code> attribute</li>
+<li><em>join-hash-number</em> and <em>join-hash-string</em>: ditto, but join using a hash index on a numeric or string
+ attribute</li>
+<li><em>join-skiplist-number</em> and <em>join-skiplist-string</em>: ditto, but join using a skiplist index on a numeric or
+ string attribute</li>
+<li><em>lookup-key</em>, <em>lookup-hash-number</em>, <em>lookup-hash-string</em>, <em>lookup-skiplist-number</em>, <em>lookup-skiplist-string</em>:
+ compile an IN-list of 10,000 lookup values and search these 10,000 documents in the collection using
+ either the primary index (<code>_key</code> attribute), a hash index or a skiplist index. The latter two are tested
+ on numeric and string attributes.</li>
+</ul>
+
+
+<p>The test queries were run 5 times each on collections containing 10,000, 100,000 and
+1,000,000 documents.</p>
+
+<p>Here are the query execution times from 2.7 and 2.8 for the individual tests, in
+seconds (less is better):</p>
+
+<figure class='code'><figcaption><span>test results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+<span class='line-number'>40</span>
+<span class='line-number'>41</span>
+<span class='line-number'>42</span>
+<span class='line-number'>43</span>
+<span class='line-number'>44</span>
+<span class='line-number'>45</span>
+<span class='line-number'>46</span>
+<span class='line-number'>47</span>
+<span class='line-number'>48</span>
+<span class='line-number'>49</span>
+<span class='line-number'>50</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>test name                collection     avg 2.7 (s)      avg 2.8 (s)
+</span><span class='line'>--------------------------------------------------------------------
+</span><span class='line'>join-key                 10k                 0.0997           0.0612
+</span><span class='line'>join-key                 100k                1.0611           0.6538
+</span><span class='line'>join-key                 1000k              10.2975           6.2507
+</span><span class='line'>join-id                  10k                 0.1088           0.0606
+</span><span class='line'>join-id                  100k                1.1126           0.6694
+</span><span class='line'>join-id                  1000k              10.8180           6.5336
+</span><span class='line'>join-hash-number         10k                 0.1044           0.0679
+</span><span class='line'>join-hash-number         100k                1.1137           0.7430
+</span><span class='line'>join-hash-number         1000k              10.7923           7.1534
+</span><span class='line'>join-hash-string         10k                 0.1193           0.0712
+</span><span class='line'>join-hash-string         100k                1.2656           0.7915
+</span><span class='line'>join-hash-string         1000k              12.3075           7.6667
+</span><span class='line'>join-skiplist-number     10k                 0.1387           0.1030
+</span><span class='line'>join-skiplist-number     100k                1.6693           1.3062
+</span><span class='line'>join-skiplist-number     1000k              18.0406          15.5203
+</span><span class='line'>join-skiplist-string     10k                 0.1928           0.1469
+</span><span class='line'>join-skiplist-string     100k                2.3166           1.8997
+</span><span class='line'>join-skiplist-string     1000k              27.1513          23.2058
+</span><span class='line'>lookup-key               10k                 1.4996           1.5245
+</span><span class='line'>lookup-key               100k                1.4951           1.5189
+</span><span class='line'>lookup-key               1000k               1.5545           1.5662
+</span><span class='line'>lookup-hash-number       10k                 1.5572           1.5526
+</span><span class='line'>lookup-hash-number       100k                1.5595           1.5435
+</span><span class='line'>lookup-hash-number       1000k               1.5436           1.5648
+</span><span class='line'>lookup-hash-string       10k                 1.6023           1.5623
+</span><span class='line'>lookup-hash-string       100k                1.5892           1.5741
+</span><span class='line'>lookup-hash-string       1000k               1.5841           1.5770
+</span><span class='line'>lookup-skiplist-number   10k                 1.5978           1.6145
+</span><span class='line'>lookup-skiplist-number   100k                1.5782           1.6269
+</span><span class='line'>lookup-skiplist-number   1000k               1.5891           1.6258
+</span><span class='line'>lookup-skiplist-string   10k                 1.6443           1.6840
+</span><span class='line'>lookup-skiplist-string   100k                1.6787           1.6985
+</span><span class='line'>lookup-skiplist-string   1000k               1.7319           1.7562
+</span><span class='line'>in-key                   10k                 0.1076           0.0754
+</span><span class='line'>in-key                   100k                0.1083           0.0775
+</span><span class='line'>in-key                   1000k               0.1104           0.0773
+</span><span class='line'>in-hash-number           10k                 0.0898           0.0696
+</span><span class='line'>in-hash-number           100k                0.0889           0.0674
+</span><span class='line'>in-hash-number           1000k               0.0877           0.0675
+</span><span class='line'>in-hash-string           10k                 0.1174           0.0867
+</span><span class='line'>in-hash-string           100k                0.1188           0.0878
+</span><span class='line'>in-hash-string           1000k               0.1174           0.0853
+</span><span class='line'>in-skiplist-number       10k                 0.1095           0.0849
+</span><span class='line'>in-skiplist-number       100k                0.1110           0.0873
+</span><span class='line'>in-skiplist-number       1000k               0.1106           0.0910
+</span><span class='line'>in-skiplist-string       10k                 0.1744           0.1315
+</span><span class='line'>in-skiplist-string       100k                0.1990           0.1594
+</span><span class='line'>in-skiplist-string       1000k               0.2369           0.1968</span></code></pre></td></tr></table></div></figure>
+
+
+<p>It looks like joins and IN list lookups got significantly faster in 2.8, whereas
+the performance for point lookups is more or less the same as in 2.7.</p>
+
+<p>Note that the changes to the index code in 2.8 only affect how indexes are accessed
+from within AQL queries and how filtering works. No changes have been made for other
+index operations such as insert, updates, and removals.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Improved Deadlock Detection]]></title>
@@ -3317,204 +3668,6 @@ will look in this path for any helper tools it invokes. As we have a file named
 and only override it using environment variables. This is also helpful in
 other contexts, e.g. when <code>ld</code> shall remain as the system&rsquo;s default linker but
 <code>gold</code>shall only be used for linking a few selected components.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Bulk Document Lookups]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/07/bulk-document-lookups/"/>
-    <updated>2015-05-07T17:48:21+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/07/bulk-document-lookups</id>
-    <content type="html"><![CDATA[<p>ArangoDB 2.6 comes with a specialized API for bulk document lookups.</p>
-
-<p>The new API allows fetching multiple documents from the server using a single
-request, making bulk document retrieval more efficient than when using
-one request per document to fetch.</p>
-
-<!-- more -->
-
-
-<p>The straight-forward implementation of a client application that needs to
-fetch several documents from an ArangoDB server looks like this:</p>
-
-<figure class='code'><figcaption><span>fetching multiple documents from the server one by one</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="c1">// list of document keys</span>
-</span><span class='line'><span class="kd">var</span> <span class="nx">keys</span> <span class="o">=</span> <span class="p">[</span> <span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="s2">&quot;baz&quot;</span><span class="p">,</span> <span class="p">...];</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// sequentially fetch all documents from the server</span>
-</span><span class='line'><span class="kd">var</span> <span class="nx">results</span> <span class="o">=</span> <span class="p">[</span> <span class="p">];</span>
-</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">keys</span><span class="p">.</span><span class="nx">length</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">results</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="nx">db</span><span class="p">.</span><span class="nx">test</span><span class="p">.</span><span class="nb">document</span><span class="p">(</span><span class="nx">keys</span><span class="p">[</span><span class="nx">i</span><span class="p">]));</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="c1">// now all documents are contained in variable &#39;results&#39;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This works fine but causes excessive HTTP communication between the client
-application and the server when many documents need to be fetched. In fact,
-the above code will issue as many HTTP requests as there are documents to fetch.</p>
-
-<p>From the performance point of view, it would be much better to reduce the
-number of HTTP requests, and retrieve multiple documents from the server in
-one go, using a single request.</p>
-
-<p>This is where the new document lookup function comes into play. Provided the
-documents keys are known, all the client application needs to do is to call the
-collection&rsquo;s <code>lookupByKeys</code> method:</p>
-
-<figure class='code'><figcaption><span>bulk method: fetching multiple documents at once</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="c1">// list of document keys</span>
-</span><span class='line'><span class="kd">var</span> <span class="nx">keys</span> <span class="o">=</span> <span class="p">[</span> <span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="s2">&quot;baz&quot;</span><span class="p">,</span> <span class="p">...];</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">var</span> <span class="nx">results</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">test</span><span class="p">.</span><span class="nx">lookupByKeys</span><span class="p">(</span><span class="nx">keys</span><span class="p">);</span>
-</span><span class='line'><span class="c1">// now all documents are contained in variable &#39;results&#39;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Following is a comparison of the execution times for the two different methds.
-All test runs were conducted in the same ArangoDB 2.6 instance. The tests were
-run from the ArangoShell. The ArangoShell and the ArangoDB server were located on
-the same physical host.</p>
-
-<figure class='code'><figcaption><span>comparing single document requests and bulk requests</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Number of keys     Single documents        Bulk
-</span><span class='line'>-----------------------------------------------
-</span><span class='line'>         1,000               0.24 s      0.04 s
-</span><span class='line'>        10,000               1.23 s      0.31 s
-</span><span class='line'>       100,000              10.89 s      2.13 s</span></code></pre></td></tr></table></div></figure>
-
-
-<p>As can be seen, the bulk method can provide a substantial speedup in case lots
-of documents need to be fetched by their keys at once. The actual speedups might be
-even higher when using a remote ArangoDB server instead of a localhost connection.</p>
-
-<p>In 2.6 there is currently an ArangoShell implementation for bulk document lookups.
-Other drivers will follow.</p>
-
-<p>Additionally, the server-side REST API method for bulk document lookups can be
-invoked directly via HTTP as follows:</p>
-
-<figure class='code'><figcaption><span>invoking bulk document lookups via HTTP</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>curl                                                  \
-</span><span class='line'>  -X PUT                                              \
-</span><span class='line'>  http://127.0.0.1:8529/_api/simple/lookup-by-keys    \
-</span><span class='line'>  --data '{"collection":"test","keys":["foo","bar","baz"]}'</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Restrictions: the bulk document API works only with document keys, not document ids.
-Additionally, it works on a single collection at a time and cannot be leveraged to fetch
-documents from multiple collections. Still, a client application can group document keys
-by collection beforehand and send one bulk request per involved collection. Finally,
-trying to fetch a document using a non-existing key will not produce an error with the
-bulk API. Using the one-by-one method, trying to fetch a non-existing document will throw
-an exception.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[IN-list Improvements]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/07/in-list-improvements/"/>
-    <updated>2015-05-07T16:46:30+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/07/in-list-improvements</id>
-    <content type="html"><![CDATA[<p>We have worked on many AQL optimizations for ArangoDB 2.6.</p>
-
-<p>As a side effect of one of these optimizations, some cases involving the handling
-of large IN-lists have become much faster than before. Large IN-lists are normally
-used when comparing attribute or index values against some big array of lookup values
-or keys provided by the application.</p>
-
-<!-- more -->
-
-
-<p>Let&rsquo;s quickly create and populate a collection named <code>keys</code> so that we can use some
-IN-list queries on it later on:</p>
-
-<figure class='code'><figcaption><span>setting up example data</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;keys&quot;</span><span class="p">);</span>
-</span><span class='line'>
-</span><span class='line'><span class="c1">// insert 100k documents with some defined keys into the collection</span>
-</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="mi">100000</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">db</span><span class="p">.</span><span class="nx">keys</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">_key</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span> <span class="p">});</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>And here is a query to all find documents with one of the provided keys <code>test0</code> to <code>test999</code>.
-The IN-list here contains 1,000 values:</p>
-
-<figure class='code'><figcaption><span>using an IN-list with 1,000 values</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">keys</span> <span class="o">=</span> <span class="p">[</span> <span class="p">];</span>
-</span><span class='line'><span class="kd">var</span> <span class="nx">n</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">;</span>
-</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="nx">n</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">keys</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span><span class="p">);</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="s2">&quot;FOR doc IN keys FILTER doc._key IN @keys RETURN doc&quot;</span><span class="p">,</span> <span class="p">{</span> <span class="nx">keys</span><span class="o">:</span> <span class="nx">keys</span> <span class="p">});</span> <span class="p">});</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>When invoked from the ArangoShell, this takes around 0.6 seconds to complete with ArangoDB 2.5.</p>
-
-<p>Increasing the length of the IN-list from 1,000 to 5,000 values makes this run in around 15 seconds.
-With an IN-list of 10,000 values, this already takes more than 60 seconds to complete in 2.5.</p>
-
-<p>Obviously longer IN-lists weren&rsquo;t handled terribly efficiently in 2.5, and should be avoided there
-if possible.</p>
-
-<p>I am glad this has been fixed in 2.6. Following is a comparison of the above query for different
-IN-list sizes, run on both ArangoDB 2.5 and 2.6.</p>
-
-<figure class='code'><figcaption><span>2.5 and 2.6 with different IN-list sizes </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'># of IN-list values    Execution time (2.5)   Execution time (2.6)
-</span><span class='line'>------------------------------------------------------------------
-</span><span class='line'>              1,000                  0.67 s                 0.03 s
-</span><span class='line'>              5,000                 15.34 s                 0.12 s
-</span><span class='line'>             10,000                 63.48 s                 0.20 s
-</span><span class='line'>             50,000                   n/a                   0.81 s
-</span><span class='line'>            100,000                   n/a                   1.60 s</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Looks like 2.6 handles longer IN-lists way better than 2.5! The above figures suggest that execution
-times now scale about linearly with the number of IN-list values. This also leads to reductions in query
-execution times of 90 % and more percent.</p>
-
-<p>Please note that longer IN-lists will still make a the query run longer than when
-using shorter IN-lists. This is expected because longer IN-lists require more comparisons to
-be made and will lead (in the above example) to more documents being returned.</p>
 ]]></content>
   </entry>
   

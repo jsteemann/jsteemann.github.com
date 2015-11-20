@@ -275,12 +275,22 @@
         <lastmod>2015-11-18T22:19:17+01:00</lastmod>
     </url>
     <url>
+        <loc>http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28/</loc>
+        <lastmod>2015-11-20T16:19:36+01:00</lastmod>
+    </url>
+    <url>
+        <loc>
+            http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection/
+        </loc>
+        <lastmod>2015-11-20T15:56:35+01:00</lastmod>
+    </url>
+    <url>
         <loc>http://jsteemann.github.io/about/</loc>
-        <lastmod>2015-11-19T00:42:55+01:00</lastmod>
+        <lastmod>2015-11-20T16:19:36+01:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2015-11-19T00:42:55+01:00</lastmod>
+        <lastmod>2015-11-20T16:19:36+01:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -288,6 +298,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2015-11-19T00:42:55+01:00</lastmod>
+        <lastmod>2015-11-20T16:19:36+01:00</lastmod>
     </url>
 </urlset>

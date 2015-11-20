@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-11-19T00:43:32+01:00</updated>
+  <updated>2015-11-20T16:20:12+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,248 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Using Multiple Indexes Per Collection]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection/"/>
+    <updated>2015-11-20T15:30:05+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection</id>
+    <content type="html"><![CDATA[<p>The query optimizer in ArangoDB 2.8 has been improved in terms of how it can
+make use of indexes. In previous versions of ArangoDB, the query optimizer could
+use only one index per collection used in an AQL query. When using a logical OR
+in a FILTER condition, the optimizer did not use any index for the collection in
+order to ensure the result is still correct.</p>
+
+<p>This is much better in 2.8. Now the query optimizer can use multiple indexes on
+the same collection for FILTER conditions that are combined with a logical OR.</p>
+
+<!-- more -->
+
+
+<p>For all following queries, I have set up a collection named <code>test</code>, which has
+two isolated hash indexes on the attributes <code>value1</code> and <code>value2</code>, and a skiplist
+index on attribute <code>value3</code>.</p>
+
+<p>Let&rsquo;s first try an AQL queries that uses a logical OR on two different attributes of the
+collection:</p>
+
+<p><code>plain example query
+FOR doc IN test
+  FILTER doc.value1 == 11 || doc.value2 == 19
+  RETURN doc
+</code></p>
+
+<p>The execution plan for this query in 2.7 reveals that query will perform a full
+collection scan and cannot use indexes because of the logical OR on two different
+attributes:</p>
+
+<p><code>``plain 2.7 query execution plan
+Execution plan:
+ Id   NodeType                  Est.   Comment
+  1   SingletonNode                1   * ROOT
+  2   EnumerateCollectionNode      0     - FOR doc IN test   /* full collection scan */
+  3   CalculationNode              0       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2` == 19
+  4   FilterNode                   0       &ndash; FILTER #1
+  5   ReturnNode                   0       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ none</p>
+
+<p>Optimization rules applied:
+ none
+```</p>
+
+<p>Running the same query in 2.8 / devel will produce a much better execution plan:</p>
+
+<p><code>``plain 2.8 query execution plan
+Execution plan:
+ Id   NodeType          Est.   Comment
+  1   SingletonNode        1   * ROOT
+  6   IndexNode            2     - FOR doc IN test   /* hash index scan, hash index scan */
+  3   CalculationNode      2       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2` == 19<br/>
+  4   FilterNode           2       &ndash; FILTER #1
+  5   ReturnNode           2       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ By   Type   Collection   Unique   Sparse   Selectivity   Fields         Ranges
+  6   hash   test         false    false       100.00 %   [ <code>value1</code> ]   doc.<code>value1</code> == 11
+  6   hash   test         false    false       100.00 %   [ <code>value2</code> ]   doc.<code>value2</code> == 19</p>
+
+<p>Optimization rules applied:
+ Id   RuleName
+  1   use-indexes
+```</p>
+
+<p>Multiple indexes will also be used if different index types are accessed, or for non-equality
+filter conditions. For example, the following query will make use of the two hash indexes
+and also the skiplist index:</p>
+
+<p><code>plain example query
+FOR doc IN test
+  FILTER doc.value1 == 11 || doc.value2 == 19 || doc.value3 &gt; 42
+  RETURN doc
+</code></p>
+
+<p>Here is its execution plan from 2.8:</p>
+
+<p><code>``plain 2.8 query execution plan
+Execution plan:
+ Id   NodeType          Est.   Comment
+  1   SingletonNode        1   * ROOT
+  6   IndexNode            3     - FOR doc IN test   /* hash index scan, hash index scan, skiplist index scan */
+  3   CalculationNode      3       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2<code>== 19 || doc.</code>value3` > 42
+  4   FilterNode           3       &ndash; FILTER #1
+  5   ReturnNode           3       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ By   Type       Collection   Unique   Sparse   Selectivity   Fields         Ranges
+  6   hash       test         false    false       100.00 %   [ <code>value1</code> ]   doc.<code>value1</code> == 11
+  6   hash       test         false    false       100.00 %   [ <code>value2</code> ]   doc.<code>value2</code> == 19
+  6   skiplist   test         false    false            n/a   [ <code>value3</code> ]   doc.<code>value3</code> > 42</p>
+
+<p>Optimization rules applied:
+ Id   RuleName
+  1   use-indexes
+```</p>
+
+<p>For comparison, here is the non-optimized plan from 2.7 for the same query:</p>
+
+<p><code>``plain 2.7 query execution plan
+Execution plan:
+ Id   NodeType                  Est.   Comment
+  1   SingletonNode                1   * ROOT
+  2   EnumerateCollectionNode      0     - FOR doc IN test   /* full collection scan */
+  3   CalculationNode              0       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2<code>== 19 || doc.</code>value3` > 42
+  4   FilterNode                   0       &ndash; FILTER #1
+  5   ReturnNode                   0       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ none</p>
+
+<p>Optimization rules applied:
+ none
+```</p>
+
+<p>Still the query optimizer will not be able to use any indexes on a collection when
+there are multiple FILTER conditions combined with logical OR and at least one of them
+is not satisfisable by an index of the collection. In this case it has no other choice
+but to do a full collection scan.</p>
+
+<p>For queries that combine multiple FILTER conditions with a logical AND, the optimizer
+will still try to pick the most selective index for the query and use it for the collection.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Index Speedups in 2.8]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28/"/>
+    <updated>2015-11-20T15:11:00+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28</id>
+    <content type="html"><![CDATA[<p>The upcoming 2.8 version of ArangoDB will provide several improvements in
+the area of index usage and query optimization.</p>
+
+<p>First of all, hash and skiplist indexes can now index individual array values.
+A dedicated post on this will follow shortly. Second, the query optimizer can
+make use multiple indexes per collection for queries with OR-combined filter
+conditions. This again is a subject for <a href="/blog/2015/11/20/using-multiple-indexes-per-collection/">another post</a>.
+Third, there have been some speed improvements due to changes in the general
+index handling code. This is what this post is about.</p>
+
+<!-- more -->
+
+
+<p>In order to assess the speedups in 2.8, I have run some already existing performance
+tests that I initially ran when comparing ArangoDB 2.5 with 2.6. The test cases and
+methodology are detailed in <a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">this earlier blog post</a>.</p>
+
+<p>For measuring the index-related performance improvements, I simply re-ran the
+index related tests in 2.7 and in 2.8 / devel. I did not bother re-running all
+tests from the original blog article because only some are index-related. In
+particular, I only ran these tests again:</p>
+
+<ul>
+<li><em>join-key</em>: for each document in the collection, perform a join on the <code>_key</code> attribute on the collection
+ itself (i.e. <code>FOR c1 IN @@c FOR c2 IN @@c FILTER c1._key == c2._key RETURN c1</code>)</li>
+<li><em>join-id</em>: ditto, but perform the join using the <code>_id</code> attribute</li>
+<li><em>join-hash-number</em> and <em>join-hash-string</em>: ditto, but join using a hash index on a numeric or string
+ attribute</li>
+<li><em>join-skiplist-number</em> and <em>join-skiplist-string</em>: ditto, but join using a skiplist index on a numeric or
+ string attribute</li>
+<li><em>lookup-key</em>, <em>lookup-hash-number</em>, <em>lookup-hash-string</em>, <em>lookup-skiplist-number</em>, <em>lookup-skiplist-string</em>:
+ compile an IN-list of 10,000 lookup values and search these 10,000 documents in the collection using
+ either the primary index (<code>_key</code> attribute), a hash index or a skiplist index. The latter two are tested
+ on numeric and string attributes.</li>
+</ul>
+
+
+<p>The test queries were run 5 times each on collections containing 10,000, 100,000 and
+1,000,000 documents.</p>
+
+<p>Here are the query execution times from 2.7 and 2.8 for the individual tests, in
+seconds (less is better):</p>
+
+<p>```plain test results</p>
+
+<h2>test name                collection     avg 2.7 (s)      avg 2.8 (s)</h2>
+
+<p>join-key                 10k                 0.0997           0.0612
+join-key                 100k                1.0611           0.6538
+join-key                 1000k              10.2975           6.2507
+join-id                  10k                 0.1088           0.0606
+join-id                  100k                1.1126           0.6694
+join-id                  1000k              10.8180           6.5336
+join-hash-number         10k                 0.1044           0.0679
+join-hash-number         100k                1.1137           0.7430
+join-hash-number         1000k              10.7923           7.1534
+join-hash-string         10k                 0.1193           0.0712
+join-hash-string         100k                1.2656           0.7915
+join-hash-string         1000k              12.3075           7.6667
+join-skiplist-number     10k                 0.1387           0.1030
+join-skiplist-number     100k                1.6693           1.3062
+join-skiplist-number     1000k              18.0406          15.5203
+join-skiplist-string     10k                 0.1928           0.1469
+join-skiplist-string     100k                2.3166           1.8997
+join-skiplist-string     1000k              27.1513          23.2058
+lookup-key               10k                 1.4996           1.5245
+lookup-key               100k                1.4951           1.5189
+lookup-key               1000k               1.5545           1.5662
+lookup-hash-number       10k                 1.5572           1.5526
+lookup-hash-number       100k                1.5595           1.5435
+lookup-hash-number       1000k               1.5436           1.5648
+lookup-hash-string       10k                 1.6023           1.5623
+lookup-hash-string       100k                1.5892           1.5741
+lookup-hash-string       1000k               1.5841           1.5770
+lookup-skiplist-number   10k                 1.5978           1.6145
+lookup-skiplist-number   100k                1.5782           1.6269
+lookup-skiplist-number   1000k               1.5891           1.6258
+lookup-skiplist-string   10k                 1.6443           1.6840
+lookup-skiplist-string   100k                1.6787           1.6985
+lookup-skiplist-string   1000k               1.7319           1.7562
+in-key                   10k                 0.1076           0.0754
+in-key                   100k                0.1083           0.0775
+in-key                   1000k               0.1104           0.0773
+in-hash-number           10k                 0.0898           0.0696
+in-hash-number           100k                0.0889           0.0674
+in-hash-number           1000k               0.0877           0.0675
+in-hash-string           10k                 0.1174           0.0867
+in-hash-string           100k                0.1188           0.0878
+in-hash-string           1000k               0.1174           0.0853
+in-skiplist-number       10k                 0.1095           0.0849
+in-skiplist-number       100k                0.1110           0.0873
+in-skiplist-number       1000k               0.1106           0.0910
+in-skiplist-string       10k                 0.1744           0.1315
+in-skiplist-string       100k                0.1990           0.1594
+in-skiplist-string       1000k               0.2369           0.1968
+```</p>
+
+<p>It looks like joins and IN list lookups got significantly faster in 2.8, whereas
+the performance for point lookups is more or less the same as in 2.7.</p>
+
+<p>Note that the changes to the index code in 2.8 only affect how indexes are accessed
+from within AQL queries and how filtering works. No changes have been made for other
+index operations such as insert, updates, and removals.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Improved Deadlock Detection]]></title>
@@ -284,357 +526,6 @@ Zend Engine v2.6.0, Copyright &copy; 1998-2014 Zend Technologies</p>
 The improvements may not be noticable for applications that issue only a few
 requests with the driver, but they will be significant when performing lots of
 requests, as in the above examples.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[On Building AQL Query Strings]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/08/30/on-building-aql-query-strings/"/>
-    <updated>2015-08-30T23:14:42+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/08/30/on-building-aql-query-strings</id>
-    <content type="html"><![CDATA[<p>I recently wrote two recipes about generating AQL query
-strings. They are contained in the ArangoDB cookbook by now:</p>
-
-<ul>
-<li><a href="https://docs.arangodb.com/cookbook/AvoidingInjection.html">Avoiding parameter injection in AQL</a></li>
-<li><a href="https://docs.arangodb.com/cookbook/MultilineQueryStrings.html">Writing multi-line AQL queries</a></li>
-</ul>
-
-
-<p>After that, Github user <em>tracker1</em> suggested in <a href="https://github.com/arangodb/arangodb/issues/1457">Github issue 1457</a>
-to take the ES6 template string variant even further, using a generator function for
-string building, and also using promises and ES7 async/await.</p>
-
-<p>We can&rsquo;t use ES7 async/await in ArangoDB at the moment due to lacking support
-in V8, but the suggested template string generator function seemed to be an
-obvious improvement that deserved inclusion in ArangoDB.</p>
-
-<!-- more -->
-
-
-<p>Basically, the suggestion is to use regular JavaScript variables/expressions in
-the template string and have them substituted <em>safely</em>.</p>
-
-<p>With regular AQL bind parameters, a query looks like this:</p>
-
-<p><code>``js
-var bindVars = { name: "test" };
-var query =</code>FOR doc IN collection</p>
-
-<pre><code>         FILTER doc.name == @name 
-         RETURN doc._key`;
-</code></pre>
-
-<p>db._query(query, bindVars);
-```</p>
-
-<p>This is immune to parameter injection, because the query string and the bind parameter
-value are passed in separately. But it&rsquo;s <strong>not very ES6-y</strong>.</p>
-
-<p>Now, after partly implementing <em>tracker1</em>&rsquo;s suggestion, JavaScript values
-and expressions can be used much more <em>naturally</em> when building AQL query strings:</p>
-
-<p><code>``js
-var name = "test";
-var query = aqlQuery</code>FOR doc IN collection</p>
-
-<pre><code>                 FILTER doc.name == ${name} 
-                 RETURN doc._key`;
-</code></pre>
-
-<p>db._query(query);
-```</p>
-
-<p><code>${name}</code> is regular ES template string syntax and would normally be substituted
-with the value of JavaScript variable <code>name</code>. Such simple substitution would be unsafe,
-because it would make the query vulnerable to parameter injection. So we&rsquo;re also
-using a template string generator function named <code>aqlQuery</code>. This function comes
-bundled with ArangoDB 2.7.</p>
-
-<p>Under the hood, <code>aqlQuery</code> will create regular AQL bind parameters for each occurrence
-of a template string parameter. It will keep the query string and the actual bind
-parameter values separate, so it is safe to use.</p>
-
-<p>The function will return an object with that can directly be passed on to the
-<code>db._query()</code> function. Here&rsquo;s what <code>aqlQuery</code> will generate for the above example
-(note: some whitespace was removed from the output):</p>
-
-<p>```js
-{
-  &ldquo;query&rdquo; : &ldquo;FOR doc IN collection FILTER doc.name == @value0 RETURN doc._key&rdquo;,
-  &ldquo;bindVars&rdquo; : {</p>
-
-<pre><code>"value0" : "test" 
-</code></pre>
-
-<p>  }
-}
-```</p>
-
-<p>The <code>aqlQuery</code> template string generator function is available in 2.7, which is
-currently in development. The changes are contained in the <code>devel</code> branch only
-at the moment, but will become available in following 2.7 release. A pull request
-has been issued to have the cookbook recipes updated to include <code>aqlQuery</code>, too.</p>
-
-<p><code>aqlQuery</code> can be used in 2.7 from the ArangoShell, inside arangod (e.g. from inside
-Foxx actions) and from ArangoDB&rsquo;s web interface.</p>
-
-<p>All other variants for building AQL queries are still fully supported.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[How V8 Is Used in ArangoDB]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/08/01/how-v8-is-used-in-arangodb/"/>
-    <updated>2015-08-01T19:06:04+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/08/01/how-v8-is-used-in-arangodb</id>
-    <content type="html"><![CDATA[<p>ArangoDB allows running user-defined JavaScript code in the database.
-This can be used for more complex, <em>stored procedures</em>-like database operations.
-Additionally, ArangoDB&rsquo;s <a href="https://www.arangodb.com/foxx/">Foxx framework</a> can
-be used to make any database functionality available via an HTTP REST API.
-It&rsquo;s easy to build microservices with it, using the scripting functionality
-for tasks like access control, data validation, sanitation etc.</p>
-
-<p>We often get asked how the scripting functionality is implemented under the hood.
-Additionally, several people have asked how ArangoDB&rsquo;s JavaScript functionality
-relates to node.js.</p>
-
-<p>This post tries to explain that in detail.</p>
-
-<!-- more -->
-
-
-<h1>The C++ parts</h1>
-
-<p><em>arangosh</em>, the ArangoShell, and <em>arangod</em>, the database server, are written in
-C++ and they are shipped as native code executables. Some parts of both <em>arangosh</em>
-and <em>arangod</em> itself are written in JavaScript (more on that later).</p>
-
-<p>The I/O handling in <em>arangod</em> is written in C++ and uses libev (written in C)
-for the low-level event handling. All the socket I/O, working scheduling and
-queueing is written in C++, too. These are parts that require high parallelism,
-so we want this to run in multiple threads.</p>
-
-<p>All the indexes, the persistence layer and many of the fundamental operations,
-like the ones for document inserts, updates, deletes, imports are written in C++ for
-effective control of memory usage and parallelism. AQL&rsquo;s query parser is written
-using the usual combination of Flex and Bison, which generate C files that are
-compiled to native code. The AQL optimizer, AQL executor and many AQL functions are
-writting in C++ as well.</p>
-
-<p>Some AQL functions however, are written in JavaScript. And if an AQL query
-invokes a user-defined function, this function will be a JavaScript function, too.</p>
-
-<h1>How ArangoDB uses V8</h1>
-
-<p>How is JavaScript code executed in ArangoDB?</p>
-
-<p>Both <em>arangosh</em> and <em>arangod</em> are linked against the <a href="https://developers.google.com/v8/">V8 JavaScript engine</a>
-library. V8 (itself written in C++) is the component that runs the JavaScript
-code in ArangoDB.</p>
-
-<p>V8 requires JavaScript code to run in a so-called <em>isolate</em> (note: I&rsquo;ll be
-oversimplifying a bit here &ndash; in reality there are isolates and contexts).
-As the name suggests, isolates are completely isolated from each other.
-Especially, data cannot be shared or moved across isolates, and each isolate
-can be used by only one thread at a time.</p>
-
-<p>Let&rsquo;s look at how <em>arangosh</em>, the ArangoShell, uses V8. All JavaScript commands
-entered in <em>arangosh</em> will be compiled and executing with V8 immediately.
-In <em>arangosh</em>, this happens using a single V8 isolate.</p>
-
-<p>On the server side, things are a bit different. In <em>arangod</em>, there are multiple
-V8 isolates. The number of isolates to create is a startup configuration
-option (<code>--javascript.v8-contexts</code>). Creating multiple isolates allows running
-JavaScript code in multiple threads, truly parallel. Apart from that, <em>arangod</em>
-has multiple I/O threads (<code>--scheduler.threads</code> configuration option) for handling
-the communication with client applications.</p>
-
-<p>As mentioned earlier, part of ArangoDB&rsquo;s codebase itself is written in JavaScript,
-and this JavaScript code is executed the same way as any user-defined will be executed.</p>
-
-<h1>Executing JavaScript code with V8</h1>
-
-<p>For executing any JavaScript code (built-in or user-defined), ArangoDB will invoke
-V8&rsquo;s JIT compiler to compile the script code into native code and run it.</p>
-
-<p>The JIT compiler in V8 will not try extremely hard to optimize the code on the
-first invocation. On initial compilation, it will aim for a good balance of
-optimizations and fast compilation time. If it finds some code parts are called
-often, it may re-try to optimize these parts more aggressively automatically.
-To make things even more complex, there are different JIT compilers in V8
-(i.e. Crankshaft and Turbofan) with different sweet spots. JavaScript modes
-(i.e. <em>strict mode</em> and <em>strong mode</em>) can also affect the level of optimizations
-the compilers will carry out.</p>
-
-<p>Now, after the JavaScript code has been compiled to native code, V8 will run it
-until it returns or fails with an uncaught exception.</p>
-
-<p>But how can the JavaScript code access the database data and server internals?
-In other words, what actually happens if a JavaScript command such as the following
-is executed?</p>
-
-<p><code>js example JavaScript command
-db.myCollection.save({ _key: "test" });
-</code></p>
-
-<h2>Accessing server internals from JavaScript</h2>
-
-<p>Inside <em>arangod</em>, each V8 isolate is equipped with a global variable named <code>db</code>.
-This JavaScript variable is a wrapper around database functionality written in C++.
-When the <code>db</code> object is created, we tell V8 that its methods are C++ callbacks.</p>
-
-<p>Whenever the <code>db</code> object is accessed in JavaScript, the V8 engine will therefore
-call C++ methods. These provide full access to the server internals, can do whatever
-is required and return data in the format that V8 requires. V8 then makes the
-return data accessible to the JavaScript code.</p>
-
-<p>Executing <code>db.myCollection.save(...)</code> is effectively two operations: accessing the
-property <code>myCollection</code> on the object <code>db</code> and then calling function <code>save</code> on that
-property. For the first operation, V8 will invoke the object&rsquo;s <code>NamedPropertyHandler</code>,
-which is a C++ function that is responsible for returning the value for the property
-with the given name (<code>myCollection</code>). In the case of <code>db</code>, we have a C++ function
-that collection object if it exists, or <code>undefined</code> if not.</p>
-
-<p>The collection object again has C++ bindings in the background, so calling function
-<code>save</code> on it will call another C++ function. The collection object also has a (hidden)
-pointer to the C++ collection. When <code>save</code> is called, we will extract that pointer
-from the <code>this</code> object so we know which C++ data structures to work on. The <code>save</code>
-function will also get the to-be-inserted document data as its payload. V8 will
-pass this to the C++ function as well so we can validate it and convert it into
-our internal data format.</p>
-
-<p>On the server side, there are several objects exposed to JavaScript that have C++
-bindings. There are also non-object functions that have C++ bindings. Some of these
-functions are also bolted on regular JavaScript objects.</p>
-
-<h2>Accessing server internals from ArangoShell</h2>
-
-<p>When running the same command in <em>arangosh</em>, things will be completely different.
-The ArangoShell may run on the same host as the <em>arangod</em> server process, but it may
-also run on a completely different one. Providing <em>arangosh</em> access to server internals
-such as pointers will therefore not work in general. Even if <em>arangosh</em> and <em>arangod</em>
-do run on the same host, they are independent processes with no access to the each
-other&rsquo;s data. The latter problem could be solved by having a shared memory segment
-that both <em>arangosh</em> and <em>arangod</em> can use, but why bother with that special case
-which will provide no help in the general case when the shell can be located on
-<strong>any</strong> host.</p>
-
-<p>To make the shell work in all these situations, it uses the HTTP REST API provided
-by the ArangoDB server to talk to it. For <em>arangod</em>, any ArangoShell client is just
-another client, with no special treatments or protocols.</p>
-
-<p>As a consequence, all operations on databases and collections run from the ArangoShell
-are JavaScript wrappers that call their respective server-side HTTP APIs.</p>
-
-<p>Recalling the command example again (<code>db.myCollection.save(...)</code>), the shell will first
-access the property <code>myCollection</code> of the object <code>db</code>. In the shell <code>db</code> is a regular
-JavaScript object with no C++ bindings. When the shell is started, it will make an
-HTTP call to <em>arangod</em> to retrieve a list of all available collections, and register
-them as properties in its <code>db</code> object. Calling the <code>save</code> method on one of these
-objects will trigger an HTTP POST request to the server API at <code>/_api/document?collection=myCollection</code>,
-with the to-be-inserted data in its request body. Eventually the server will respond
-and the command will return with the data retrieved from the server.</p>
-
-<h2>Considerations</h2>
-
-<p>Consider running the following JavaScript code:</p>
-
-<p><code>js code to insert 1000 documents
-for (var i = 0; i &lt; 1000; ++i) {
-  db.myCollection.save({ _key: "test" + i });
-}
-</code></p>
-
-<p>When run from inside the ArangoShell, the code will be executed in there. The shell will
-perform an HTTP request to <em>arangod</em> for each call to <code>save</code>. We&rsquo;ll end up with 1,000
-HTTP requests.</p>
-
-<p>Running the same code inside <em>arangod</em> will trigger no HTTP requests, as the server-side
-functions are backed with C++ internals and can access the database data directly. It will
-be a lot faster to run this loop on the server than in <em>arangosh</em>. A while ago I wrote
-<a href="/blog/2014/08/30/understanding-where-operations-are-executed/">another article</a> about this.</p>
-
-<p>When replacing the ArangoShell with another client application, things are no different.
-A client application will not have access to the server internals, so all it can do is to
-make requests to the server (by the way, the principle would be no different if we used
-MySQL or other database servers, only the protocols would vary).</p>
-
-<p>Fortunately, there is a fix for this: making the code run server-side. For example, the
-above code can be put into a Foxx route. This way it is not only fast but will be made
-accessible via an HTTP REST API so client applications can call it with a single HTTP request.</p>
-
-<p>In reality, database operations will be more complex than in the above example. And this
-is where having a full-featured scripting language like JavaScript helps. It provides all
-the features that are needed for more complex tasks such as validating and sanitizing input
-data, access control, executing database queries and postprocessing results.</p>
-
-<h1>The differences to node.js</h1>
-
-<p>To start with: ArangoDB is not node.js, and vice versa. ArangoDB is not a node.js module
-either. ArangoDB and node.js are completely indepedent.</p>
-
-<p>But there is a commonality: both ArangoDB and node.js use the V8 engine for running
-JavaScript code.</p>
-
-<h2>Threading</h2>
-
-<p>AFAIK, standard node.js only has a single V8 isolate to run all code in.
-While that made the implementation easier (no hassle with multi-threading) it
-also limits node.js to using only a single CPU.</p>
-
-<p>It&rsquo;s not unusual to see a multi-core server with a node.js instance maxing out
-one CPU while the other CPUs are sitting idle. In order to max out a multi-core
-server, people often start multiple node.js instances on a single server. That will
-work fine, but the node.js instances will be independent, and sharing data between
-them is not possible in plain JavaScript.</p>
-
-<p>And because a node.js instance is single-threaded, it is also important that
-code written for node.js is non-blocking. Code that blocks while waiting for
-some I/O operation would block the only available CPU. Using non-blocking
-I/O operations allows node.js to queue the operation, and execute other code
-in the meantime, allowing overall progress. This also makes it look like it
-would be executing multiple actions in parallel, while it is actually executing
-them sequentially.</p>
-
-<p>Contrary, <em>arangod</em> is a multi-threaded server. It can serve multiple requests in
-parallel, using multiple CPUs. Because <em>arangod</em> has multiple V8 isolates that
-each can execute JavaScript code, it can run JavaScript in multiple threads in parallel.</p>
-
-<p><em>arangosh</em>, the ArangoShell, is single-threaded and provides only a single V8 isolate.</p>
-
-<h2>Usage of modules</h2>
-
-<p>Both node.js and ArangoDB can load code at runtime so it can be organized into
-modules or libraries. In both, extra JavaScript modules can be loaded using the
-<code>require</code> function.</p>
-
-<p>There is often confusion about whether node.js modules can be used in ArangoDB.
-This is probably because the answer is &ldquo;<em>it depends!</em>&rdquo;.</p>
-
-<p>node.js packages can be written in JavaScript but they can also compile to native
-code using C++. The latter can be used to extend the functionality of node.js with
-features that JavaScript alone wouldn&rsquo;t be capable of. Such modules however often
-heavily depend on a specific V8 version (so do not necessarily compile in a node.js
-version with a different version of V8) and often rely on node.js internals.</p>
-
-<p>ArangoDB can load modules that are written in pure JavaScript. Modules that
-depend on non-JavaScript functionality (such as native modules for node.js) or modules
-that rely on node.js internals cannot be loaded in ArangoDB. As a rule of thumb,
-any module will run in ArangoDB that is implemented in pure JavaScript, does not
-access global variables and only requires other modules that obey the same restrictions.</p>
-
-<p>ArangoDB also uses several externally maintained JavaScript-only libraries, such as
-underscore.js. This module will run everywhere because it conforms to the mentioned
-restrictions.</p>
-
-<p>ArangoDB also uses several other modules that are maintained on npm.js.
-An example module is <a href="https://www.npmjs.com/package/aqb">AQB</a>, a query builder for AQL.
-It is written in pure JavaScript too, so it can be used from a node.js application and
-from within ArangoDB. If there is an updated version of this module, we use npm to
-install it in a subdirectory of ArangoDB. As per npm convention, the node.js modules
-shipped with ArangoDB reside in a directory named <code>node_modules</code>. Probably this is
-what caused some of the confusion.</p>
 ]]></content>
   </entry>
   

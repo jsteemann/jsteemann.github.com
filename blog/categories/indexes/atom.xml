@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Indexes | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/indexes/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-11-19T00:43:32+01:00</updated>
+  <updated>2015-11-20T16:20:12+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,248 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Using Multiple Indexes Per Collection]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection/"/>
+    <updated>2015-11-20T15:30:05+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection</id>
+    <content type="html"><![CDATA[<p>The query optimizer in ArangoDB 2.8 has been improved in terms of how it can
+make use of indexes. In previous versions of ArangoDB, the query optimizer could
+use only one index per collection used in an AQL query. When using a logical OR
+in a FILTER condition, the optimizer did not use any index for the collection in
+order to ensure the result is still correct.</p>
+
+<p>This is much better in 2.8. Now the query optimizer can use multiple indexes on
+the same collection for FILTER conditions that are combined with a logical OR.</p>
+
+<!-- more -->
+
+
+<p>For all following queries, I have set up a collection named <code>test</code>, which has
+two isolated hash indexes on the attributes <code>value1</code> and <code>value2</code>, and a skiplist
+index on attribute <code>value3</code>.</p>
+
+<p>Let&rsquo;s first try an AQL queries that uses a logical OR on two different attributes of the
+collection:</p>
+
+<p><code>plain example query
+FOR doc IN test
+  FILTER doc.value1 == 11 || doc.value2 == 19
+  RETURN doc
+</code></p>
+
+<p>The execution plan for this query in 2.7 reveals that query will perform a full
+collection scan and cannot use indexes because of the logical OR on two different
+attributes:</p>
+
+<p><code>``plain 2.7 query execution plan
+Execution plan:
+ Id   NodeType                  Est.   Comment
+  1   SingletonNode                1   * ROOT
+  2   EnumerateCollectionNode      0     - FOR doc IN test   /* full collection scan */
+  3   CalculationNode              0       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2` == 19
+  4   FilterNode                   0       &ndash; FILTER #1
+  5   ReturnNode                   0       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ none</p>
+
+<p>Optimization rules applied:
+ none
+```</p>
+
+<p>Running the same query in 2.8 / devel will produce a much better execution plan:</p>
+
+<p><code>``plain 2.8 query execution plan
+Execution plan:
+ Id   NodeType          Est.   Comment
+  1   SingletonNode        1   * ROOT
+  6   IndexNode            2     - FOR doc IN test   /* hash index scan, hash index scan */
+  3   CalculationNode      2       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2` == 19<br/>
+  4   FilterNode           2       &ndash; FILTER #1
+  5   ReturnNode           2       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ By   Type   Collection   Unique   Sparse   Selectivity   Fields         Ranges
+  6   hash   test         false    false       100.00 %   [ <code>value1</code> ]   doc.<code>value1</code> == 11
+  6   hash   test         false    false       100.00 %   [ <code>value2</code> ]   doc.<code>value2</code> == 19</p>
+
+<p>Optimization rules applied:
+ Id   RuleName
+  1   use-indexes
+```</p>
+
+<p>Multiple indexes will also be used if different index types are accessed, or for non-equality
+filter conditions. For example, the following query will make use of the two hash indexes
+and also the skiplist index:</p>
+
+<p><code>plain example query
+FOR doc IN test
+  FILTER doc.value1 == 11 || doc.value2 == 19 || doc.value3 &gt; 42
+  RETURN doc
+</code></p>
+
+<p>Here is its execution plan from 2.8:</p>
+
+<p><code>``plain 2.8 query execution plan
+Execution plan:
+ Id   NodeType          Est.   Comment
+  1   SingletonNode        1   * ROOT
+  6   IndexNode            3     - FOR doc IN test   /* hash index scan, hash index scan, skiplist index scan */
+  3   CalculationNode      3       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2<code>== 19 || doc.</code>value3` > 42
+  4   FilterNode           3       &ndash; FILTER #1
+  5   ReturnNode           3       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ By   Type       Collection   Unique   Sparse   Selectivity   Fields         Ranges
+  6   hash       test         false    false       100.00 %   [ <code>value1</code> ]   doc.<code>value1</code> == 11
+  6   hash       test         false    false       100.00 %   [ <code>value2</code> ]   doc.<code>value2</code> == 19
+  6   skiplist   test         false    false            n/a   [ <code>value3</code> ]   doc.<code>value3</code> > 42</p>
+
+<p>Optimization rules applied:
+ Id   RuleName
+  1   use-indexes
+```</p>
+
+<p>For comparison, here is the non-optimized plan from 2.7 for the same query:</p>
+
+<p><code>``plain 2.7 query execution plan
+Execution plan:
+ Id   NodeType                  Est.   Comment
+  1   SingletonNode                1   * ROOT
+  2   EnumerateCollectionNode      0     - FOR doc IN test   /* full collection scan */
+  3   CalculationNode              0       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2<code>== 19 || doc.</code>value3` > 42
+  4   FilterNode                   0       &ndash; FILTER #1
+  5   ReturnNode                   0       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ none</p>
+
+<p>Optimization rules applied:
+ none
+```</p>
+
+<p>Still the query optimizer will not be able to use any indexes on a collection when
+there are multiple FILTER conditions combined with logical OR and at least one of them
+is not satisfisable by an index of the collection. In this case it has no other choice
+but to do a full collection scan.</p>
+
+<p>For queries that combine multiple FILTER conditions with a logical AND, the optimizer
+will still try to pick the most selective index for the query and use it for the collection.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Index Speedups in 2.8]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28/"/>
+    <updated>2015-11-20T15:11:00+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28</id>
+    <content type="html"><![CDATA[<p>The upcoming 2.8 version of ArangoDB will provide several improvements in
+the area of index usage and query optimization.</p>
+
+<p>First of all, hash and skiplist indexes can now index individual array values.
+A dedicated post on this will follow shortly. Second, the query optimizer can
+make use multiple indexes per collection for queries with OR-combined filter
+conditions. This again is a subject for <a href="/blog/2015/11/20/using-multiple-indexes-per-collection/">another post</a>.
+Third, there have been some speed improvements due to changes in the general
+index handling code. This is what this post is about.</p>
+
+<!-- more -->
+
+
+<p>In order to assess the speedups in 2.8, I have run some already existing performance
+tests that I initially ran when comparing ArangoDB 2.5 with 2.6. The test cases and
+methodology are detailed in <a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">this earlier blog post</a>.</p>
+
+<p>For measuring the index-related performance improvements, I simply re-ran the
+index related tests in 2.7 and in 2.8 / devel. I did not bother re-running all
+tests from the original blog article because only some are index-related. In
+particular, I only ran these tests again:</p>
+
+<ul>
+<li><em>join-key</em>: for each document in the collection, perform a join on the <code>_key</code> attribute on the collection
+ itself (i.e. <code>FOR c1 IN @@c FOR c2 IN @@c FILTER c1._key == c2._key RETURN c1</code>)</li>
+<li><em>join-id</em>: ditto, but perform the join using the <code>_id</code> attribute</li>
+<li><em>join-hash-number</em> and <em>join-hash-string</em>: ditto, but join using a hash index on a numeric or string
+ attribute</li>
+<li><em>join-skiplist-number</em> and <em>join-skiplist-string</em>: ditto, but join using a skiplist index on a numeric or
+ string attribute</li>
+<li><em>lookup-key</em>, <em>lookup-hash-number</em>, <em>lookup-hash-string</em>, <em>lookup-skiplist-number</em>, <em>lookup-skiplist-string</em>:
+ compile an IN-list of 10,000 lookup values and search these 10,000 documents in the collection using
+ either the primary index (<code>_key</code> attribute), a hash index or a skiplist index. The latter two are tested
+ on numeric and string attributes.</li>
+</ul>
+
+
+<p>The test queries were run 5 times each on collections containing 10,000, 100,000 and
+1,000,000 documents.</p>
+
+<p>Here are the query execution times from 2.7 and 2.8 for the individual tests, in
+seconds (less is better):</p>
+
+<p>```plain test results</p>
+
+<h2>test name                collection     avg 2.7 (s)      avg 2.8 (s)</h2>
+
+<p>join-key                 10k                 0.0997           0.0612
+join-key                 100k                1.0611           0.6538
+join-key                 1000k              10.2975           6.2507
+join-id                  10k                 0.1088           0.0606
+join-id                  100k                1.1126           0.6694
+join-id                  1000k              10.8180           6.5336
+join-hash-number         10k                 0.1044           0.0679
+join-hash-number         100k                1.1137           0.7430
+join-hash-number         1000k              10.7923           7.1534
+join-hash-string         10k                 0.1193           0.0712
+join-hash-string         100k                1.2656           0.7915
+join-hash-string         1000k              12.3075           7.6667
+join-skiplist-number     10k                 0.1387           0.1030
+join-skiplist-number     100k                1.6693           1.3062
+join-skiplist-number     1000k              18.0406          15.5203
+join-skiplist-string     10k                 0.1928           0.1469
+join-skiplist-string     100k                2.3166           1.8997
+join-skiplist-string     1000k              27.1513          23.2058
+lookup-key               10k                 1.4996           1.5245
+lookup-key               100k                1.4951           1.5189
+lookup-key               1000k               1.5545           1.5662
+lookup-hash-number       10k                 1.5572           1.5526
+lookup-hash-number       100k                1.5595           1.5435
+lookup-hash-number       1000k               1.5436           1.5648
+lookup-hash-string       10k                 1.6023           1.5623
+lookup-hash-string       100k                1.5892           1.5741
+lookup-hash-string       1000k               1.5841           1.5770
+lookup-skiplist-number   10k                 1.5978           1.6145
+lookup-skiplist-number   100k                1.5782           1.6269
+lookup-skiplist-number   1000k               1.5891           1.6258
+lookup-skiplist-string   10k                 1.6443           1.6840
+lookup-skiplist-string   100k                1.6787           1.6985
+lookup-skiplist-string   1000k               1.7319           1.7562
+in-key                   10k                 0.1076           0.0754
+in-key                   100k                0.1083           0.0775
+in-key                   1000k               0.1104           0.0773
+in-hash-number           10k                 0.0898           0.0696
+in-hash-number           100k                0.0889           0.0674
+in-hash-number           1000k               0.0877           0.0675
+in-hash-string           10k                 0.1174           0.0867
+in-hash-string           100k                0.1188           0.0878
+in-hash-string           1000k               0.1174           0.0853
+in-skiplist-number       10k                 0.1095           0.0849
+in-skiplist-number       100k                0.1110           0.0873
+in-skiplist-number       1000k               0.1106           0.0910
+in-skiplist-string       10k                 0.1744           0.1315
+in-skiplist-string       100k                0.1990           0.1594
+in-skiplist-string       1000k               0.2369           0.1968
+```</p>
+
+<p>It looks like joins and IN list lookups got significantly faster in 2.8, whereas
+the performance for point lookups is more or less the same as in 2.7.</p>
+
+<p>Note that the changes to the index code in 2.8 only affect how indexes are accessed
+from within AQL queries and how filtering works. No changes have been made for other
+index operations such as insert, updates, and removals.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Fulltext Index Enhancements]]></title>
@@ -986,319 +1228,6 @@ FOR h IN highscores
 <p>On a side note: the <code>REMOVE</code> was limited to the <em>oldest</em> 1000 entries. This
 was done to make the query return fast. The removal query can be repeated while
 there are still entries to remove.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Improvements in 2.5]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25/"/>
-    <updated>2015-02-26T10:35:31+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/02/26/aql-improvements-in-25</id>
-    <content type="html"><![CDATA[<p>Contained in 2.5 are some small but useful AQL language improvements plus several AQL optimizer improvements.</p>
-
-<p>We are working on further AQL improvements for 2.5, but work is still ongoing.
-This post summarizes the improvements that are already completed and will be shipped with the initial ArangoDB
-2.5 release.</p>
-
-<!-- more -->
-
-
-<h1>Language improvements</h1>
-
-<h2>Dynamic attribute names</h2>
-
-<p>Often the need arises to dynamically name object attributes in return values.
-In AQL this was not directly possible so far, though there were some workarounds available to achieve about
-the same result. <a href="https://docs.arangodb.com/cookbook/UsingDynamicAttributeNames.html">This recipe</a> summarizes
-the options that are available to pre-ArangoDB 2.5 users.</p>
-
-<p>With ArangoDB 2.5, dynamic attribute names can be constructed much more easily and flexibly. Object
-attribute names in ArangoDB 2.5 can be specified using static string literals, bind parameters,
-and dynamic expressions.</p>
-
-<p>Dynamic expressions are most interesting, and to disambiguate them from other regular string literal attribute
-names, dynamic attribute names need to be enclosed in square brackets (<code>[</code> and <code>]</code>). I have written about
-that before in <a href="http://jsteemann.github.io/blog/2015/02/03/using-dynamic-attribute-names-in-aql/">this blog</a>.</p>
-
-<p>Here is an example query that uses the new syntax:</p>
-
-<p><code>plain example query using dynamic attribute names
-FOR i IN [ 17, 23, 42, 83 ]
-  RETURN { [ CONCAT('value-of-', i, ' * ', i) ] : i * i }
-</code></p>
-
-<p>This will produce:</p>
-
-<p>```json query result
-[
-  {</p>
-
-<pre><code>"value-of-17 * 17" : 289 
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"value-of-23 * 23" : 529 
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"value-of-42 * 42" : 1764 
-</code></pre>
-
-<p>  },
-  {</p>
-
-<pre><code>"value-of-83 * 83" : 6889 
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<h2>Functions added</h2>
-
-<p>The following AQL functions have been added in 2.5:</p>
-
-<ul>
-<li><code>MD5(value)</code>: produces the MD5 hash of <code>value</code></li>
-<li><code>SHA1(value)</code>: produces the SHA1 hash of <code>value</code></li>
-<li><code>RANDOM_TOKEN(length)</code>: produces a pseudo-random string of the specified length.
- Such strings can be used for id or token generation. Tokens consist only of letters
- (lower and upper case) plus digits, so they are also URL-safe</li>
-</ul>
-
-
-<h1>Optimizer improvements</h1>
-
-<h2>Optimizer rules</h2>
-
-<p>The following AQL optimizer rules have been added in ArangoDB 2.5:</p>
-
-<ul>
-<li><p><code>propagate-constant-attributes</code></p>
-
-<p>This rule will look inside <code>FILTER</code> conditions for constant value equality comparisons,
-and insert the constant values in other places in <code>FILTER</code>s. For example, the rule will
-insert <code>42</code> instead of <code>i.value</code> in the second <code>FILTER</code> of the following query:</p>
-
-<pre><code>FOR i IN c1 
-  FOR j IN c2 
-    FILTER i.value == 42 
-    FILTER j.value == i.value 
-    RETURN 1
-</code></pre></li>
-<li><p><code>move-calculations-down</code></p>
-
-<p>This rule moves calculations down in the execution plan as far as possible. The intention
-is to move calculations beyond filters, in order to avoid calculations and computations
-for documents that will be filtered away anyway.</p>
-
-<p>If a query contains a lot of computations and a lot of documents will be skipped because
-of filters, this rule might provide a big benefit.</p>
-
-<p>A more detailed example is provided in
-<a href="http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/">this post</a>.</p></li>
-</ul>
-
-
-<p>The already existing optimizer rule <code>use-index-for-sort</code> was also improved in the following way:</p>
-
-<ul>
-<li><p>the rule can now remove <code>SORT</code>s also in case a non-sorted index (i.e. a hash index) is used
-for an equality lookup and all sort attributes are covered by the index.</p></li>
-<li><p>the rule can also remove <code>SORT</code>s in case the sort critieria excludes the left-most index attributes,
-but the left-most index attributes are used in a <code>FILTER</code> for equality-only lookups.</p>
-
-<p>Here is an example that will use an existing skiplist index on [ <code>value1</code>, <code>value2</code> ] for sorting,
-removing the extra <code>SORT</code>:</p>
-
-<pre><code>FOR doc IN collection 
-  FILTER doc.value1 == 1 
-  SORT doc.value2 
-  RETURN doc
-</code></pre></li>
-</ul>
-
-
-<h2>Index usage</h2>
-
-<p>The AQL optimizer now supports <a href="https://www.arangodb.com/2015/02/24/sparse-indexes-in-arangodb">sparse indexes</a>,
-a feature added in 2.5.</p>
-
-<p>It will use them automatically in queries when appropriate and when safe. Sparse indexes do exclude certain
-documents purposely, so the optimizer always has to figure out whether it can use a sparse index to satisfy
-a given <code>FILTER</code> condition.</p>
-
-<p>The optimizer will also take into account index selectivity estimates when there are multiple index candidates.</p>
-
-<h2>Estimates</h2>
-
-<p>The optimizer estimates for the number of documents to be returned by a query or a subquery are more accurate
-now for several types of queries. For example, if the optimizer can use a primary key, an edge index, or a hash
-index in a given query part, it will use the index selectivity estimates for calculating the number of return
-documents.</p>
-
-<p>These estimates will be a lot more accurate than the previoulsy hard-coded filtering factors, and can lead to
-better optimizer decisions and reporting (because estimates are returned in <code>explain</code> results, too).</p>
-
-<h2>Memory savings</h2>
-
-<p>Finally, the optimizer will now detect if the data-modification part in a data-modification query
-can be executed in lockstep with the data-retrieval part of the same query. Previously, a data-modification
-query always executed its data-retrieval part first, and then executed its data-modification part.
-This could have resulted in big intermediate result sets which to retrieval part constructed in order
-to pass them to the modification part of the query.</p>
-
-<p>Here&rsquo;s an example query:</p>
-
-<p><code>plain data-modification query
-FOR doc IN test
-  INSERT doc INTO backup
-</code></p>
-
-<p>In the above query, the <code>FOR</code> loop is the retrieval part, and the <code>INSERT</code> is the modification part.
-The optimizer in 2.5 will check if the two parts of the query are independent, and if it turns out they are,
-will execute them in lockstep instead of sequentially.</p>
-
-<p>The execution in lockstep is not necessarily faster than sequential execution, but it can save lots of
-memory if the data-retrieval part constructed big intermediate result sets.</p>
-
-<h1>Miscellaneous changes</h1>
-
-<p>The AQL query execution statistics now also provide an attribute <code>filtered</code>. Its value indicates how many
-documents were filtered by <code>FilterNode</code>s in the AQL query. This can be used as an indicator for whether
-indexes should be added, and for how effective indexes are used for filtering.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Improved Non-unique Hash Indexes in 2.3]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/11/07/improved-non-unique-hash-indexes/"/>
-    <updated>2014-11-07T20:51:12+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/11/07/improved-non-unique-hash-indexes</id>
-    <content type="html"><![CDATA[<p>With ArangoDB 2.3 now getting into the <a href="https://www.arangodb.com/install-beta-version">beta stage</a>,
-it&rsquo;s time to spread the word about new features and improvements.</p>
-
-<p>Today&rsquo;s post will be about the changes made to non-unique hash
-indexes.</p>
-
-<!-- more -->
-
-
-<p>Hash indexes allow looking up documents quickly if the indexed
-attributes are all provided in a search query. They are not
-suitable for range queries, but are the perfect choice if equality
-comparisons are all that&rsquo;s needed.</p>
-
-<p>Hash indexes have been available in ArangoDB ever since. There
-have always been two variants of them:</p>
-
-<ul>
-<li>unique hash indexes</li>
-<li>non-unique hash indexes</li>
-</ul>
-
-
-<p>There wasn&rsquo;t much to be done for unique hash indexes, and so there
-haven&rsquo;t been any changes to them in 2.3. However, the non-unique
-hash indexes were improved significantly in the new version.</p>
-
-<p>The non-unique indexes already performed quite well if most of the
-indexed values were unique and only few repetitions occurred. But their
-performance suffered severly if the indexed attribute values repeated
-a lot &ndash; that is, when the indexed value had a <strong>low cardinality</strong> and thus
-the index had a <strong>low selectivity</strong>.</p>
-
-<p>This was a problem because it slowed down inserting new documents into
-a collection with such an index. And it also slowed down loading collections
-with low cardinality hash indexes.</p>
-
-<p>I am happy to state that in ArangoDB 2.3 this has been fixed, and the insert
-performance of non-unique hash indexes has been improved significantly.
-The index insertion time now scales quite well with the number
-of indexed documents regardless of the cardinality of the indexed
-attribute.</p>
-
-<p>Following are a few measurements of non-unique hash index insertion
-times from ArangoDB 2.3, for different cardinalities of the indexed
-attribute.</p>
-
-<p>The times reported are the net non-unique hash index
-insertion times (the documents were present already, just the index
-was created on them and index creation time was measured).</p>
-
-<p>Let&rsquo;s start with a not too challenging case: indexing documents in
-a collection with 100,000 different index values (<em>cardinality 100,000</em>):</p>
-
-<p><code>text index insertion times for cardinality 100,000
-number of documents:    128,000    =&gt;    time:   0.144 s
-number of documents:    256,000    =&gt;    time:   0.231 s
-number of documents:    512,000    =&gt;    time:   0.347 s
-number of documents:  1,024,000    =&gt;    time:   0.694 s
-number of documents:  2,048,000    =&gt;    time:   1.379 s
-</code></p>
-
-<p>The picture doesn&rsquo;t change much when reducing the cardinality
-by a factor or 10 (i.e. <em>cardinality 10,000</em>):</p>
-
-<p><code>text index insertion times for cardinality 10,000
-number of documents:    128,000    =&gt;    time:   0.169 s
-number of documents:    256,000    =&gt;    time:   0.194 s
-number of documents:    512,000    =&gt;    time:   0.355 s
-number of documents:  1,024,000    =&gt;    time:   0.668 s
-number of documents:  2,048,000    =&gt;    time:   1.325 s
-</code></p>
-
-<p>Let&rsquo;s again divide cardinality by 10 (now <em>cardinality 1,000</em>):</p>
-
-<p><code>text index insertion times for cardinality 1,000
-number of documents:    128,000    =&gt;    time:   0.130 s
-number of documents:    256,000    =&gt;    time:   0.152 s
-number of documents:    512,000    =&gt;    time:   0.261 s
-number of documents:  1,024,000    =&gt;    time:   0.524 s
-number of documents:  2,048,000    =&gt;    time:   0.934 s
-</code></p>
-
-<p><em>Cardinality 100</em>:</p>
-
-<p><code>text index insertion times for cardinality 100
-number of documents:    128,000    =&gt;    time:   0.114 s
-number of documents:    256,000    =&gt;    time:   0.148 s
-number of documents:    512,000    =&gt;    time:   0.337 s
-number of documents:  1,024,000    =&gt;    time:   0.452 s
-number of documents:  2,048,000    =&gt;    time:   0.907 s
-</code></p>
-
-<p><em>Cardinality 10</em>:</p>
-
-<p><code>text index insertion times for cardinality 10
-number of documents:    128,000    =&gt;    time:   0.130 s
-number of documents:    256,000    =&gt;    time:   0.327 s
-number of documents:    512,000    =&gt;    time:   0.239 s
-number of documents:  1,024,000    =&gt;    time:   0.442 s
-number of documents:  2,048,000    =&gt;    time:   0.827 s
-</code></p>
-
-<p>Finally we get to <em>cardinality 1</em>, the definitive indicator
-for the index being absolutely useless. Let&rsquo;s create it anyway,
-for the sake of completeness of this post:</p>
-
-<p><code>text index insertion times for cardinality 1
-number of documents:    128,000    =&gt;    time:   0.130 s
-number of documents:    128,000    =&gt;    time:   0.095 s
-number of documents:    256,000    =&gt;    time:   0.146 s
-number of documents:    512,000    =&gt;    time:   0.246 s
-number of documents:  1,024,000    =&gt;    time:   0.445 s
-number of documents:  2,048,000    =&gt;    time:   0.925 s
-</code></p>
-
-<p>On a side note: all indexed values were numeric. In absolute terms,
-indexing string values will be slower than indexing numbers, but insertion
-should still scale nicely with the number of documents as long as everything
-fits in RAM.</p>
 ]]></content>
   </entry>
   

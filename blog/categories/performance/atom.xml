@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-11-19T00:43:32+01:00</updated>
+  <updated>2015-11-20T16:20:12+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,248 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Using Multiple Indexes Per Collection]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection/"/>
+    <updated>2015-11-20T15:30:05+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection</id>
+    <content type="html"><![CDATA[<p>The query optimizer in ArangoDB 2.8 has been improved in terms of how it can
+make use of indexes. In previous versions of ArangoDB, the query optimizer could
+use only one index per collection used in an AQL query. When using a logical OR
+in a FILTER condition, the optimizer did not use any index for the collection in
+order to ensure the result is still correct.</p>
+
+<p>This is much better in 2.8. Now the query optimizer can use multiple indexes on
+the same collection for FILTER conditions that are combined with a logical OR.</p>
+
+<!-- more -->
+
+
+<p>For all following queries, I have set up a collection named <code>test</code>, which has
+two isolated hash indexes on the attributes <code>value1</code> and <code>value2</code>, and a skiplist
+index on attribute <code>value3</code>.</p>
+
+<p>Let&rsquo;s first try an AQL queries that uses a logical OR on two different attributes of the
+collection:</p>
+
+<p><code>plain example query
+FOR doc IN test
+  FILTER doc.value1 == 11 || doc.value2 == 19
+  RETURN doc
+</code></p>
+
+<p>The execution plan for this query in 2.7 reveals that query will perform a full
+collection scan and cannot use indexes because of the logical OR on two different
+attributes:</p>
+
+<p><code>``plain 2.7 query execution plan
+Execution plan:
+ Id   NodeType                  Est.   Comment
+  1   SingletonNode                1   * ROOT
+  2   EnumerateCollectionNode      0     - FOR doc IN test   /* full collection scan */
+  3   CalculationNode              0       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2` == 19
+  4   FilterNode                   0       &ndash; FILTER #1
+  5   ReturnNode                   0       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ none</p>
+
+<p>Optimization rules applied:
+ none
+```</p>
+
+<p>Running the same query in 2.8 / devel will produce a much better execution plan:</p>
+
+<p><code>``plain 2.8 query execution plan
+Execution plan:
+ Id   NodeType          Est.   Comment
+  1   SingletonNode        1   * ROOT
+  6   IndexNode            2     - FOR doc IN test   /* hash index scan, hash index scan */
+  3   CalculationNode      2       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2` == 19<br/>
+  4   FilterNode           2       &ndash; FILTER #1
+  5   ReturnNode           2       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ By   Type   Collection   Unique   Sparse   Selectivity   Fields         Ranges
+  6   hash   test         false    false       100.00 %   [ <code>value1</code> ]   doc.<code>value1</code> == 11
+  6   hash   test         false    false       100.00 %   [ <code>value2</code> ]   doc.<code>value2</code> == 19</p>
+
+<p>Optimization rules applied:
+ Id   RuleName
+  1   use-indexes
+```</p>
+
+<p>Multiple indexes will also be used if different index types are accessed, or for non-equality
+filter conditions. For example, the following query will make use of the two hash indexes
+and also the skiplist index:</p>
+
+<p><code>plain example query
+FOR doc IN test
+  FILTER doc.value1 == 11 || doc.value2 == 19 || doc.value3 &gt; 42
+  RETURN doc
+</code></p>
+
+<p>Here is its execution plan from 2.8:</p>
+
+<p><code>``plain 2.8 query execution plan
+Execution plan:
+ Id   NodeType          Est.   Comment
+  1   SingletonNode        1   * ROOT
+  6   IndexNode            3     - FOR doc IN test   /* hash index scan, hash index scan, skiplist index scan */
+  3   CalculationNode      3       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2<code>== 19 || doc.</code>value3` > 42
+  4   FilterNode           3       &ndash; FILTER #1
+  5   ReturnNode           3       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ By   Type       Collection   Unique   Sparse   Selectivity   Fields         Ranges
+  6   hash       test         false    false       100.00 %   [ <code>value1</code> ]   doc.<code>value1</code> == 11
+  6   hash       test         false    false       100.00 %   [ <code>value2</code> ]   doc.<code>value2</code> == 19
+  6   skiplist   test         false    false            n/a   [ <code>value3</code> ]   doc.<code>value3</code> > 42</p>
+
+<p>Optimization rules applied:
+ Id   RuleName
+  1   use-indexes
+```</p>
+
+<p>For comparison, here is the non-optimized plan from 2.7 for the same query:</p>
+
+<p><code>``plain 2.7 query execution plan
+Execution plan:
+ Id   NodeType                  Est.   Comment
+  1   SingletonNode                1   * ROOT
+  2   EnumerateCollectionNode      0     - FOR doc IN test   /* full collection scan */
+  3   CalculationNode              0       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2<code>== 19 || doc.</code>value3` > 42
+  4   FilterNode                   0       &ndash; FILTER #1
+  5   ReturnNode                   0       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ none</p>
+
+<p>Optimization rules applied:
+ none
+```</p>
+
+<p>Still the query optimizer will not be able to use any indexes on a collection when
+there are multiple FILTER conditions combined with logical OR and at least one of them
+is not satisfisable by an index of the collection. In this case it has no other choice
+but to do a full collection scan.</p>
+
+<p>For queries that combine multiple FILTER conditions with a logical AND, the optimizer
+will still try to pick the most selective index for the query and use it for the collection.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Index Speedups in 2.8]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28/"/>
+    <updated>2015-11-20T15:11:00+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28</id>
+    <content type="html"><![CDATA[<p>The upcoming 2.8 version of ArangoDB will provide several improvements in
+the area of index usage and query optimization.</p>
+
+<p>First of all, hash and skiplist indexes can now index individual array values.
+A dedicated post on this will follow shortly. Second, the query optimizer can
+make use multiple indexes per collection for queries with OR-combined filter
+conditions. This again is a subject for <a href="/blog/2015/11/20/using-multiple-indexes-per-collection/">another post</a>.
+Third, there have been some speed improvements due to changes in the general
+index handling code. This is what this post is about.</p>
+
+<!-- more -->
+
+
+<p>In order to assess the speedups in 2.8, I have run some already existing performance
+tests that I initially ran when comparing ArangoDB 2.5 with 2.6. The test cases and
+methodology are detailed in <a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">this earlier blog post</a>.</p>
+
+<p>For measuring the index-related performance improvements, I simply re-ran the
+index related tests in 2.7 and in 2.8 / devel. I did not bother re-running all
+tests from the original blog article because only some are index-related. In
+particular, I only ran these tests again:</p>
+
+<ul>
+<li><em>join-key</em>: for each document in the collection, perform a join on the <code>_key</code> attribute on the collection
+ itself (i.e. <code>FOR c1 IN @@c FOR c2 IN @@c FILTER c1._key == c2._key RETURN c1</code>)</li>
+<li><em>join-id</em>: ditto, but perform the join using the <code>_id</code> attribute</li>
+<li><em>join-hash-number</em> and <em>join-hash-string</em>: ditto, but join using a hash index on a numeric or string
+ attribute</li>
+<li><em>join-skiplist-number</em> and <em>join-skiplist-string</em>: ditto, but join using a skiplist index on a numeric or
+ string attribute</li>
+<li><em>lookup-key</em>, <em>lookup-hash-number</em>, <em>lookup-hash-string</em>, <em>lookup-skiplist-number</em>, <em>lookup-skiplist-string</em>:
+ compile an IN-list of 10,000 lookup values and search these 10,000 documents in the collection using
+ either the primary index (<code>_key</code> attribute), a hash index or a skiplist index. The latter two are tested
+ on numeric and string attributes.</li>
+</ul>
+
+
+<p>The test queries were run 5 times each on collections containing 10,000, 100,000 and
+1,000,000 documents.</p>
+
+<p>Here are the query execution times from 2.7 and 2.8 for the individual tests, in
+seconds (less is better):</p>
+
+<p>```plain test results</p>
+
+<h2>test name                collection     avg 2.7 (s)      avg 2.8 (s)</h2>
+
+<p>join-key                 10k                 0.0997           0.0612
+join-key                 100k                1.0611           0.6538
+join-key                 1000k              10.2975           6.2507
+join-id                  10k                 0.1088           0.0606
+join-id                  100k                1.1126           0.6694
+join-id                  1000k              10.8180           6.5336
+join-hash-number         10k                 0.1044           0.0679
+join-hash-number         100k                1.1137           0.7430
+join-hash-number         1000k              10.7923           7.1534
+join-hash-string         10k                 0.1193           0.0712
+join-hash-string         100k                1.2656           0.7915
+join-hash-string         1000k              12.3075           7.6667
+join-skiplist-number     10k                 0.1387           0.1030
+join-skiplist-number     100k                1.6693           1.3062
+join-skiplist-number     1000k              18.0406          15.5203
+join-skiplist-string     10k                 0.1928           0.1469
+join-skiplist-string     100k                2.3166           1.8997
+join-skiplist-string     1000k              27.1513          23.2058
+lookup-key               10k                 1.4996           1.5245
+lookup-key               100k                1.4951           1.5189
+lookup-key               1000k               1.5545           1.5662
+lookup-hash-number       10k                 1.5572           1.5526
+lookup-hash-number       100k                1.5595           1.5435
+lookup-hash-number       1000k               1.5436           1.5648
+lookup-hash-string       10k                 1.6023           1.5623
+lookup-hash-string       100k                1.5892           1.5741
+lookup-hash-string       1000k               1.5841           1.5770
+lookup-skiplist-number   10k                 1.5978           1.6145
+lookup-skiplist-number   100k                1.5782           1.6269
+lookup-skiplist-number   1000k               1.5891           1.6258
+lookup-skiplist-string   10k                 1.6443           1.6840
+lookup-skiplist-string   100k                1.6787           1.6985
+lookup-skiplist-string   1000k               1.7319           1.7562
+in-key                   10k                 0.1076           0.0754
+in-key                   100k                0.1083           0.0775
+in-key                   1000k               0.1104           0.0773
+in-hash-number           10k                 0.0898           0.0696
+in-hash-number           100k                0.0889           0.0674
+in-hash-number           1000k               0.0877           0.0675
+in-hash-string           10k                 0.1174           0.0867
+in-hash-string           100k                0.1188           0.0878
+in-hash-string           1000k               0.1174           0.0853
+in-skiplist-number       10k                 0.1095           0.0849
+in-skiplist-number       100k                0.1110           0.0873
+in-skiplist-number       1000k               0.1106           0.0910
+in-skiplist-string       10k                 0.1744           0.1315
+in-skiplist-string       100k                0.1990           0.1594
+in-skiplist-string       1000k               0.2369           0.1968
+```</p>
+
+<p>It looks like joins and IN list lookups got significantly faster in 2.8, whereas
+the performance for point lookups is more or less the same as in 2.7.</p>
+
+<p>Note that the changes to the index code in 2.8 only affect how indexes are accessed
+from within AQL queries and how filtering works. No changes have been made for other
+index operations such as insert, updates, and removals.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[ArangoDB-PHP Driver Improvements]]></title>
@@ -364,303 +606,6 @@ or the result of an expression), or for parameters passed into user-defined AQL 
 Enabling it for user-defined AQL functions is not safe because in theory these might
 modify their arguments (and function arguments are passed by reference &ndash; passing them
 by value would also defeat the purpose of the optimization).</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[On Getting Unique Values]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/06/01/on-getting-unique-values/"/>
-    <updated>2015-06-01T13:27:13+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/06/01/on-getting-unique-values</id>
-    <content type="html"><![CDATA[<p>While paging through the issues in the <a href="https://github.com/arangodb/arangodb">ArangoDB issue tracker</a>
-I came across <a href="https://github.com/arangodb/arangodb/issues/987">issue #987</a>, titled
-<em>Trying to get distinct document attribute values from a large collection fails</em>.</p>
-
-<p>The issue was opened around 10 months ago when ArangoDB 2.2 was around. We improved AQL performance
-somewhat since then, so I was eager to see how the query would perform in ArangoDB 2.6, especially
-when comparing it to 2.2.</p>
-
-<!-- more -->
-
-
-<p>For reproduction I quickly put together some example data to run the query on:
-<code>js setting up example data
-var db = require("org/arangodb").db;
-var c = db._create("test");
-for (var i = 0; i &lt; 4 * 1000 * 1000; ++i) {
-  c.save({ _key: "test" + i, value: (i % 100) });
-}
-require("internal").wal.flush(true, true);
-</code></p>
-
-<p>This produces a collection named <code>test</code> with 4 million documents. Each document has a numeric <code>value</code>
-attribute, which in total has 100 unique values. I remembered from a conversation with the guy that
-opened the issue that the number of distinct values was 100 or even slightly lower. I didn&rsquo;t bother
-to create an index on the <code>value</code> attribute, which might have sped up the query.</p>
-
-<p>With data available, it was time to run the query and measure its execution time:
-<code>js running the query
-var time = require("internal").time;
-var start = time();
-db._query("FOR doc IN test COLLECT value = doc.value RETURN value");
-time() - start;
-</code></p>
-
-<p>Running this in 2.2.7 took 3 minutes and 18 seconds before bursting with the following error message:</p>
-
-<p>```plain 2.2.7 error message
-#</p>
-
-<h1>Fatal error in CALL_AND_RETRY_2</h1>
-
-<h1>Allocation failed &ndash; process out of memory</h1>
-
-<p>#
-```</p>
-
-<p>In the 2.2 branch AQL queries were fully transformed to JavaScript and executed using V8. Obviously
-that didn&rsquo;t work well with large collections. That was one of the reasons why version 2.3 saw a major
-rewrite of the AQL engine.</p>
-
-<p>As a consequence, running the query in 2.3 (2.3.5) worked fine. Execution took around 28 seconds.
-The same was true for 2.4 (2.4.8) and 2.5 (2.5.5).</p>
-
-<p>Finally, running the query in 2.6.0 completed in just 3.2 seconds.</p>
-
-<p>The reasons for the speedup are the optimizations done for <code>COLLECT</code> (see
-<a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing with a hash table</a>, the
-<a href="/blog/2015/05/04/return-value-optimization-for-aql/">Return value optimization for AQL</a> and some
-minor optimizations within AQL that didn&rsquo;t get a pretty working title.</p>
-
-<p>Looks like in sum all the optimizations put into 2.6 really pay out.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[The Great AQL Shootout: ArangoDB 2.5 vs 2.6]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/"/>
-    <updated>2015-05-20T18:04:04+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26</id>
-    <content type="html"><![CDATA[<p>We are currently preparing ArangoDB 2.6 for release. A lot of work has been put into this release,
-and I really hope we can ship a first 2.6 release soon.</p>
-
-<p>To keep you hanging on in the meantime, I put together some performance tests results from 2.6.
-The tests I ran compared AQL query execution times in 2.6 and 2.5.</p>
-
-<p>The results look quite promising: <strong>2.6 outperformed 2.5 for all tested queries</strong>, mostly by
-factors of 2 to 5. A few dedicated AQL features in the tests got boosted even more, resulting in
-query execution time reductions of 90 % and more.
-Finally, the tests also revealed a dedicated case for which 2.6 provides a several hundredfold speedup.</p>
-
-<p>Also good news is that not a single of the test queries ran slower in 2.6 than in 2.5.</p>
-
-<!-- more -->
-
-
-<h1>What was tested?</h1>
-
-<p>The tests execute several read-only AQL queries on datasets of different sizes and measure the
-query execution times. The tests were conducted in both ArangoDB 2.5 (2.5.4, the current stable version)
-and 2.6 (2.6.0-alpha2, the upcoming version), so the results of the two ArangoDB versions can be compared.</p>
-
-<p>Though the tests do not cover every possible type of AQL operation, feature and function, they still do
-cover a wide range of features, e.g. lookups, joins, COLLECT operations, sorting, subqueries,
-and some AQL functions. Overall, the test suite contains 33 different cases.</p>
-
-<p>All queries were run on datasets of three different sizes to validate that the results are relevant
-for datasets of various sizes. The dataset sizes are 10,000 documents, 100,000 documents, and 1,000,000
-documents. Each query was repeated a few times so outliers in execution time can be identified.</p>
-
-<p>There is full disclosure of the test methodology and the test script below, so anyone interested
-can repeat the tests locally and verify the results.</p>
-
-<h1>Test results</h1>
-
-<p>The combined test results from 2.5 and 2.6 can be found in this
-<a href="/downloads/code/arango-25-26-shootout-results.pdf">PDF file</a>.
-There is also an <em>ods</em> version of the same file <a href="/downloads/code/arango-25-26-shootout-results.ods">here</a>.
-A description of the columns and test cases used in these files can be found further below.</p>
-
-<p>For the detail-loving folks, here are the raw results for both versions in isolation:
-<a href="/downloads/code/arango-25-26-shootout-results-25.txt">2.5</a>,
-<a href="/downloads/code/arango-25-26-shootout-results-26.txt">2.6</a>.</p>
-
-<p>The results show that ArangoDB 2.6 was consistently faster for <strong>all</strong> AQL queries included in the
-tests.</p>
-
-<p>The queries that improved most in 2.6 over 2.5 include:</p>
-
-<ul>
-<li><code>FILTER</code> conditions: simple <code>FILTER</code> conditions as used in the tests are 3 to 5 times faster</li>
-<li>simple joins using the primary index (<code>_key</code> attribute), hash index or skiplist index are
-2 to 3.5 times faster</li>
-<li>sorting on a string attribute is 2.5 to 3 times faster</li>
-<li>extracting the <code>_key</code> or other top-level attributes from documents is 4 to 5 times faster</li>
-<li><code>COLLECT</code> statements: simple <code>COLLECT</code> statements like the ones in the tests are 7 to 15 times
-faster</li>
-<li>looking up documents using <code>IN</code> lists with a substantial amount of values contained in the <code>IN</code>
-list is 250 to 700 times faster</li>
-</ul>
-
-
-<p>The one thing that did not change much when comparing 2.6 with 2.5 is iterating over a collection
-and returning all its documents unmodified. The speedups observed for this type of query are between
-18 and 25 %, which is the lowest speedup measured by the tests. Still 18 to 25 % seem okay
-as a free take-away.</p>
-
-<p>Speedups were observed for all three test dataset sizes alike. In some cases, the speedups
-varied a bit with the dataset sizes, but it was still in the same ballpark for all three datasets.
-The conclusion is thus that the speedups did not depend much on the dataset sizes.</p>
-
-<h1>Reasons for speedups</h1>
-
-<p>There are several reasons why the 2.6 performance is better than in previous versions. The main
-reason is that we spent much time optimizing some of the crtical AQL code paths. Then we also
-worked on optimizations for specific features, which are used by some of the tested queries.</p>
-
-<p>If you&rsquo;re interested in the details, here they are:</p>
-
-<ul>
-<li><a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing with a hash table</a></li>
-<li><a href="/blog/2015/04/23/aql-functions-improvements/">AQL functions improvements</a></li>
-<li><a href="/blog/2015/05/04/subquery-optimizations/">Subquery optimizations</a></li>
-<li><a href="/blog/2015/05/04/return-value-optimization-for-aql/">Return value optimization for AQL</a></li>
-<li><a href="/blog/2015/05/07/in-list-improvements/">IN-list improvements</a></li>
-</ul>
-
-
-<p>Additionally, UTF-8 string comparisons were boosted by the upgrade from ICU 52 to ICU 54. The
-latter version contains a rewritten and much faster UTF-8-aware strcmp, which we heavily rely on.</p>
-
-<h1>Test methodology</h1>
-
-<p>Each query was run five times on each dataset, so execution time outliers can be identified. The
-results contain the minimum, maximum and average execution times for each query.</p>
-
-<p>Queries were run in isolation on an otherwise idle server. The queries were all run inside the
-server, so there was no HTTP/network traffic involved for shipping query results (note: this
-was also <a href="/blog/2015/04/01/improvements-for-the-cursor-api/">vastly improved in 2.6</a> but this is
-not the subject of this post).</p>
-
-<p>All tests were run on my local machine, which has 4 cores, 8 CPUs (though the number of CPUs will
-not matter for any of the tests), 12 GB of physical memory, a Linux 3.16 kernel and an Ubuntu 15
-OS. All datasets fit into the main memory, so tests were not I/O-bound.</p>
-
-<p>The ArangoDB versions tested were 2.5.4 and 2.6.0-alpha2. Both versions were hand-compiled with
-g++ 4.9.1 with options <code>CC='gcc' CXX='g++' CFLAGS='-O3 -Wall' CXXFLAGS='-O3 -Wall'</code>.</p>
-
-<p>The complete test script, including the setup of the test data, is contained in
-<a href="/downloads/code/arango-25-26-shootout-script.js">this file</a>. It can be run inside <em>arangod</em> by
-typing the following in the server console:</p>
-
-<p><code>js running the tests inside arangod
-require("internal").load("/path/to/arango-25-26-shootout-script.js");
-</code></p>
-
-<p>Note that this needs an <em>arangod</em> started with option <code>--console</code>. Also note that running the
-script will only test the current <em>arangod</em> instance, so the script needs to be run once in a
-2.5 instance and once in 2.6.</p>
-
-<p>Running the script will set up the test collections, run all queries on them (you will need some
-patience for this) and finally print a table like the following:</p>
-
-<p>```plain excerpt from test results</p>
-
-<h2>test name                     | collection  |    runs |     min (s) |     max (s) |     avg (s)</h2>
-
-<p>collect-number                | 10k         |       5 |      0.0760 |      0.1638 |      0.0943
-collect-number                | 100k        |       5 |      0.8697 |      0.8966 |      0.8803
-collect-number                | 1000k       |       5 |     10.4320 |     10.6597 |     10.5314
-collect-string                | 10k         |       5 |      0.1211 |      0.1319 |      0.1250
-collect-string                | 100k        |       5 |      1.5406 |      1.5974 |      1.5641
-collect-string                | 1000k       |       5 |     19.0708 |     19.0966 |     19.0825
-collect-count-number          | 10k         |       5 |      0.0763 |      0.0792 |      0.0778
-```</p>
-
-<p>These result columns have the following meanings:</p>
-
-<ul>
-<li><em>test name</em>: name of test</li>
-<li><em>collection</em>: name of collection. <em>10k</em> is a collection with 10,000 documents, <em>100k</em> contains
- 100,000 documents, and <em>1000k</em> contains 1,000,000 documents.</li>
-<li><em>runs</em>: number of times the query was run</li>
-<li><em>min (s)</em>: minimum query execution time (in seconds)</li>
-<li><em>max (s)</em>: maximum query execution time (in seconds)</li>
-<li><em>avg (s)</em>: average query execution time (in seconds)</li>
-</ul>
-
-
-<h1>Test data</h1>
-
-<p>The test datasets for the three collections are filled with artifical data. Test documents are
-created like this:</p>
-
-<p><code>js test document creation
-collection.insert({
-  _key: "test" + i,
-  value1: i,
-  value2: "test" + i,
-  value3: i,
-  value4: "test" + i,
-  value5: i,
-  value6: "test" + i,
-  value7: i % g,
-  value8: "test" + (i % g)
-});
-</code></p>
-
-<p>Each document has a <code>_key</code> attribute and 8 other attributes, <code>value1</code> to <code>value8</code>.</p>
-
-<p><code>value1</code>, <code>value3</code>, <code>value5</code> and <code>value7</code> are numeric attributes, the other attributes contain
-string values. The attributes <code>value1</code> to <code>value6</code> contain unique values. The attributes <code>value7</code>
-and <code>value8</code> contain repeating values. They are used for <code>COLLECT</code> queries.</p>
-
-<p><code>value1</code> and <code>value2</code> are each indexed with a hash index. <code>value3</code> and <code>value4</code> are each indexed with
-a skiplist index. <code>value5</code> to <code>value8</code> are not indexed. This way queries can be run on the same values,
-but with different indexes and even without indexes.</p>
-
-<h1>Test cases</h1>
-
-<p>The test cases cover the following queries:</p>
-
-<ul>
-<li><em>collect-number</em> and <em>collect-string</em>: run <code>COLLECT</code> on a repeating attribute, which is either
-numeric or a string</li>
-<li><em>collect-count-number</em> and <em>collect-count-string</em>: ditto, but also calculate the group lengths
-using <code>WITH COUNT INTO</code></li>
-<li><em>subquery</em>: run a single-document subquery for each document of the original collection</li>
-<li><em>concat</em>: for each document in the collection, concat the document <code>_key</code> attribute with another
- document attribute using <code>CONCAT()</code></li>
-<li><em>merge</em>: for each document in the collection, merge the document with another object using <code>MERGE()</code></li>
-<li><em>keep</em>: for each document in the collection, remove all but a few named attributes from it using
-<code>KEEP()</code></li>
-<li><em>unset</em>: for each document in the collection, remove a few named attributes from it using <code>UNSET()</code></li>
-<li><em>min-number</em> and <em>min-string</em>: return the minimum value of a specific attribute from all documents in
- the collection, which is either numeric or a string. This uses <code>MIN()</code></li>
-<li><em>max-number</em> and <em>max-string</em>: ditto, but using <code>MAX()</code></li>
-<li><em>sort-number</em> and <em>sort-string</em>: sort all documents in the collection by a non-indexed attribute,
- which is either numeric or a string</li>
-<li><em>filter-number</em> and <em>filter-string</em>: filter all documents in the collection using a non-indexed attribute,
- which is either numeric or a string</li>
-<li><em>extract-doc</em>: return all documents in the collection unmodified</li>
-<li><em>extract-key</em>: return the <code>_key</code> attribute of all documents in the collection</li>
-<li><em>extract-number</em> and <em>extract-string</em>: return an attribute from all documents in the collection,
- which is either numeric or a string</li>
-<li><em>join-key</em>: for each document in the collection, perform a join on the <code>_key</code> attribute on the collection
- itself (i.e. <code>FOR c1 IN @@c FOR c2 IN @@c FILTER c1._key == c2._key RETURN c1</code>)</li>
-<li><em>join-id</em>: ditto, but perform the join using the <code>_id</code> attribute</li>
-<li><em>join-hash-number</em> and <em>join-hash-string</em>: ditto, but join using a hash index on a numeric or string
- attribute</li>
-<li><em>join-skiplist-number</em> and <em>join-skiplist-string</em>: ditto, but join using a skiplist index on a numeric or
- string attribute</li>
-<li><em>lookup-key</em>, <em>lookup-hash-number</em>, <em>lookup-hash-string</em>, <em>lookup-skiplist-number</em>, <em>lookup-skiplist-string</em>:
- compile an IN-list of 10,000 lookup values and search these 10,000 documents in the collection using
- either the primary index (<code>_key</code> attribute), a hash index or a skiplist index. The latter two are tested
- on numeric and string attributes.</li>
-</ul>
-
-
-<p>Further implementation details can be checked in the <a href="/downloads/code/arango-25-26-shootout-script.js">test script</a>.</p>
 ]]></content>
   </entry>
   

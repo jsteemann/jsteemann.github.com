@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-11-19T00:43:32+01:00</updated>
+  <updated>2015-11-20T16:20:12+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,248 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Using Multiple Indexes Per Collection]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection/"/>
+    <updated>2015-11-20T15:30:05+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection</id>
+    <content type="html"><![CDATA[<p>The query optimizer in ArangoDB 2.8 has been improved in terms of how it can
+make use of indexes. In previous versions of ArangoDB, the query optimizer could
+use only one index per collection used in an AQL query. When using a logical OR
+in a FILTER condition, the optimizer did not use any index for the collection in
+order to ensure the result is still correct.</p>
+
+<p>This is much better in 2.8. Now the query optimizer can use multiple indexes on
+the same collection for FILTER conditions that are combined with a logical OR.</p>
+
+<!-- more -->
+
+
+<p>For all following queries, I have set up a collection named <code>test</code>, which has
+two isolated hash indexes on the attributes <code>value1</code> and <code>value2</code>, and a skiplist
+index on attribute <code>value3</code>.</p>
+
+<p>Let&rsquo;s first try an AQL queries that uses a logical OR on two different attributes of the
+collection:</p>
+
+<p><code>plain example query
+FOR doc IN test
+  FILTER doc.value1 == 11 || doc.value2 == 19
+  RETURN doc
+</code></p>
+
+<p>The execution plan for this query in 2.7 reveals that query will perform a full
+collection scan and cannot use indexes because of the logical OR on two different
+attributes:</p>
+
+<p><code>``plain 2.7 query execution plan
+Execution plan:
+ Id   NodeType                  Est.   Comment
+  1   SingletonNode                1   * ROOT
+  2   EnumerateCollectionNode      0     - FOR doc IN test   /* full collection scan */
+  3   CalculationNode              0       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2` == 19
+  4   FilterNode                   0       &ndash; FILTER #1
+  5   ReturnNode                   0       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ none</p>
+
+<p>Optimization rules applied:
+ none
+```</p>
+
+<p>Running the same query in 2.8 / devel will produce a much better execution plan:</p>
+
+<p><code>``plain 2.8 query execution plan
+Execution plan:
+ Id   NodeType          Est.   Comment
+  1   SingletonNode        1   * ROOT
+  6   IndexNode            2     - FOR doc IN test   /* hash index scan, hash index scan */
+  3   CalculationNode      2       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2` == 19<br/>
+  4   FilterNode           2       &ndash; FILTER #1
+  5   ReturnNode           2       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ By   Type   Collection   Unique   Sparse   Selectivity   Fields         Ranges
+  6   hash   test         false    false       100.00 %   [ <code>value1</code> ]   doc.<code>value1</code> == 11
+  6   hash   test         false    false       100.00 %   [ <code>value2</code> ]   doc.<code>value2</code> == 19</p>
+
+<p>Optimization rules applied:
+ Id   RuleName
+  1   use-indexes
+```</p>
+
+<p>Multiple indexes will also be used if different index types are accessed, or for non-equality
+filter conditions. For example, the following query will make use of the two hash indexes
+and also the skiplist index:</p>
+
+<p><code>plain example query
+FOR doc IN test
+  FILTER doc.value1 == 11 || doc.value2 == 19 || doc.value3 &gt; 42
+  RETURN doc
+</code></p>
+
+<p>Here is its execution plan from 2.8:</p>
+
+<p><code>``plain 2.8 query execution plan
+Execution plan:
+ Id   NodeType          Est.   Comment
+  1   SingletonNode        1   * ROOT
+  6   IndexNode            3     - FOR doc IN test   /* hash index scan, hash index scan, skiplist index scan */
+  3   CalculationNode      3       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2<code>== 19 || doc.</code>value3` > 42
+  4   FilterNode           3       &ndash; FILTER #1
+  5   ReturnNode           3       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ By   Type       Collection   Unique   Sparse   Selectivity   Fields         Ranges
+  6   hash       test         false    false       100.00 %   [ <code>value1</code> ]   doc.<code>value1</code> == 11
+  6   hash       test         false    false       100.00 %   [ <code>value2</code> ]   doc.<code>value2</code> == 19
+  6   skiplist   test         false    false            n/a   [ <code>value3</code> ]   doc.<code>value3</code> > 42</p>
+
+<p>Optimization rules applied:
+ Id   RuleName
+  1   use-indexes
+```</p>
+
+<p>For comparison, here is the non-optimized plan from 2.7 for the same query:</p>
+
+<p><code>``plain 2.7 query execution plan
+Execution plan:
+ Id   NodeType                  Est.   Comment
+  1   SingletonNode                1   * ROOT
+  2   EnumerateCollectionNode      0     - FOR doc IN test   /* full collection scan */
+  3   CalculationNode              0       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2<code>== 19 || doc.</code>value3` > 42
+  4   FilterNode                   0       &ndash; FILTER #1
+  5   ReturnNode                   0       &ndash; RETURN doc</p>
+
+<p>Indexes used:
+ none</p>
+
+<p>Optimization rules applied:
+ none
+```</p>
+
+<p>Still the query optimizer will not be able to use any indexes on a collection when
+there are multiple FILTER conditions combined with logical OR and at least one of them
+is not satisfisable by an index of the collection. In this case it has no other choice
+but to do a full collection scan.</p>
+
+<p>For queries that combine multiple FILTER conditions with a logical AND, the optimizer
+will still try to pick the most selective index for the query and use it for the collection.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Index Speedups in 2.8]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28/"/>
+    <updated>2015-11-20T15:11:00+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28</id>
+    <content type="html"><![CDATA[<p>The upcoming 2.8 version of ArangoDB will provide several improvements in
+the area of index usage and query optimization.</p>
+
+<p>First of all, hash and skiplist indexes can now index individual array values.
+A dedicated post on this will follow shortly. Second, the query optimizer can
+make use multiple indexes per collection for queries with OR-combined filter
+conditions. This again is a subject for <a href="/blog/2015/11/20/using-multiple-indexes-per-collection/">another post</a>.
+Third, there have been some speed improvements due to changes in the general
+index handling code. This is what this post is about.</p>
+
+<!-- more -->
+
+
+<p>In order to assess the speedups in 2.8, I have run some already existing performance
+tests that I initially ran when comparing ArangoDB 2.5 with 2.6. The test cases and
+methodology are detailed in <a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">this earlier blog post</a>.</p>
+
+<p>For measuring the index-related performance improvements, I simply re-ran the
+index related tests in 2.7 and in 2.8 / devel. I did not bother re-running all
+tests from the original blog article because only some are index-related. In
+particular, I only ran these tests again:</p>
+
+<ul>
+<li><em>join-key</em>: for each document in the collection, perform a join on the <code>_key</code> attribute on the collection
+ itself (i.e. <code>FOR c1 IN @@c FOR c2 IN @@c FILTER c1._key == c2._key RETURN c1</code>)</li>
+<li><em>join-id</em>: ditto, but perform the join using the <code>_id</code> attribute</li>
+<li><em>join-hash-number</em> and <em>join-hash-string</em>: ditto, but join using a hash index on a numeric or string
+ attribute</li>
+<li><em>join-skiplist-number</em> and <em>join-skiplist-string</em>: ditto, but join using a skiplist index on a numeric or
+ string attribute</li>
+<li><em>lookup-key</em>, <em>lookup-hash-number</em>, <em>lookup-hash-string</em>, <em>lookup-skiplist-number</em>, <em>lookup-skiplist-string</em>:
+ compile an IN-list of 10,000 lookup values and search these 10,000 documents in the collection using
+ either the primary index (<code>_key</code> attribute), a hash index or a skiplist index. The latter two are tested
+ on numeric and string attributes.</li>
+</ul>
+
+
+<p>The test queries were run 5 times each on collections containing 10,000, 100,000 and
+1,000,000 documents.</p>
+
+<p>Here are the query execution times from 2.7 and 2.8 for the individual tests, in
+seconds (less is better):</p>
+
+<p>```plain test results</p>
+
+<h2>test name                collection     avg 2.7 (s)      avg 2.8 (s)</h2>
+
+<p>join-key                 10k                 0.0997           0.0612
+join-key                 100k                1.0611           0.6538
+join-key                 1000k              10.2975           6.2507
+join-id                  10k                 0.1088           0.0606
+join-id                  100k                1.1126           0.6694
+join-id                  1000k              10.8180           6.5336
+join-hash-number         10k                 0.1044           0.0679
+join-hash-number         100k                1.1137           0.7430
+join-hash-number         1000k              10.7923           7.1534
+join-hash-string         10k                 0.1193           0.0712
+join-hash-string         100k                1.2656           0.7915
+join-hash-string         1000k              12.3075           7.6667
+join-skiplist-number     10k                 0.1387           0.1030
+join-skiplist-number     100k                1.6693           1.3062
+join-skiplist-number     1000k              18.0406          15.5203
+join-skiplist-string     10k                 0.1928           0.1469
+join-skiplist-string     100k                2.3166           1.8997
+join-skiplist-string     1000k              27.1513          23.2058
+lookup-key               10k                 1.4996           1.5245
+lookup-key               100k                1.4951           1.5189
+lookup-key               1000k               1.5545           1.5662
+lookup-hash-number       10k                 1.5572           1.5526
+lookup-hash-number       100k                1.5595           1.5435
+lookup-hash-number       1000k               1.5436           1.5648
+lookup-hash-string       10k                 1.6023           1.5623
+lookup-hash-string       100k                1.5892           1.5741
+lookup-hash-string       1000k               1.5841           1.5770
+lookup-skiplist-number   10k                 1.5978           1.6145
+lookup-skiplist-number   100k                1.5782           1.6269
+lookup-skiplist-number   1000k               1.5891           1.6258
+lookup-skiplist-string   10k                 1.6443           1.6840
+lookup-skiplist-string   100k                1.6787           1.6985
+lookup-skiplist-string   1000k               1.7319           1.7562
+in-key                   10k                 0.1076           0.0754
+in-key                   100k                0.1083           0.0775
+in-key                   1000k               0.1104           0.0773
+in-hash-number           10k                 0.0898           0.0696
+in-hash-number           100k                0.0889           0.0674
+in-hash-number           1000k               0.0877           0.0675
+in-hash-string           10k                 0.1174           0.0867
+in-hash-string           100k                0.1188           0.0878
+in-hash-string           1000k               0.1174           0.0853
+in-skiplist-number       10k                 0.1095           0.0849
+in-skiplist-number       100k                0.1110           0.0873
+in-skiplist-number       1000k               0.1106           0.0910
+in-skiplist-string       10k                 0.1744           0.1315
+in-skiplist-string       100k                0.1990           0.1594
+in-skiplist-string       1000k               0.2369           0.1968
+```</p>
+
+<p>It looks like joins and IN list lookups got significantly faster in 2.8, whereas
+the performance for point lookups is more or less the same as in 2.7.</p>
+
+<p>Note that the changes to the index code in 2.8 only affect how indexes are accessed
+from within AQL queries and how filtering works. No changes have been made for other
+index operations such as insert, updates, and removals.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Improved Deadlock Detection]]></title>
@@ -289,114 +531,6 @@ has been issued to have the cookbook recipes updated to include <code>aqlQuery</
 Foxx actions) and from ArangoDB&rsquo;s web interface.</p>
 
 <p>All other variants for building AQL queries are still fully supported.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Introducing RETURN DISTINCT]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/27/introducing-return-distinct/"/>
-    <updated>2015-07-27T11:48:41+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/27/introducing-return-distinct</id>
-    <content type="html"><![CDATA[<p>Last week saw the addition of the <code>RETURN DISTINCT</code> for AQL queries.
-This is a new shortcut syntax for making result sets unique.</p>
-
-<p>For this purpose it can be used as an easier-to-memorize alternative for
-the already existing <code>COLLECT</code> statement. <code>COLLECT</code> is very flexible and
-can be used for multiple purposes, but it is syntactic overkill for making
-a result set unique.</p>
-
-<p>The new <code>RETURN DISTINCT</code> syntax makes queries easier to write and understand.</p>
-
-<!-- more -->
-
-
-<p>Here&rsquo;s a non-scientific proof for this claim:</p>
-
-<p>Compare the following queries, which both return each distinct <code>age</code> attribute
-value from the collection:</p>
-
-<p><code>plain making result set unique using COLLECT
-FOR doc IN collection
-  COLLECT age = doc.age
-  RETURN age
-</code></p>
-
-<p><code>plain making result set unique using RETURN DISTINCT
-FOR doc IN collection
-  RETURN DISTINCT doc.age
-</code></p>
-
-<p>Clearly, the query using <code>RETURN DISTINCT</code> is more intuitive, especially for
-AQL beginners. Apart from that, using <code>RETURN DISTINCT</code> will save a bit of typing
-compared to the longer <code>COLLECT</code>-based query.</p>
-
-<p>Internally both <code>COLLECT</code> and <code>RETURN DISTINCT</code> will work by creating an
-<code>AggregateNode</code>. The optimizer will try the <em>sorted</em> and the <em>hashed</em> variants
-for both, so they should perform about the same.</p>
-
-<p>However, the result of a <code>RETURN DISTINCT</code> does not have any guaranteed order,
-so the optimizer will not insert a post-<code>SORT</code> for it. It may do so for a regular
-<code>COLLECT</code>.</p>
-
-<p>As mentioned before, <code>COLLECT</code> is more flexible than <code>RETURN DISTINCT</code>.
-Notably, <code>COLLECT</code> is superior to <code>RETURN DISTINCT</code> when the result set should
-be made unique using more than one criterion, e.g.</p>
-
-<p><code>plain using more than one criterion for uniqueness
-FOR doc IN collection
-  COLLECT status = doc.status, age = doc.age,
-  RETURN { status, age }
-</code></p>
-
-<p>This is currently not achievable via <code>RETURN DISTINCT</code>, as it only works
-with a single criterion.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Object Literal Simplification]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/27/aql-object-literal-simplification/"/>
-    <updated>2015-07-27T11:33:09+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/27/aql-object-literal-simplification</id>
-    <content type="html"><![CDATA[<p>ArangoDB&rsquo;s <code>devel</code> branch recently saw a change that makes writing
-some AQL queries a bit simpler.</p>
-
-<p>The change introduces an optional shorthand notation for object attributes
-in the style of ES6&rsquo;s enhanced object literal notation.</p>
-
-<!-- more -->
-
-
-<p>For example, consider the following query that groups values by <code>age</code>
-attribute and counts the number of documents per distinct <code>age</code> value:</p>
-
-<p><code>plain example query
-FOR doc IN collection
-  COLLECT age = doc.age WITH COUNT INTO length
-  RETURN { age: age, length: length }
-</code></p>
-
-<p>The object declaration in the last line of the query is somewhat redundant
-because one has to type identical attribute names and values:</p>
-
-<p><code>plain the long notation for object literals
-RETURN { age: age, length: length }
-</code></p>
-
-<p>In this case, the new shorthand notation simplifies the <code>RETURN</code> to:</p>
-
-<p><code>plain using shorthand notation for object literals
-RETURN { age, length }
-</code></p>
-
-<p>In general, the shorthand notation can be used for all object literals when
-there is an attribute name that refers to a query variable of the same name.</p>
-
-<p>It can also be mixed with the longer notation, e.g.:</p>
-
-<p><code>plain mixing long and shorthand notation
-RETURN { age, length, dateCreated: DATE_NOW() }
-</code></p>
 ]]></content>
   </entry>
   
