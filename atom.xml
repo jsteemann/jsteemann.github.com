@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-11-20T16:20:12+01:00</updated>
+  <updated>2015-11-20T18:14:21+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,78 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[AQL Function Speedups]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/20/aql-function-speedups/"/>
+    <updated>2015-11-20T16:55:34+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/20/aql-function-speedups</id>
+    <content type="html"><![CDATA[<p>While working on the upcoming ArangoDB 2.8, we have reimplemented some AQL
+functions in C++ for improved performance. AQL queries using these functions
+may benefit from using the new implementation of the function.</p>
+
+<p>The following list shows the AQL functions for which a C++ implementation has
+been added in 2.8. The other C++-based AQL function implementations added since
+ArangoDB 2.5 are also still available. Here&rsquo;s the list of functions added in 2.8:</p>
+
+<!-- more -->
+
+
+<ul>
+<li>document-related functions: DOCUMENT, EDGES, PARSE_IDENTIFIER</li>
+<li>numerical functions: ABS, FLOOR, RAND, ROUND, SQRT</li>
+<li>statistical functions: MEDIAN, PERCENTILE, STDDEV_POPULATION, STDDEV_SAMPLE, VARIANCE_POPULATION, VARIANCE_SAMPLE</li>
+<li>geo functions: NEAR, WITHIN</li>
+<li>array functions: APPEND, FIRST, FLATTEN, LAST, MINUS, NTH, POP, POSITION, PUSH, REMOVE_NTH, REMOVE_VALUE, REMOVE_VALUES, SHIFT, UNSHIFT</li>
+<li>informational functions: COLLECTIONS, CURRENT_DATABASE, FIRST_DOCUMENT, FIRST_LIST, NOT_NULL</li>
+<li>object-related functions: MERGE_RECURSIVE, ZIP</li>
+</ul>
+
+
+<p>Following are a few example queries that benefit from using the C++ variants of some
+of the above functions:</p>
+
+<p>Fetching documents programmatically using the <code>DOCUMENT</code> function:</p>
+
+<ul>
+<li>query: <code>FOR i IN 1..10000 RETURN DOCUMENT(test, CONCAT('test', i))</code></li>
+<li>2.7: 0.3005 s</li>
+<li>2.8: 0.1050 s</li>
+</ul>
+
+
+<p>Fetching edges programmatically using the <code>EDGES</code> function:</p>
+
+<ul>
+<li>query: <code>FOR i IN 1..100000 RETURN EDGES(edges, CONCAT('test/test', i), 'outbound')</code>:</li>
+<li>2.7: 4.3590 s</li>
+<li>2.8: 1.4469 s</li>
+</ul>
+
+
+<p>Fetching many documents from a geo index, post-filtering most of them:</p>
+
+<ul>
+<li>query: <code>FOR doc IN WITHIN(locations, 0, 0, 100000) FILTER doc.value2 == 'test1001' LIMIT 1 RETURN doc</code></li>
+<li>2.7: 2.9876 s</li>
+<li>2.8: 0.4087 s</li>
+</ul>
+
+
+<p>Generating random numbers:</p>
+
+<ul>
+<li>query: <code>FOR value IN 1..100000 RETURN RAND() * 50</code></li>
+<li>2.7: 0.1743 s</li>
+<li>2.8: 0.1364 s</li>
+</ul>
+
+
+<p>Please note that not in every case there will be a tremendous speedup. As usual,
+it depends on how often a function is called inside a query and what other constructs
+are used. Your mileage may vary.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Using Multiple Indexes Per Collection]]></title>
@@ -3611,63 +3683,6 @@ using <code>WITH COUNT INTO</code></li>
 
 
 <p>Further implementation details can be checked in the <a href="http://jsteemann.github.io/downloads/code/arango-25-26-shootout-script.js">test script</a>.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Less Intrusive Linking]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking/"/>
-    <updated>2015-05-07T19:52:53+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking</id>
-    <content type="html"><![CDATA[<p>A while ago our continuous integration builds on <a href="http://travis-ci.org">TravisCI</a>
-began to fail seemingly randomly because the build worker was killed without
-an apparent reason. Obviously the build process reached some resource limits
-though we couldn&rsquo;t find any documented limit that the build obviously violated.</p>
-
-<p>Some builds still succeeded without issues, but those builds that were killed
-had one thing in common: they were all stuck waiting the linker to finish.</p>
-
-<p>The default linker used on TravisCI is <em>GNU ld</em>. After some research, it turned
-out that replacing <em>GNU ld</em> with <em>GNU gold</em> not only made the linking much
-faster, but also less resource-intensive. Linking ArangoDB on my local machine
-is almost twice as fast with <em>gold</em> as with <em>ld</em>. Even better, after reconfiguring
-our TravisCI builds to also use <em>gold</em>, our builds weren&rsquo;t killed anymore by
-TravisCI&rsquo;s build scheduling system.</p>
-
-<p>To make TravisCI use <em>gold</em> instead of <em>ld</em>, add the following to your project&rsquo;s
-<code>.travis.yml</code> in the <code>install</code> section (so it gets execute before the actual build
-steps):</p>
-
-<figure class='code'><figcaption><span>commands for wrapping gold</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo apt-get -y install binutils-gold
-</span><span class='line'>mkdir -p ~/bin/gold
-</span><span class='line'><span class="nb">echo</span> <span class="s1">&#39;#!/bin/bash&#39;</span> &gt; ~/bin/gold/ld
-</span><span class='line'><span class="nb">echo</span> <span class="s1">&#39;gold &quot;$@&quot;&#39;</span> &gt;&gt; ~/bin/gold/ld
-</span><span class='line'>chmod a+x ~/bin/gold/ld
-</span><span class='line'><span class="nb">export </span><span class="nv">CFLAGS</span><span class="o">=</span><span class="s2">&quot;-B$HOME/bin/gold $CFLAGS&quot;</span>
-</span><span class='line'><span class="nb">export </span><span class="nv">CXXFLAGS</span><span class="o">=</span><span class="s2">&quot;-B$HOME/bin/gold $CXXFLAGS&quot;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The script downloads and installs <em>gold</em> and creates a tiny wrapper script in a
-file named <code>ld</code> in the user&rsquo;s home directory. The wrapper simply calls <em>gold</em>
-with all the arguments passed to the wrapper. Finally, the script modifies the
-environments <code>CFLAGS</code> and <code>CXXFLAGS</code> by setting the <code>-B</code> parameter to the
-wrapper script&rsquo;s directory.</p>
-
-<p><code>-B</code> is the option for the compiler&rsquo;s search path. The compiler (g++) at least
-will look in this path for any helper tools it invokes. As we have a file named
-<code>ld</code> in this directory, g++ will use our wrapper script instead of the original
-<code>ld</code> binary. This way we can keep the original version of <code>ld</code> in <code>/usr/bin</code>,
-and only override it using environment variables. This is also helpful in
-other contexts, e.g. when <code>ld</code> shall remain as the system&rsquo;s default linker but
-<code>gold</code>shall only be used for linking a few selected components.</p>
 ]]></content>
   </entry>
   

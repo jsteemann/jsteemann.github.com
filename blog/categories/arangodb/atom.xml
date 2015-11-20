@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-11-20T16:20:12+01:00</updated>
+  <updated>2015-11-20T18:14:21+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,78 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[AQL Function Speedups]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/11/20/aql-function-speedups/"/>
+    <updated>2015-11-20T16:55:34+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/11/20/aql-function-speedups</id>
+    <content type="html"><![CDATA[<p>While working on the upcoming ArangoDB 2.8, we have reimplemented some AQL
+functions in C++ for improved performance. AQL queries using these functions
+may benefit from using the new implementation of the function.</p>
+
+<p>The following list shows the AQL functions for which a C++ implementation has
+been added in 2.8. The other C++-based AQL function implementations added since
+ArangoDB 2.5 are also still available. Here&rsquo;s the list of functions added in 2.8:</p>
+
+<!-- more -->
+
+
+<ul>
+<li>document-related functions: DOCUMENT, EDGES, PARSE_IDENTIFIER</li>
+<li>numerical functions: ABS, FLOOR, RAND, ROUND, SQRT</li>
+<li>statistical functions: MEDIAN, PERCENTILE, STDDEV_POPULATION, STDDEV_SAMPLE, VARIANCE_POPULATION, VARIANCE_SAMPLE</li>
+<li>geo functions: NEAR, WITHIN</li>
+<li>array functions: APPEND, FIRST, FLATTEN, LAST, MINUS, NTH, POP, POSITION, PUSH, REMOVE_NTH, REMOVE_VALUE, REMOVE_VALUES, SHIFT, UNSHIFT</li>
+<li>informational functions: COLLECTIONS, CURRENT_DATABASE, FIRST_DOCUMENT, FIRST_LIST, NOT_NULL</li>
+<li>object-related functions: MERGE_RECURSIVE, ZIP</li>
+</ul>
+
+
+<p>Following are a few example queries that benefit from using the C++ variants of some
+of the above functions:</p>
+
+<p>Fetching documents programmatically using the <code>DOCUMENT</code> function:</p>
+
+<ul>
+<li>query: <code>FOR i IN 1..10000 RETURN DOCUMENT(test, CONCAT('test', i))</code></li>
+<li>2.7: 0.3005 s</li>
+<li>2.8: 0.1050 s</li>
+</ul>
+
+
+<p>Fetching edges programmatically using the <code>EDGES</code> function:</p>
+
+<ul>
+<li>query: <code>FOR i IN 1..100000 RETURN EDGES(edges, CONCAT('test/test', i), 'outbound')</code>:</li>
+<li>2.7: 4.3590 s</li>
+<li>2.8: 1.4469 s</li>
+</ul>
+
+
+<p>Fetching many documents from a geo index, post-filtering most of them:</p>
+
+<ul>
+<li>query: <code>FOR doc IN WITHIN(locations, 0, 0, 100000) FILTER doc.value2 == 'test1001' LIMIT 1 RETURN doc</code></li>
+<li>2.7: 2.9876 s</li>
+<li>2.8: 0.4087 s</li>
+</ul>
+
+
+<p>Generating random numbers:</p>
+
+<ul>
+<li>query: <code>FOR value IN 1..100000 RETURN RAND() * 50</code></li>
+<li>2.7: 0.1743 s</li>
+<li>2.8: 0.1364 s</li>
+</ul>
+
+
+<p>Please note that not in every case there will be a tremendous speedup. As usual,
+it depends on how often a function is called inside a query and what other constructs
+are used. Your mileage may vary.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Using Multiple Indexes Per Collection]]></title>
@@ -435,97 +507,6 @@ values for later reuse.</p>
 <p>Screenshot from the feature in 2.8:</p>
 
 <p><img src="/downloads/screenshots/bind-parameters.png"></p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[ArangoDB-PHP Driver Improvements]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/09/10/arangodb-php-driver-improvements/"/>
-    <updated>2015-09-10T14:05:40+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/09/10/arangodb-php-driver-improvements</id>
-    <content type="html"><![CDATA[<p>While preparing the release of ArangoDB 2.7, some improvements were made for the
-<a href="https://github.com/arangodb/arangodb-php">PHP driver for ArangoDB</a>.</p>
-
-<p>The 2.7 version of the PHP driver now supports the AQL query results cache. The
-cache can be turned on or off globally, or be set to demand mode. The demand mode will
-allow controlling caching on a per-AQL-query basis.</p>
-
-<p>Additionally, the HTTP transport layer in the PHP driver was improved. Some internal
-string handling methods were optimized so that the transport part becomes cheaper. All
-driver operations that communicate with the ArangoDB server will benefit from this.</p>
-
-<p>For a demonstration of the improvements, here is a script that creates 100,000
-documents in a local ArangoDB database via the PHP driver. As we&rsquo;re interested in assessing
-the HTTP layer improvements, the script intentionally issues 100,000 HTTP requests
-instead of using the specialized <code>import</code> method provided by the driver.</p>
-
-<p>The script code can be found <a href="https://github.com/arangodb/arangodb-php/blob/devel/examples/http-test.php">here</a>.</p>
-
-<p>The baseline for the improvments is the (non-optimized) 2.6 version of the PHP
-driver. Here are the results for issuing 100,000 requests with the 2.6 driver
-(script was run twice to see if there are variations in execution time):</p>
-
-<p>```plain execution times with 2.6 driver
-creating 100000 documents
-creating documents took 55.144556999207 s</p>
-
-<p>creating 100000 documents
-creating documents took 54.476955890656 s
-```</p>
-
-<p>Running it with the 2.7 version of the PHP driver now shows the improvements.
-Execution time for the same script goes down from 54 seconds to 42 seconds:
-```plain execution times with 2.7 driver
-creating 100000 documents
-creating documents took 42.886090040207 s</p>
-
-<p>creating 100000 documents
-creating documents took 42.578990936279 s
-```</p>
-
-<p>The PHP version used here was:
-```plain PHP version details
-PHP 5.5.12-2ubuntu4.6 (cli) (built: Jul  2 2015 15:27:14)
-Copyright &copy; 1997-2014 The PHP Group
-Zend Engine v2.5.0, Copyright &copy; 1998-2014 Zend Technologies</p>
-
-<pre><code>with Zend OPcache v7.0.4-dev, Copyright (c) 1999-2014, by Zend Technologies
-</code></pre>
-
-<p>```</p>
-
-<p>Following are the results from a different machine, this time using PHP 5.6:
-```plain execution times with 2.6 driver
-creating 100000 documents
-creating documents took 48.394731044769 s</p>
-
-<p>creating 100000 documents
-creating documents took 47.618598937988 s
-```</p>
-
-<p>```plain execution times with 2.7 driver
-creating 100000 documents
-creating documents took 40.535583972931 s</p>
-
-<p>creating 100000 documents
-creating documents took 40.041265010834 s
-```</p>
-
-<p>The PHP version details for this machine were:
-```plain PHP version details
-PHP 5.6.4-4ubuntu6.2 (cli) (built: Jul  2 2015 15:29:28)
-Copyright &copy; 1997-2014 The PHP Group
-Zend Engine v2.6.0, Copyright &copy; 1998-2014 Zend Technologies</p>
-
-<pre><code>with Zend OPcache v7.0.4-dev, Copyright (c) 1999-2014, by Zend Technologies
-</code></pre>
-
-<p>```</p>
-
-<p>The actual improvements depend on many factors, so your exact mileage may vary.
-The improvements may not be noticable for applications that issue only a few
-requests with the driver, but they will be significant when performing lots of
-requests, as in the above examples.</p>
 ]]></content>
   </entry>
   
