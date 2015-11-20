@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-11-20T18:14:21+01:00</updated>
+  <updated>2015-11-20T18:15:52+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -43,7 +43,7 @@ ArangoDB 2.5 are also still available. Here&rsquo;s the list of functions added 
 <p>Following are a few example queries that benefit from using the C++ variants of some
 of the above functions:</p>
 
-<p>Fetching documents programmatically using the <code>DOCUMENT</code> function:</p>
+<h3>Fetching documents programmatically using the <code>DOCUMENT</code> function:</h3>
 
 <ul>
 <li>query: <code>FOR i IN 1..10000 RETURN DOCUMENT(test, CONCAT('test', i))</code></li>
@@ -52,7 +52,7 @@ of the above functions:</p>
 </ul>
 
 
-<p>Fetching edges programmatically using the <code>EDGES</code> function:</p>
+<h3>Fetching edges programmatically using the <code>EDGES</code> function:</h3>
 
 <ul>
 <li>query: <code>FOR i IN 1..100000 RETURN EDGES(edges, CONCAT('test/test', i), 'outbound')</code>:</li>
@@ -61,7 +61,7 @@ of the above functions:</p>
 </ul>
 
 
-<p>Fetching many documents from a geo index, post-filtering most of them:</p>
+<h3>Fetching many documents from a geo index, post-filtering most of them:</h3>
 
 <ul>
 <li>query: <code>FOR doc IN WITHIN(locations, 0, 0, 100000) FILTER doc.value2 == 'test1001' LIMIT 1 RETURN doc</code></li>
@@ -70,7 +70,7 @@ of the above functions:</p>
 </ul>
 
 
-<p>Generating random numbers:</p>
+<h3>Generating random numbers:</h3>
 
 <ul>
 <li>query: <code>FOR value IN 1..100000 RETURN RAND() * 50</code></li>
