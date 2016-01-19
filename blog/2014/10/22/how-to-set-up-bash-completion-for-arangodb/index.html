@@ -206,7 +206,8 @@ source, this should already be the case.</p>
 Pre-generated completion scripts for various ArangoDB versions can be found here:
 <a href="/downloads/code/completions-2.2">2.2</a> <a href="/downloads/code/completions-2.3">2.3</a>
 <a href="/downloads/code/completions-2.4">2.4</a> <a href="/downloads/code/completions-2.5">2.5</a>
-<a href="/downloads/code/completions-2.6">2.6</a> <a href="/downloads/code/completions-2.7">2.7</a></p>
+<a href="/downloads/code/completions-2.6">2.6</a> <a href="/downloads/code/completions-2.7">2.7</a>
+<a href="/downloads/code/completions-2.8">2.8</a></p>
 
 <p>To activate completions, copy the appropriate file into <code>/etc/bash_completion.d/arangodb</code>.
 Note that completion may need to be re-initialized once in order to make work:</p>
@@ -218,7 +219,20 @@ Note that completion may need to be re-initialized once in order to make work:</
 
 <h2>Quick setup</h2>
 
-<p>The following command should install the completions for 2.6 and activate them:</p>
+<p>The following command should install the completions for 2.7 and activate them:</p>
+
+<figure class='code'><figcaption><span>activate completions for ArangoDB 2.7 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo <span class="se">\</span>
+</span><span class='line'>  wget -O /etc/bash_completion.d/arangodb <span class="se">\</span>
+</span><span class='line'>    https://jsteemann.github.io/downloads/code/completions-2.7 <span class="o">&amp;&amp;</span> <span class="se">\</span>
+</span><span class='line'>  . /etc/bash_completion.d/arangodb
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The command for 2.6 is:</p>
 
 <figure class='code'><figcaption><span>activate completions for ArangoDB 2.6 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
@@ -342,6 +356,10 @@ completions script to your <code>.bashrc</code> file:</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/12/22/aql-optimizer-improvements-for-28/">AQL Optimizer Improvements for 2.8</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/11/20/aql-function-speedups/">AQL Function Speedups</a>
       </li>
     
@@ -361,10 +379,6 @@ completions script to your <code>.bashrc</code> file:</p>
         <a href="/blog/2015/11/18/bind-parameters-in-aql-editor/">Using Bind Parameters in the AQL Editor</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/11/18/on-exception-handling/">C++ Constructors and Memory Leaks</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -373,11 +387,11 @@ completions script to your <code>.bashrc</code> file:</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (33)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (54)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (7)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (22)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (34)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (55)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (7)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (23)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (45)</li><ul class="month_list"><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>
@@ -395,7 +409,7 @@ completions script to your <code>.bashrc</code> file:</p>
     </div>
   </div>
   <footer role="contentinfo"><p>
-  Copyright &copy; 2015 - jsteemann -
+  Copyright &copy; 2016 - jsteemann -
   <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
 </p>
 

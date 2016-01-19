@@ -1,0 +1,449 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>AQL Optimizer Improvements for 2.8 - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="With the 2.8 beta phase coming to an end it&rsquo;s time to shed some light
+on the improvements in the 2.8 AQL optimizer. This blog post summarizes
+a &hellip;">
+  <meta name="keywords" content="ArangoDB, database, AQL, Optimizer, Performance">
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2015/12/22/aql-optimizer-improvements-for-28">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>{ "subject" : "ArangoDB", "tags": [ "multi-model", "nosql", "database" ] }</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">AQL Optimizer Improvements for 2.8</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-12-22T22:39:30+01:00" pubdate data-updated="true">Dec 22<span>nd</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>With the 2.8 beta phase coming to an end it&rsquo;s time to shed some light
+on the improvements in the 2.8 AQL optimizer. This blog post summarizes
+a few of them, focusing on the query optimizer. There&rsquo;ll be a follow-up
+post that will explain dedicated new AQL features soon.</p>
+
+<!-- more -->
+
+
+<h2>Array indexes</h2>
+
+<p>2.8 allows creating hash and skiplist indexes on attributes which are arrays.
+Creating such index works similar to creating a non-array index, with the
+exception that the name of the array attribute needs to be followed by a <code>[*]</code>
+in the index fields definition:</p>
+
+<figure class='code'><figcaption><span>creating an array index</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;posts&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">posts</span><span class="p">.</span><span class="nx">ensureIndex</span><span class="p">({</span> <span class="nx">type</span><span class="o">:</span> <span class="s2">&quot;hash&quot;</span><span class="p">,</span> <span class="nx">fields</span><span class="o">:</span> <span class="p">[</span> <span class="s2">&quot;tags[*]&quot;</span> <span class="p">]</span> <span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now if the <code>tags</code> attribute of a document in the <code>posts</code> collection is an array,
+each array member will be inserted into the index:</p>
+
+<figure class='code'><figcaption><span>storing an array value</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">posts</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">tags</span><span class="o">:</span> <span class="p">[</span> <span class="s2">&quot;arangodb&quot;</span><span class="p">,</span> <span class="s2">&quot;database&quot;</span><span class="p">,</span> <span class="s2">&quot;aql&quot;</span> <span class="p">]</span> <span class="p">});</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">posts</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">tags</span><span class="o">:</span> <span class="p">[</span> <span class="s2">&quot;arangodb&quot;</span><span class="p">,</span> <span class="s2">&quot;v8&quot;</span><span class="p">,</span> <span class="s2">&quot;javascript&quot;</span> <span class="p">]</span> <span class="p">});</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">posts</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">tags</span><span class="o">:</span> <span class="p">[</span> <span class="s2">&quot;javascript&quot;</span><span class="p">,</span> <span class="s2">&quot;v8&quot;</span><span class="p">,</span> <span class="s2">&quot;nodejs&quot;</span> <span class="p">]</span> <span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The index on <code>tags[*]</code> will now contain the values <code>arangodb</code>, <code>database</code>, <code>aql</code> and
+<code>nosql</code> for the first document, <code>arangodb</code>, <code>v8</code> and <code>javascript</code> for the second, and
+<code>javascript</code>, <code>v8</code> and <code>nodejs</code> for the third.</p>
+
+<p>The following AQL will find any documents that have a value of <code>javascript</code> contained
+in their <code>tags</code> value:</p>
+
+<figure class='code'><figcaption><span>array index query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN posts
+</span><span class='line'>  FILTER 'javascript' IN doc.tags[*]
+</span><span class='line'>  RETURN doc</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will use the array index on <code>tags[*]</code>.</p>
+
+<p>The array index works by inserting all members from an array into the index
+separately. Duplicates are removed automatically when populating the index.</p>
+
+<p>An array index can also be created on a sub-attribute of array members. For
+example, the following definition will make sure the <code>name</code> sub-attributes of
+the <code>tags</code> array values will make it into the index:</p>
+
+<figure class='code'><figcaption><span>creating an array index on a sub-attribute</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">posts</span><span class="p">.</span><span class="nx">ensureIndex</span><span class="p">({</span> <span class="nx">type</span><span class="o">:</span> <span class="s2">&quot;hash&quot;</span><span class="p">,</span> <span class="nx">fields</span><span class="o">:</span> <span class="p">[</span> <span class="s2">&quot;tags[*].name&quot;</span> <span class="p">]</span> <span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>That will allow storing data as follows:</p>
+
+<figure class='code'><figcaption><span>storing an array value</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">posts</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">tags</span><span class="o">:</span> <span class="p">[</span> <span class="p">{</span> <span class="nx">name</span><span class="o">:</span> <span class="s2">&quot;arangodb&quot;</span> <span class="p">},</span> <span class="p">{</span> <span class="nx">name</span><span class="o">:</span> <span class="s2">&quot;database&quot;</span> <span class="p">},</span> <span class="p">{</span> <span class="nx">name</span><span class="o">:</span> <span class="s2">&quot;aql&quot;</span> <span class="p">}</span> <span class="p">]</span> <span class="p">});</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">posts</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">tags</span><span class="o">:</span> <span class="p">[</span> <span class="p">{</span> <span class="nx">name</span><span class="o">:</span> <span class="s2">&quot;arangodb&quot;</span> <span class="p">},</span> <span class="p">{</span> <span class="nx">name</span><span class="o">:</span> <span class="s2">&quot;v8&quot;</span> <span class="p">},</span> <span class="p">{</span> <span class="nx">name</span><span class="o">:</span> <span class="s2">&quot;javascript&quot;</span> <span class="p">}</span> <span class="p">]</span> <span class="p">});</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">posts</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">tags</span><span class="o">:</span> <span class="p">[</span> <span class="p">{</span> <span class="nx">name</span><span class="o">:</span> <span class="s2">&quot;javascript&quot;</span> <span class="p">},</span> <span class="p">{</span> <span class="nx">name</span><span class="o">:</span> <span class="s2">&quot;v8&quot;</span> <span class="p">},</span> <span class="p">{</span> <span class="nx">name</span><span class="o">:</span> <span class="s2">&quot;nodejs&quot;</span> <span class="p">}</span> <span class="p">]</span> <span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The (index-based) selection query for this data structure then becomes</p>
+
+<figure class='code'><figcaption><span>array index query using sub-attributes</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN posts
+</span><span class='line'>  FILTER 'javascript' IN doc.tags[*].name
+</span><span class='line'>  RETURN doc</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Contrary to MongoDB, there is no automatic conversion to array values when
+inserting non-array values in ArangoDB. For example, the following plain strings
+will not be inserted into an array index, simply because the value of the index
+attribute is not an array:</p>
+
+<figure class='code'><figcaption><span>storing non array values without indexing</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">posts</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">tags</span><span class="o">:</span> <span class="s2">&quot;arangodb&quot;</span> <span class="p">});</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">posts</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">tags</span><span class="o">:</span> <span class="s2">&quot;javascript&quot;</span> <span class="p">});</span>
+</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">posts</span><span class="p">.</span><span class="nx">insert</span><span class="p">({</span> <span class="nx">tags</span><span class="o">:</span> <span class="s2">&quot;nodejs&quot;</span> <span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note that in this case a non-array index can still be used.</p>
+
+<h2>Use of multiple indexes per collection</h2>
+
+<p>The query optimizer can now make use of multiple indexes if multiple filter
+conditions are combined with logical ORs, and all of them are covered by
+indexes of the same collection.</p>
+
+<p>Provided there are separate indexes present on <code>name</code> and <code>status</code>, the
+following query can make use of index scans in 2.8, as opposed to full
+collection scans in 2.7:</p>
+
+<figure class='code'><figcaption><span>using multiple indexes</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN users 
+</span><span class='line'>  FILTER doc.name == 'root' || doc.status == 'active' 
+</span><span class='line'>  RETURN doc</span></code></pre></td></tr></table></div></figure>
+
+
+<p><img src="/downloads/screenshots/multiple-indexes.png"></p>
+
+<p>If multiple filter conditions match for the same document, the result will
+automatically be deduplicated, so each document is still returned at most once.</p>
+
+<h2>Sorted IN comparison</h2>
+
+<p>Another improvement for the optimizer is to pre-sort comparison values for <code>IN</code> and
+<code>NOT IN</code> so these operators can use a (much faster) binary search instead of a linear search.</p>
+
+<p>The optimization will be applied automatically for <code>IN</code> / <code>NOT IN</code> comparison values used
+in filters, which are used inside of a <code>FOR</code> loop, and depend on runtime values. For example,
+the optimization will be applied for the following query:</p>
+
+<figure class='code'><figcaption><span>using multiple indexes</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>LET values = /* some runtime expression here */
+</span><span class='line'>FOR doc IN collection
+</span><span class='line'>  FILTER doc.value IN values
+</span><span class='line'>  RETURN doc</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The optimization will not be applied for <code>IN</code> comparison values that are value
+literals and those that are used in index lookups. For these cases the comparison values
+were already deduplicated and sorted.</p>
+
+<p>&ldquo;sort-in-values&rdquo; will appear in the list of applied optimizer rules if the optimizer
+could apply the optimization:</p>
+
+<p><img src="/downloads/screenshots/sorted-in.png"></p>
+
+<h2>Optimization for LENGTH(collection)</h2>
+
+<p>There are multiple ways for counting the total number of documents in a collection from
+inside an AQL query. One obvious way is to use <code>RETURN LENGTH(collection)</code>.</p>
+
+<p>That variant however was inefficient as it fully materialized the documents before
+counting them. In 2.8 calling <code>LENGTH()</code> for a collection will get automatically replaced
+by a call to a special function that can efficiently determine the number of documents.
+For larger collections, this can be several thousand times faster than the naive 2.7
+solution.</p>
+
+<h2>C++ implementation for many AQL functions</h2>
+
+<p>Many existing AQL functions have been backed with a C++ implementation that removes
+the need for some data conversion that would otherwise happen if the function were
+implemented in V8/JavaScript only. More than 30+ functions have been changed, including
+several that may produce bigger result sets (such as <code>EDGES()</code>, <code>FULLTEXT()</code>, <code>WITHIN()</code>,
+<code>NEAR()</code>) and that will hugely benefit from this.</p>
+
+<h2>Improved skip performance</h2>
+
+<p>2.8 improves the performance of skipping over many documents in case no indexes and no
+filters are used. This might sound like an edge case, but it is quite common when the
+task is to fetch documents from a big collection in chunks and there is certainty that
+there will be no parallel modifications.</p>
+
+<p>For example, the following query runs about 3 to 5 times faster in 2.8, and this
+improvements can easily sum up to notable speedups if the query is called repeatedly
+with increasing offset values for <code>LIMIT</code>:</p>
+
+<figure class='code'><figcaption><span>query with huge skip</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
+</span><span class='line'>  LIMIT 1000000, 10
+</span><span class='line'>  RETURN doc</span></code></pre></td></tr></table></div></figure>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-12-22T22:39:30+01:00" pubdate data-updated="true">Dec 22<span>nd</span>, 2015</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/performance/'>Performance</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2015/12/22/aql-optimizer-improvements-for-28/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2015/12/22/aql-optimizer-improvements-for-28/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2015/11/20/aql-function-speedups/" title="Previous Post: AQL function speedups">&laquo; AQL function speedups</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2015/12/22/aql-optimizer-improvements-for-28/">AQL Optimizer Improvements for 2.8</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/11/20/aql-function-speedups/">AQL Function Speedups</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/11/20/using-multiple-indexes-per-collection/">Using Multiple Indexes Per Collection</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/11/20/index-speedups-for-28/">Index Speedups in 2.8</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/11/18/improved-deadlock-detection/">Improved Deadlock Detection</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/11/18/bind-parameters-in-aql-editor/">Using Bind Parameters in the AQL Editor</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (34)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (55)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (7)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (23)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2016 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

@@ -11,9 +11,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="While experimenting with the fish shell on my laptop
-I found fish has a slightly different (but much fancier) tab-completion mechanism
-than bash. Re- &hellip;">
+  <meta name="description" content="We&rsquo;ve recently been working on improving ArangoDB&rsquo;s throughput,
+especially when using the ArangoDB&rsquo;s interface. In this post, I &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -83,6 +82,52 @@ than bash. Re- &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/07/30/throughput-enhancements/">Throughput Enhancements</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-07-30T12:54:12+02:00" pubdate data-updated="true">Jul 30<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>We&rsquo;ve recently been working on improving ArangoDB&rsquo;s throughput,
+especially when using the ArangoDB&rsquo;s interface.</p>
+
+<p>In this post, I will show some of the improvements already achieved,
+though the work is not yet finished. Therefore, the results shown here
+are still somewhat preliminary.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/07/30/throughput-enhancements/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -515,58 +560,6 @@ the following query.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">The Great AQL Shootout: ArangoDB 2.5 vs 2.6</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-05-20T18:04:04+02:00" pubdate data-updated="true">May 20<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>We are currently preparing ArangoDB 2.6 for release. A lot of work has been put into this release,
-and I really hope we can ship a first 2.6 release soon.</p>
-
-<p>To keep you hanging on in the meantime, I put together some performance tests results from 2.6.
-The tests I ran compared AQL query execution times in 2.6 and 2.5.</p>
-
-<p>The results look quite promising: <strong>2.6 outperformed 2.5 for all tested queries</strong>, mostly by
-factors of 2 to 5. A few dedicated AQL features in the tests got boosted even more, resulting in
-query execution time reductions of 90 % and more.
-Finally, the tests also revealed a dedicated case for which 2.6 provides a several hundredfold speedup.</p>
-
-<p>Also good news is that not a single of the test queries ran slower in 2.6 than in 2.5.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/3/">&larr; Older</a>
@@ -591,6 +584,10 @@ Finally, the tests also revealed a dedicated case for which 2.6 provides a sever
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2015/12/22/aql-optimizer-improvements-for-28/">AQL Optimizer Improvements for 2.8</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/11/20/aql-function-speedups/">AQL Function Speedups</a>
       </li>
     
@@ -610,10 +607,6 @@ Finally, the tests also revealed a dedicated case for which 2.6 provides a sever
         <a href="/blog/2015/11/18/bind-parameters-in-aql-editor/">Using Bind Parameters in the AQL Editor</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/11/18/on-exception-handling/">C++ Constructors and Memory Leaks</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -622,11 +615,11 @@ Finally, the tests also revealed a dedicated case for which 2.6 provides a sever
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (33)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (54)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (7)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (22)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (34)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (55)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (7)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (23)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (45)</li><ul class="month_list"><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>
@@ -643,7 +636,7 @@ Finally, the tests also revealed a dedicated case for which 2.6 provides a sever
     </div>
   </div>
   <footer role="contentinfo"><p>
-  Copyright &copy; 2015 - jsteemann -
+  Copyright &copy; 2016 - jsteemann -
   <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
 </p>
 

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Bash | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/bash/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-11-20T18:15:52+01:00</updated>
+  <updated>2016-01-19T14:53:45+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -30,7 +30,7 @@ wouldn&rsquo;t work, so I put together some dedicated completions files for <em>
 
 <p>The files can be downloaded here:
 <a href="/downloads/code/completions-fish-2.5">2.5</a> <a href="/downloads/code/completions-fish-2.6">2.6</a>
-<a href="/downloads/code/completions-fish-2.7">2.7</a></p>
+<a href="/downloads/code/completions-fish-2.7">2.7</a> <a href="/downloads/code/completions-fish-2.8">2.8</a></p>
 
 <p>To activate these completions, copy the appropriate file into <code>~/.arangodb-completions</code>
 and source it from <em>fish</em>:
@@ -43,15 +43,21 @@ from your <code>config.fish</code> file, which is normally located in directory 
 
 <h2>Full setup</h2>
 
-<p>The following command, executed in <em>fish</em>, should install the completions for 2.6 and
+<p>The following command, executed in <em>fish</em>, should install the completions for 2.7 and
 activate them:
-<code>bash activate completions for ArangoDB 2.6
+<code>bash activate completions for ArangoDB 2.7
+wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.7
+echo "source ~/.arangodb-completions" &gt;&gt; ~/.config/fish/config.fish
+source ~/.arangodb-completions
+</code>
+To install fish completions for ArangoDB 2.6, the command is:</p>
+
+<p><code>bash activate completions for ArangoDB 2.6
 wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.6
 echo "source ~/.arangodb-completions" &gt;&gt; ~/.config/fish/config.fish
 source ~/.arangodb-completions
-</code></p>
-
-<p>To install fish completions for ArangoDB 2.5, the command is:
+</code>
+For 2.5 the command is:
 <code>bash activate completions for ArangoDB 2.5
 wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.5
 echo "source ~/.arangodb-completions" &gt;&gt; ~/.config/fish/config.fish
@@ -149,7 +155,8 @@ This will write the completions script for all binaries into the file <code>aran
 Pre-generated completion scripts for various ArangoDB versions can be found here:
 <a href="/downloads/code/completions-2.2">2.2</a> <a href="/downloads/code/completions-2.3">2.3</a>
 <a href="/downloads/code/completions-2.4">2.4</a> <a href="/downloads/code/completions-2.5">2.5</a>
-<a href="/downloads/code/completions-2.6">2.6</a> <a href="/downloads/code/completions-2.7">2.7</a></p>
+<a href="/downloads/code/completions-2.6">2.6</a> <a href="/downloads/code/completions-2.7">2.7</a>
+<a href="/downloads/code/completions-2.8">2.8</a></p>
 
 <p>To activate completions, copy the appropriate file into <code>/etc/bash_completion.d/arangodb</code>.
 Note that completion may need to be re-initialized once in order to make work:
@@ -159,7 +166,18 @@ Note that completion may need to be re-initialized once in order to make work:
 
 <h2>Quick setup</h2>
 
-<p>The following command should install the completions for 2.6 and activate them:
+<p>The following command should install the completions for 2.7 and activate them:
+```bash activate completions for ArangoDB 2.7
+sudo \
+  wget -O /etc/bash_completion.d/arangodb \</p>
+
+<pre><code>https://jsteemann.github.io/downloads/code/completions-2.7 &amp;&amp; \
+</code></pre>
+
+<p>  . /etc/bash_completion.d/arangodb
+```</p>
+
+<p>The command for 2.6 is:
 ```bash activate completions for ArangoDB 2.6
 sudo \
   wget -O /etc/bash_completion.d/arangodb \</p>

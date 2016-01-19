@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2015-11-20T18:15:52+01:00</updated>
+  <updated>2016-01-19T14:53:45+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,179 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[AQL Optimizer Improvements for 2.8]]></title>
+    <link href="http://jsteemann.github.io/blog/2015/12/22/aql-optimizer-improvements-for-28/"/>
+    <updated>2015-12-22T22:39:30+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2015/12/22/aql-optimizer-improvements-for-28</id>
+    <content type="html"><![CDATA[<p>With the 2.8 beta phase coming to an end it&rsquo;s time to shed some light
+on the improvements in the 2.8 AQL optimizer. This blog post summarizes
+a few of them, focusing on the query optimizer. There&rsquo;ll be a follow-up
+post that will explain dedicated new AQL features soon.</p>
+
+<!-- more -->
+
+
+<h2>Array indexes</h2>
+
+<p>2.8 allows creating hash and skiplist indexes on attributes which are arrays.
+Creating such index works similar to creating a non-array index, with the
+exception that the name of the array attribute needs to be followed by a <code>[*]</code>
+in the index fields definition:</p>
+
+<p><code>js creating an array index
+db._create("posts");
+db.posts.ensureIndex({ type: "hash", fields: [ "tags[*]" ] });
+</code></p>
+
+<p>Now if the <code>tags</code> attribute of a document in the <code>posts</code> collection is an array,
+each array member will be inserted into the index:</p>
+
+<p><code>js storing an array value
+db.posts.insert({ tags: [ "arangodb", "database", "aql" ] });
+db.posts.insert({ tags: [ "arangodb", "v8", "javascript" ] });
+db.posts.insert({ tags: [ "javascript", "v8", "nodejs" ] });
+</code></p>
+
+<p>The index on <code>tags[*]</code> will now contain the values <code>arangodb</code>, <code>database</code>, <code>aql</code> and
+<code>nosql</code> for the first document, <code>arangodb</code>, <code>v8</code> and <code>javascript</code> for the second, and
+<code>javascript</code>, <code>v8</code> and <code>nodejs</code> for the third.</p>
+
+<p>The following AQL will find any documents that have a value of <code>javascript</code> contained
+in their <code>tags</code> value:</p>
+
+<p><code>plain array index query
+FOR doc IN posts
+  FILTER 'javascript' IN doc.tags[*]
+  RETURN doc
+</code></p>
+
+<p>This will use the array index on <code>tags[*]</code>.</p>
+
+<p>The array index works by inserting all members from an array into the index
+separately. Duplicates are removed automatically when populating the index.</p>
+
+<p>An array index can also be created on a sub-attribute of array members. For
+example, the following definition will make sure the <code>name</code> sub-attributes of
+the <code>tags</code> array values will make it into the index:</p>
+
+<p><code>js creating an array index on a sub-attribute
+db.posts.ensureIndex({ type: "hash", fields: [ "tags[*].name" ] });
+</code></p>
+
+<p>That will allow storing data as follows:</p>
+
+<p><code>js storing an array value
+db.posts.insert({ tags: [ { name: "arangodb" }, { name: "database" }, { name: "aql" } ] });
+db.posts.insert({ tags: [ { name: "arangodb" }, { name: "v8" }, { name: "javascript" } ] });
+db.posts.insert({ tags: [ { name: "javascript" }, { name: "v8" }, { name: "nodejs" } ] });
+</code></p>
+
+<p>The (index-based) selection query for this data structure then becomes</p>
+
+<p><code>plain array index query using sub-attributes
+FOR doc IN posts
+  FILTER 'javascript' IN doc.tags[*].name
+  RETURN doc
+</code></p>
+
+<p>Contrary to MongoDB, there is no automatic conversion to array values when
+inserting non-array values in ArangoDB. For example, the following plain strings
+will not be inserted into an array index, simply because the value of the index
+attribute is not an array:</p>
+
+<p><code>js storing non array values without indexing
+db.posts.insert({ tags: "arangodb" });
+db.posts.insert({ tags: "javascript" });
+db.posts.insert({ tags: "nodejs" });
+</code></p>
+
+<p>Note that in this case a non-array index can still be used.</p>
+
+<h2>Use of multiple indexes per collection</h2>
+
+<p>The query optimizer can now make use of multiple indexes if multiple filter
+conditions are combined with logical ORs, and all of them are covered by
+indexes of the same collection.</p>
+
+<p>Provided there are separate indexes present on <code>name</code> and <code>status</code>, the
+following query can make use of index scans in 2.8, as opposed to full
+collection scans in 2.7:</p>
+
+<p><code>plain using multiple indexes
+FOR doc IN users
+  FILTER doc.name == 'root' || doc.status == 'active'
+  RETURN doc
+</code></p>
+
+<p><img src="/downloads/screenshots/multiple-indexes.png"></p>
+
+<p>If multiple filter conditions match for the same document, the result will
+automatically be deduplicated, so each document is still returned at most once.</p>
+
+<h2>Sorted IN comparison</h2>
+
+<p>Another improvement for the optimizer is to pre-sort comparison values for <code>IN</code> and
+<code>NOT IN</code> so these operators can use a (much faster) binary search instead of a linear search.</p>
+
+<p>The optimization will be applied automatically for <code>IN</code> / <code>NOT IN</code> comparison values used
+in filters, which are used inside of a <code>FOR</code> loop, and depend on runtime values. For example,
+the optimization will be applied for the following query:</p>
+
+<p><code>
+LET values = /* some runtime expression here */
+FOR doc IN collection
+  FILTER doc.value IN values
+  RETURN doc
+</code></p>
+
+<p>The optimization will not be applied for <code>IN</code> comparison values that are value
+literals and those that are used in index lookups. For these cases the comparison values
+were already deduplicated and sorted.</p>
+
+<p>&ldquo;sort-in-values&rdquo; will appear in the list of applied optimizer rules if the optimizer
+could apply the optimization:</p>
+
+<p><img src="/downloads/screenshots/sorted-in.png"></p>
+
+<h2>Optimization for LENGTH(collection)</h2>
+
+<p>There are multiple ways for counting the total number of documents in a collection from
+inside an AQL query. One obvious way is to use <code>RETURN LENGTH(collection)</code>.</p>
+
+<p>That variant however was inefficient as it fully materialized the documents before
+counting them. In 2.8 calling <code>LENGTH()</code> for a collection will get automatically replaced
+by a call to a special function that can efficiently determine the number of documents.
+For larger collections, this can be several thousand times faster than the naive 2.7
+solution.</p>
+
+<h2>C++ implementation for many AQL functions</h2>
+
+<p>Many existing AQL functions have been backed with a C++ implementation that removes
+the need for some data conversion that would otherwise happen if the function were
+implemented in V8/JavaScript only. More than 30+ functions have been changed, including
+several that may produce bigger result sets (such as <code>EDGES()</code>, <code>FULLTEXT()</code>, <code>WITHIN()</code>,
+<code>NEAR()</code>) and that will hugely benefit from this.</p>
+
+<h2>Improved skip performance</h2>
+
+<p>2.8 improves the performance of skipping over many documents in case no indexes and no
+filters are used. This might sound like an edge case, but it is quite common when the
+task is to fetch documents from a big collection in chunks and there is certainty that
+there will be no parallel modifications.</p>
+
+<p>For example, the following query runs about 3 to 5 times faster in 2.8, and this
+improvements can easily sum up to notable speedups if the query is called repeatedly
+with increasing offset values for <code>LIMIT</code>:</p>
+
+<p><code>plain query with huge skip
+FOR doc IN collection
+  LIMIT 1000000, 10
+  RETURN doc
+</code></p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Function Speedups]]></title>
@@ -473,40 +646,6 @@ will abort one of the transactions.</p>
 
 <p>No configuration is required for the deadlock detection mechanism. It will
 always be active and cannot be configured or turned off.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Using Bind Parameters in the AQL Editor]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/11/18/bind-parameters-in-aql-editor/"/>
-    <updated>2015-11-18T19:24:24+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/11/18/bind-parameters-in-aql-editor</id>
-    <content type="html"><![CDATA[<p>The AQL editor in the web interface is useful for running ad hoc AQL
-queries and trying things out. It provides a feature to <em>explain</em> the
-query and inspect its execution plan. This can be used to check if the
-query uses indexes, and which.</p>
-
-<p>So far the AQL editor only supported using query string literals, but <strong>it
-lacked support for bind parameters</strong>. Queries issued by application code
-however often <strong>will use bind parameters</strong> for security reasons. Often
-enough this prevented copying &amp; pasting queries from the application code into
-the AQL editor and vice versa without making manual adjustments.</p>
-
-<!-- more -->
-
-
-<p>This has been fixed in the upcoming ArangoDB version 2.8 (currently in
-development). Bind parameters can now be used in the AQL editor as well.
-Bind parameters can be entered as JSON values, the same format that is
-used for bind parameters in the HTTP REST API and in (JavaScript) application
-code.</p>
-
-<p>The queries can also be saved in the AQL editor along with their bind parameter
-values for later reuse.</p>
-
-<p>Screenshot from the feature in 2.8:</p>
-
-<p><img src="/downloads/screenshots/bind-parameters.png"></p>
 ]]></content>
   </entry>
   
