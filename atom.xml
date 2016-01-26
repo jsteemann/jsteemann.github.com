@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-01-19T14:53:45+01:00</updated>
+  <updated>2016-01-26T23:09:26+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,151 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Small Things in 2.8: Explain Improvements]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-explain-improvements/"/>
+    <updated>2016-01-26T22:08:11+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-explain-improvements</id>
+    <content type="html"><![CDATA[<p>Explaining AQL queries becomes even easier in ArangoDB 2.8.</p>
+
+<p>While previous versions required writing a hard-to-memoize command like</p>
+
+<figure class='code'><figcaption><span>explaining a query in 2.7</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/explainer&quot;</span><span class="p">).</span><span class="nx">explain</span><span class="p">(</span><span class="nx">query</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<p>to explain an AQL query from the ArangoShell, 2.8 reduces this task to
+a mere</p>
+
+<figure class='code'><figcaption><span>explaining a query in 2.8</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_explain</span><span class="p">(</span><span class="nx">query</span><span class="p">);</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Apart from that, explain in 2.8 is smarter when confronted with very lengthy
+query strings, and with queries that contain huge hard-coded string, array,
+or object values.</p>
+
+<!-- more -->
+
+
+<p>For example, when creating an array bind variable with 1,000 values and
+using them in an explained query, 2.7 would print the entire 1,000 array values
+in the explain output:</p>
+
+<figure class='code'><figcaption><span>explaining a query with 1000 array values</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">keys</span> <span class="o">=</span> <span class="p">[];</span>
+</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="mi">1000</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">keys</span><span class="p">.</span><span class="nx">push</span><span class="p">(</span><span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span><span class="p">);</span>
+</span><span class='line'><span class="p">}</span>
+</span><span class='line'>
+</span><span class='line'><span class="kd">var</span> <span class="nx">query</span> <span class="o">=</span> <span class="s2">&quot;FOR i IN @keys RETURN i&quot;</span><span class="p">;</span>
+</span><span class='line'><span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/explainer&quot;</span><span class="p">).</span><span class="nx">explain</span><span class="p">({</span>
+</span><span class='line'>  <span class="nx">query</span><span class="o">:</span> <span class="nx">query</span><span class="p">,</span>
+</span><span class='line'>  <span class="nx">bindVars</span><span class="o">:</span> <span class="p">{</span>
+</span><span class='line'>    <span class="nx">keys</span><span class="o">:</span> <span class="nx">keys</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p><img src="http://jsteemann.github.io/downloads/screenshots/explain-27.png"></p>
+
+<p>2.8 will instead truncate longer arrays and objects in the explain output for
+much improved readability:</p>
+
+<p><img src="http://jsteemann.github.io/downloads/screenshots/explain-28.png"></p>
+
+<p>Automatic value truncation will occur for array and object values with
+more than 20 elements or for string values longer than 1,024 characters. The
+truncation for explain will occur if these values are hard-coded into the
+query or are passed via bind parameters.</p>
+
+<p>Truncation only happens inside the explain results processing and thus
+cannot affect the actual query results.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Small Things in 2.8: POW]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-pow/"/>
+    <updated>2016-01-26T21:59:17+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-pow</id>
+    <content type="html"><![CDATA[<p>ArangoDB 2.8 now provides a dedicated AQL function for exponentiation.
+This will save users a lot of trouble in case exponentiation is needed
+inside an AQL query, which up to 2.7 required writing and registering an
+AQL user-defined function.</p>
+
+<p>With 2.8 it becomes as simple as <code>RETURN POW(2, 16)</code> to raise <em>2</em>
+to the power of <em>16</em> from inside AQL.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Small Things in 2.8: Collection Type for Arangoimp]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-arangoimp-collection-type/"/>
+    <updated>2016-01-26T21:59:17+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-arangoimp-collection-type</id>
+    <content type="html"><![CDATA[<p>When trying to import data into ArangoDB from a JSON or CSV file using the
+<em>arangoimp</em> binary, there is always the chance that the target collection does
+not yet exist.</p>
+
+<p>In order to create a missing target collection <em>arangoimp</em> for long has
+provided the option <code>--create-collection true</code>:</p>
+
+<figure class='code'><figcaption><span>importing, optionally creating a missing collection</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangoimp                       <span class="se">\</span>
+</span><span class='line'>  --file users.json             <span class="se">\</span>
+</span><span class='line'>  --collection users            <span class="se">\</span>
+</span><span class='line'>  --create-collection <span class="nb">true</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>However there hasn&rsquo;t been a way of specifying the <strong>type</strong> for the target collection,
+so the new collection was always created as <em>document</em> collection.</p>
+
+<p>To import data into an <em>edge</em> collection, the target collection needed to be created
+by another means, e.g. by using the ArangoShell. It would have been more handy if
+<em>arangoimp</em> were able to create <em>edge</em> collections too.</p>
+
+<p>2.8 finally adds that feature, and it&rsquo;s simple to use: to create an <em>edge</em> collection
+if the target collection does not exist, append the <code>--create-collection-type edge</code>
+option when invoking <em>arangoimp</em>:</p>
+
+<figure class='code'><figcaption><span>importing, optionally creating a missing edge collection</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangoimp                       <span class="se">\</span>
+</span><span class='line'>  --file users.json             <span class="se">\</span>
+</span><span class='line'>  --collection users            <span class="se">\</span>
+</span><span class='line'>  --create-collection <span class="nb">true</span>      <span class="se">\</span>
+</span><span class='line'>  --create-collection-type edge
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Optimizer Improvements for 2.8]]></title>
@@ -3163,485 +3308,6 @@ and <a href="http://flex.sourceforge.net/">Flex</a>.</p></li>
 it if you don&rsquo;t have to</strong>. If you can, use a widely supported data format such as JSON
 instead and let <code>json_decode()</code> do all the heavy lifting for you.</p></li>
 </ul>
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Speeding Up Array/object Literal Access]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access/"/>
-    <updated>2015-06-15T15:56:27+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/06/15/speeding-up-array-slash-object-literal-access</id>
-    <content type="html"><![CDATA[<p>Last week some further optimization slipped into 2.6. The optimization can
-provide significant speedups in AQL queries using huge array/object bind parameters
-and passing them into V8-based functions.</p>
-
-<!-- more -->
-
-
-<p>It started with an ArangoDB user reporting a specific query to run unexpectedly slow.
-The part of the query that caused the problem was simple and looked like this:</p>
-
-<figure class='code'><figcaption><span>problematic query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  FILTER doc.attribute == @value
-</span><span class='line'>  RETURN TRANSLATE(doc.from, translations, 0)</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In the original query, <code>translations</code> was a big, constant object literal. Think of
-something like the following, but with a lot more values:</p>
-
-<figure class='code'><figcaption><span>example translations value</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">{</span>
-</span><span class='line'>  <span class="nt">&quot;p1&quot;</span> <span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">&quot;p2&quot;</span> <span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">&quot;p3&quot;</span> <span class="p">:</span> <span class="mi">40</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">&quot;p4&quot;</span> <span class="p">:</span> <span class="mi">9</span><span class="p">,</span>
-</span><span class='line'>  <span class="nt">&quot;p5&quot;</span> <span class="p">:</span> <span class="mi">12</span>
-</span><span class='line'><span class="p">}</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The translations were used for replacing an attribute value in existing documents
-with a lookup table computed outside the AQL query.</p>
-
-<p>The number of values in the <code>translations</code> object was varying from query to query,
-with no upper bound on the number of values. It was possible that the query was
-running with 50,000 lookup values in the <code>translations</code> object.</p>
-
-<p>When trying to reproduce the problem, we expected that the query would get at worst
-<em>linearly</em> slower with an increasing number of lookup values. But in reality, the
-following <em>non-linear</em> execution times were observed when increasing the number of
-lookup values:</p>
-
-<figure class='code'><figcaption><span>execution times for varying input sizes, without optimization</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'># of values |  execution time
-</span><span class='line'>------------+----------------
-</span><span class='line'>          1 |        0.6111 s
-</span><span class='line'>          2 |        0.6078 s  
-</span><span class='line'>          4 |        0.6021 s
-</span><span class='line'>          8 |        0.6160 s
-</span><span class='line'>         16 |        0.6925 s
-</span><span class='line'>         32 |        0.7107 s
-</span><span class='line'>         64 |        0.7677 s
-</span><span class='line'>        128 |        0.8576 s
-</span><span class='line'>        256 |        1.0544 s
-</span><span class='line'>        512 |        1.4579 s
-</span><span class='line'>       1024 |        8.8303 s
-</span><span class='line'>       2048 |       17.3674 s
-</span><span class='line'>       4096 |       35.3109 s
-</span><span class='line'>       8192 |       74.9161 s
-</span><span class='line'>      16384 |      145.0837 s
-</span><span class='line'>      32768 |      361.9870 s
-</span><span class='line'>      65536 |      880.4995 s</span></code></pre></td></tr></table></div></figure>
-
-
-<p>(note: all values stated above are wall-clock times for running the query with a
-FILTER condition matching 50,000 documents &ndash; i.e. the <code>TRANSLATE()</code> expression was
-executed 50,000 times per query)</p>
-
-<p>With small objects passed in <code>translate</code>, the execution times only increased slowly
-even when object sizes were doubled. The <code>TRANSLATE()</code> expression&rsquo;s share of the
-overall query execution time was still low for small objects, even when doubling
-their sizes. However, it got pretty bad for objects with 1,024 members already, and
-from that point on, execution times more than doubled if object sizes got doubled.</p>
-
-<p>The <code>TRANSLATE()</code> function itself has O(1) complexity, so we could rule it out as
-the problem cause. However, <code>TRANSLATE()</code> is V8-based, and it turned out that there
-was a problem when the number of values in the <code>translations</code> object increased from
-1022 to 1023. At that particular threshold, execution time quadrupled.</p>
-
-<p>At 1023 object members, V8 seems to change the internal object format, which probably
-requires rearranging the object data internally. V8 has several <em>internal</em> types for
-representing JavaScript objects, and converting between them is not free.</p>
-
-<p>The obvious optimization opportunity for this case was to create the <code>translations</code>
-object value just once as a V8 object, and reuse the same object when calling the
-<code>TRANSLATE()</code> function repeatedly. This avoids repeated creation and destruction of
-the V8 objects used in function calls, and as a side effect may also lead to less garbage
-values being accumulated when functions are called repeatedly.</p>
-
-<p>The optimization is possible here because the <code>translations</code> object is an object literal
-and thus constant. It will also work for array literals and bind parameters (which
-are also treated as literals once their values are known).</p>
-
-<p>Here are the execution time for running the <code>TRANSLATE()</code> on 50,000 documents with the
-modification:</p>
-
-<figure class='code'><figcaption><span>execution times, with optimization</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'># of values |  execution time
-</span><span class='line'>------------+----------------
-</span><span class='line'>          1 |        0.6251 s
-</span><span class='line'>          2 |        0.6302 s  
-</span><span class='line'>          4 |        0.6138 s
-</span><span class='line'>          8 |        0.6141 s
-</span><span class='line'>         16 |        0.6685 s
-</span><span class='line'>         32 |        0.6232 s
-</span><span class='line'>         64 |        0.6204 s
-</span><span class='line'>        128 |        0.6326 s
-</span><span class='line'>        256 |        0.6460 s
-</span><span class='line'>        512 |        0.6275 s
-</span><span class='line'>       1024 |        0.6639 s
-</span><span class='line'>       2048 |        0.6345 s
-</span><span class='line'>       4096 |        0.6554 s
-</span><span class='line'>       8192 |        0.6789 s
-</span><span class='line'>      16384 |        0.7569 s
-</span><span class='line'>      32768 |        0.7636 s
-</span><span class='line'>      65536 |        1.0173 s</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Looks like this is going to scale way better.</p>
-
-<p>The optimization is disabled for big array/objects which are non-constant (e.g. a variable
-or the result of an expression), or for parameters passed into user-defined AQL functions.
-Enabling it for user-defined AQL functions is not safe because in theory these might
-modify their arguments (and function arguments are passed by reference &ndash; passing them
-by value would also defeat the purpose of the optimization).</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[On Getting Unique Values]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/06/01/on-getting-unique-values/"/>
-    <updated>2015-06-01T13:27:13+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/06/01/on-getting-unique-values</id>
-    <content type="html"><![CDATA[<p>While paging through the issues in the <a href="https://github.com/arangodb/arangodb">ArangoDB issue tracker</a>
-I came across <a href="https://github.com/arangodb/arangodb/issues/987">issue #987</a>, titled
-<em>Trying to get distinct document attribute values from a large collection fails</em>.</p>
-
-<p>The issue was opened around 10 months ago when ArangoDB 2.2 was around. We improved AQL performance
-somewhat since then, so I was eager to see how the query would perform in ArangoDB 2.6, especially
-when comparing it to 2.2.</p>
-
-<!-- more -->
-
-
-<p>For reproduction I quickly put together some example data to run the query on:</p>
-
-<figure class='code'><figcaption><span>setting up example data</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">db</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb&quot;</span><span class="p">).</span><span class="nx">db</span><span class="p">;</span>
-</span><span class='line'><span class="kd">var</span> <span class="nx">c</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">_create</span><span class="p">(</span><span class="s2">&quot;test&quot;</span><span class="p">);</span>
-</span><span class='line'><span class="k">for</span> <span class="p">(</span><span class="kd">var</span> <span class="nx">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="nx">i</span> <span class="o">&lt;</span> <span class="mi">4</span> <span class="o">*</span> <span class="mi">1000</span> <span class="o">*</span> <span class="mi">1000</span><span class="p">;</span> <span class="o">++</span><span class="nx">i</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">c</span><span class="p">.</span><span class="nx">save</span><span class="p">({</span> <span class="nx">_key</span><span class="o">:</span> <span class="s2">&quot;test&quot;</span> <span class="o">+</span> <span class="nx">i</span><span class="p">,</span> <span class="nx">value</span><span class="o">:</span> <span class="p">(</span><span class="nx">i</span> <span class="o">%</span> <span class="mi">100</span><span class="p">)</span> <span class="p">});</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">wal</span><span class="p">.</span><span class="nx">flush</span><span class="p">(</span><span class="kc">true</span><span class="p">,</span> <span class="kc">true</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This produces a collection named <code>test</code> with 4 million documents. Each document has a numeric <code>value</code>
-attribute, which in total has 100 unique values. I remembered from a conversation with the guy that
-opened the issue that the number of distinct values was 100 or even slightly lower. I didn&rsquo;t bother
-to create an index on the <code>value</code> attribute, which might have sped up the query.</p>
-
-<p>With data available, it was time to run the query and measure its execution time:</p>
-
-<figure class='code'><figcaption><span>running the query </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">time</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;internal&quot;</span><span class="p">).</span><span class="nx">time</span><span class="p">;</span>
-</span><span class='line'><span class="kd">var</span> <span class="nx">start</span> <span class="o">=</span> <span class="nx">time</span><span class="p">();</span>
-</span><span class='line'><span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="s2">&quot;FOR doc IN test COLLECT value = doc.value RETURN value&quot;</span><span class="p">);</span>
-</span><span class='line'><span class="nx">time</span><span class="p">()</span> <span class="o">-</span> <span class="nx">start</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Running this in 2.2.7 took 3 minutes and 18 seconds before bursting with the following error message:</p>
-
-<figure class='code'><figcaption><span>2.2.7 error message</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>#
-</span><span class='line'># Fatal error in CALL_AND_RETRY_2
-</span><span class='line'># Allocation failed - process out of memory
-</span><span class='line'>#</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In the 2.2 branch AQL queries were fully transformed to JavaScript and executed using V8. Obviously
-that didn&rsquo;t work well with large collections. That was one of the reasons why version 2.3 saw a major
-rewrite of the AQL engine.</p>
-
-<p>As a consequence, running the query in 2.3 (2.3.5) worked fine. Execution took around 28 seconds.
-The same was true for 2.4 (2.4.8) and 2.5 (2.5.5).</p>
-
-<p>Finally, running the query in 2.6.0 completed in just 3.2 seconds.</p>
-
-<p>The reasons for the speedup are the optimizations done for <code>COLLECT</code> (see
-<a href="http://jsteemann.github.io/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing with a hash table</a>, the
-<a href="http://jsteemann.github.io/blog/2015/05/04/return-value-optimization-for-aql/">Return value optimization for AQL</a> and some
-minor optimizations within AQL that didn&rsquo;t get a pretty working title.</p>
-
-<p>Looks like in sum all the optimizations put into 2.6 really pay out.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Diffing Two Documents in AQL]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/26/diffing-two-documents-in-aql/"/>
-    <updated>2015-05-26T11:08:31+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/26/diffing-two-documents-in-aql</id>
-    <content type="html"><![CDATA[<p>I just stumbled upon a <a href="https://www.arangodb.com/2015/04/aql-functions-improvements/">comment in the ArangoDB blog</a>
-asking how to create a diff of two documents with AQL.</p>
-
-<p>Though there is no built-in AQL function to diff two documents, it is easily possible to build your own like in
-the following query.</p>
-
-<!-- more -->
-
-
-
-
-<figure class='code'><figcaption><span>AQL code for diffing two documents</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-<span class='line-number'>29</span>
-<span class='line-number'>30</span>
-<span class='line-number'>31</span>
-<span class='line-number'>32</span>
-<span class='line-number'>33</span>
-<span class='line-number'>34</span>
-<span class='line-number'>35</span>
-<span class='line-number'>36</span>
-<span class='line-number'>37</span>
-<span class='line-number'>38</span>
-<span class='line-number'>39</span>
-<span class='line-number'>40</span>
-<span class='line-number'>41</span>
-<span class='line-number'>42</span>
-<span class='line-number'>43</span>
-<span class='line-number'>44</span>
-<span class='line-number'>45</span>
-<span class='line-number'>46</span>
-<span class='line-number'>47</span>
-<span class='line-number'>48</span>
-<span class='line-number'>49</span>
-<span class='line-number'>50</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>/* input document 1*/
-</span><span class='line'>LET doc1 = { 
-</span><span class='line'>  "foo" : "bar", 
-</span><span class='line'>  "a" : 1, 
-</span><span class='line'>  "b" : 2 
-</span><span class='line'>}
-</span><span class='line'>
-</span><span class='line'>/* input document 2 */
-</span><span class='line'>LET doc2 = { 
-</span><span class='line'>  "foo" : "baz", 
-</span><span class='line'>  "a" : 2, 
-</span><span class='line'>  "c" : 3 
-</span><span class='line'>}
-</span><span class='line'>
-</span><span class='line'>/* collect attributes present in doc1, but missing in doc2 */
-</span><span class='line'>LET missing = (
-</span><span class='line'>  FOR key IN ATTRIBUTES(doc1)
-</span><span class='line'>    FILTER ! HAS(doc2, key)
-</span><span class='line'>    RETURN {
-</span><span class='line'>      [ key ]: doc1[key]
-</span><span class='line'>    }
-</span><span class='line'>)
-</span><span class='line'>
-</span><span class='line'>/* collect attributes present in both docs, but that have different values */
-</span><span class='line'>LET changed = (
-</span><span class='line'>  FOR key IN ATTRIBUTES(doc1)
-</span><span class='line'>    FILTER HAS(doc2, key) && doc1[key] != doc2[key]
-</span><span class='line'>    RETURN {
-</span><span class='line'>      [ key ] : {
-</span><span class='line'>        old: doc1[key],
-</span><span class='line'>        new: doc2[key]
-</span><span class='line'>      }
-</span><span class='line'>    }
-</span><span class='line'>)
-</span><span class='line'>
-</span><span class='line'>/* collect attributes present in doc2, but missing in doc1 */
-</span><span class='line'>LET added = (
-</span><span class='line'>  FOR key IN ATTRIBUTES(doc2)
-</span><span class='line'>    FILTER ! HAS(doc1, key)
-</span><span class='line'>    RETURN {
-</span><span class='line'>      [ key ] : doc2[key]
-</span><span class='line'>    }
-</span><span class='line'>)
-</span><span class='line'>
-</span><span class='line'>/* return final result */
-</span><span class='line'>RETURN {
-</span><span class='line'>  "missing" : missing,
-</span><span class='line'>  "changed" : changed,
-</span><span class='line'>  "added" : added
-</span><span class='line'>}</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Note: the query may look a bit lengthy, but much of that is due to formatting. A more terse
-version can be found below.</p>
-
-<p>The above query will return a document with three attributes:</p>
-
-<ul>
-<li><em>missing</em>: contains all attributes only present in first document (i.e. missing in second document)</li>
-<li><em>changed</em>: contains all attributes present in both documents that have different values</li>
-<li><em>added</em>: contains all attributes only present in second document (i.e. missing in first document)</li>
-</ul>
-
-
-<p>For the two example documents it will return:</p>
-
-<figure class='code'><figcaption><span>diff query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-<span class='line-number'>27</span>
-<span class='line-number'>28</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span>
-</span><span class='line'>    <span class="nt">&quot;missing&quot;</span> <span class="p">:</span> <span class="p">[</span>
-</span><span class='line'>      <span class="p">{</span>
-</span><span class='line'>        <span class="nt">&quot;b&quot;</span> <span class="p">:</span> <span class="mi">2</span>
-</span><span class='line'>      <span class="p">}</span>
-</span><span class='line'>    <span class="p">],</span>
-</span><span class='line'>    <span class="nt">&quot;changed&quot;</span> <span class="p">:</span> <span class="p">[</span>
-</span><span class='line'>      <span class="p">{</span>
-</span><span class='line'>        <span class="nt">&quot;foo&quot;</span> <span class="p">:</span> <span class="p">{</span>
-</span><span class='line'>          <span class="nt">&quot;old&quot;</span> <span class="p">:</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span>
-</span><span class='line'>          <span class="nt">&quot;new&quot;</span> <span class="p">:</span> <span class="s2">&quot;baz&quot;</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>      <span class="p">},</span>
-</span><span class='line'>      <span class="p">{</span>
-</span><span class='line'>        <span class="nt">&quot;a&quot;</span> <span class="p">:</span> <span class="p">{</span>
-</span><span class='line'>          <span class="nt">&quot;old&quot;</span> <span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
-</span><span class='line'>          <span class="nt">&quot;new&quot;</span> <span class="p">:</span> <span class="mi">2</span>
-</span><span class='line'>        <span class="p">}</span>
-</span><span class='line'>      <span class="p">}</span>
-</span><span class='line'>    <span class="p">],</span>
-</span><span class='line'>    <span class="nt">&quot;added&quot;</span> <span class="p">:</span> <span class="p">[</span>
-</span><span class='line'>      <span class="p">{</span>
-</span><span class='line'>        <span class="nt">&quot;c&quot;</span> <span class="p">:</span> <span class="mi">3</span>
-</span><span class='line'>      <span class="p">}</span>
-</span><span class='line'>    <span class="p">]</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>That output format was the first that came to my mind. It is of course possible to adjust the query so
-it produces a different output format.</p>
-
-<p>Following is a version of the same query that can be invoked from JavaScript easily. It passes the two
-documents as bind parameters and calls <code>db._query</code>. The query is now a one-liner (less readable but easier
-to copy&amp;paste):</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="nx">bindVariables</span> <span class="o">=</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">doc1</span> <span class="o">:</span> <span class="p">{</span> <span class="s2">&quot;foo&quot;</span> <span class="o">:</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span> <span class="o">:</span> <span class="mi">1</span><span class="p">,</span> <span class="s2">&quot;b&quot;</span> <span class="o">:</span> <span class="mi">2</span> <span class="p">},</span>
-</span><span class='line'>  <span class="nx">doc2</span> <span class="o">:</span> <span class="p">{</span> <span class="s2">&quot;foo&quot;</span> <span class="o">:</span> <span class="s2">&quot;baz&quot;</span><span class="p">,</span> <span class="s2">&quot;a&quot;</span> <span class="o">:</span> <span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;c&quot;</span> <span class="o">:</span> <span class="mi">3</span> <span class="p">}</span>
-</span><span class='line'><span class="p">};</span>
-</span><span class='line'>
-</span><span class='line'><span class="nx">query</span> <span class="o">=</span> <span class="s2">&quot;LET doc1 = @doc1, doc2 = @doc2, missing = (FOR key IN ATTRIBUTES(doc1) FILTER ! HAS(doc2, key) RETURN { [ key ]: doc1[key] }), changed = (FOR key IN ATTRIBUTES(doc1) FILTER HAS(doc2, key) &amp;&amp; doc1[key] != doc2[key] RETURN { [ key ] : { old: doc1[key], new: doc2[key] } }), added = (FOR key IN ATTRIBUTES(doc2) FILTER ! HAS(doc1, key) RETURN { [ key ] : doc2[key] }) RETURN { missing : missing, changed : changed, added : added }&quot;</span><span class="p">;</span>
-</span><span class='line'>
-</span><span class='line'><span class="nx">result</span> <span class="o">=</span> <span class="nx">db</span><span class="p">.</span><span class="nx">_query</span><span class="p">(</span><span class="nx">query</span><span class="p">,</span> <span class="nx">bindVariables</span><span class="p">).</span><span class="nx">toArray</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
 
 ]]></content>
   </entry>

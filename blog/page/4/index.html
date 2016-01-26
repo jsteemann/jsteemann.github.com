@@ -11,9 +11,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="I just came across a question about how to create highscore lists or
-leaderboards in ArangoDB, and how they would work when compared to
-Redis sorted &hellip;">
+  <meta name="description" content="A few weeks ago I wrote about ArangoDB&rsquo;s
+specialized export API. The export API is useful when the goal is to extract all documents from a &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -83,6 +82,160 @@ Redis sorted &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/04/24/exporting-data-for-offline-processing/">Exporting Data for Offline Processing</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-24T15:47:31+02:00" pubdate data-updated="true">Apr 24<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>A few weeks ago I wrote about ArangoDB&rsquo;s
+<a href="https://jsteemann.github.io/blog/2015/04/04/more-efficient-data-exports/">specialized export API</a>.</p>
+
+<p>The export API is useful when the goal is to extract all documents from a given collection
+and to process them outside of ArangoDB.</p>
+
+<p>The export API can provide quick and memory-efficient snapshots of the data in the underlying
+collection, making it suitable for extract all documents of the collection. It will be able
+to provide data much faster than with an AQL query that will extract all documents.</p>
+
+<p>In this post I&rsquo;ll show how to use the export API to extract data and process it with PHP.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/04/24/exporting-data-for-offline-processing/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/04/23/aql-functions-improvements/">AQL Functions Improvements</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-23T10:24:53+02:00" pubdate data-updated="true">Apr 23<span>rd</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>Waiting for a <code>git pull</code> to complete over an 8 KiB/s internet connection is boring.
+So I thought I&rsquo;d rather use the idle time and quickly write about some performance
+improvements for certain AQL functions that were recently completed and that will
+become available with ArangoDB 2.6.</p>
+
+<p>The improvements affect the following AQL functions:</p>
+
+<ul>
+<li><code>UNSET()</code>: remove specified attributes from an object/document</li>
+<li><code>KEEP()</code>: keep only specified attributes of an object/document</li>
+<li><code>MERGE()</code>: merge the attributes of multiple objects/documents</li>
+</ul>
+
+
+<p>This blog post shows a few example queries that will benefit from <strong>50 to more than 60 %
+reductions</strong> in query execution times due to the changes done to these functions.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/04/23/aql-functions-improvements/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/04/22/collecting-with-a-hash-table/">COLLECTing With a Hash Table</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-04-22T13:53:10+02:00" pubdate data-updated="true">Apr 22<span>nd</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>ArangoDB 2.6 will feature an alternative <strong>hash</strong> implementation of the AQL <code>COLLECT</code>
+operation. The new implementation can speed up some AQL queries that can not exploit indexes
+on the <code>COLLECT</code> group criteria.</p>
+
+<p>This blog post provides a preview of the feature and shows some nice performance improvements.
+It also explains the <code>COLLECT</code>-related optimizer parts and how the optimizer will decide whether
+to use the new or the traditional implementation.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/04/22/collecting-with-a-hash-table/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -441,166 +594,6 @@ applicable with any other Git repository.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/02/26/more-es6-features/">More ES6 Features</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-02-26T12:00:46+01:00" pubdate data-updated="true">Feb 26<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>ArangoDB 2.5 comes with an upgraded version of V8, Google&rsquo;s open source JavaScript engine.</p>
-
-<p>The built-in version of V8 has been upgraded from 3.29.54 to 3.31.74.1.</p>
-
-<p>In addition to several already usable ES6 features (detailed in
-<a href="https://jsteemann.github.io/blog/2014/12/19/using-es6-features-in-arangodb/">this blog</a>,
-the following ES6 features are activated in ArangoDB 2.5 by default:</p>
-
-<ul>
-<li>iterators and generators</li>
-<li>template strings</li>
-<li>enhanced object literals</li>
-<li>enhanced numeric literals</li>
-<li>block scoping with <code>let</code> and constant variables using <code>const</code></li>
-<li>additional String methods (such as <code>startsWith</code>, <code>repeat</code> etc.)</li>
-</ul>
-
-
-<p>The above features are available in ArangoDB 2.5, and can now be used for scripting purposes
-in the ArangoShell and in server-side Foxx actions inside the database.</p>
-
-<p>This blog post briefly explains the features provides some quick examples for using them.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/02/26/more-es6-features/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/02/26/aql-improvements-in-25/">AQL Improvements in 2.5</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-02-26T10:35:31+01:00" pubdate data-updated="true">Feb 26<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>Contained in 2.5 are some small but useful AQL language improvements plus several AQL optimizer improvements.</p>
-
-<p>We are working on further AQL improvements for 2.5, but work is still ongoing.
-This post summarizes the improvements that are already completed and will be shipped with the initial ArangoDB
-2.5 release.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/02/26/aql-improvements-in-25/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/02/07/using-ccache-when-working-with-different-branches/">Using Ccache When Working With Different Branches</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-02-07T17:00:15+01:00" pubdate data-updated="true">Feb 7<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>Git makes working with many different branches in the same local repository easy and efficient.</p>
-
-<p>In a C/C++ project, the code must be re-compiled after switching into another branch.
-If the branches only differ minimally, running <code>make</code> will only re-compile the parts that are
-actually different, and after that re-link them. That won&rsquo;t take too long, though especially
-link times can be annoying.</p>
-
-<p>However, if there are differences in central header files that are included from every file,
-then <code>make</code> has no option but to <strong>re-compile everything</strong>. This can take significant amounts of
-time (and coffee).</p>
-
-<p>I just realized that there is a solution to speed up re-compilation in this situation:
-<a href="http://linux.die.net/man/1/ccache">ccache</a>!</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/02/07/using-ccache-when-working-with-different-branches/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/5/">&larr; Older</a>
@@ -625,6 +618,18 @@ time (and coffee).</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-explain-improvements/">Small Things in 2.8: Explain Improvements</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-pow/">Small Things in 2.8: POW</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-arangoimp-collection-type/">Small Things in 2.8: Collection Type for Arangoimp</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/12/22/aql-optimizer-improvements-for-28/">AQL Optimizer Improvements for 2.8</a>
       </li>
     
@@ -636,18 +641,6 @@ time (and coffee).</p>
         <a href="/blog/2015/11/20/using-multiple-indexes-per-collection/">Using Multiple Indexes Per Collection</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/11/20/index-speedups-for-28/">Index Speedups in 2.8</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2015/11/18/improved-deadlock-detection/">Improved Deadlock Detection</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2015/11/18/bind-parameters-in-aql-editor/">Using Bind Parameters in the AQL Editor</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -656,11 +649,11 @@ time (and coffee).</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (34)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (55)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (7)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (23)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (36)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (58)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (8)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (23)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2016 (3)</li><ul class="month_list"><li class="month"><a href='/blog/2016/01/'>JAN (3)</a></li></ul><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

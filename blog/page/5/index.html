@@ -11,9 +11,7 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="Inspired by a question on StackOverflow,
-I did some investigation about how to make Logstash
-send log events to ArangoDB. There is no dedicated &hellip;">
+  <meta name="description" content="ArangoDB 2.5 comes with an upgraded version of V8, Google&rsquo;s open source JavaScript engine. The built-in version of V8 has been upgraded from 3. &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -83,6 +81,166 @@ send log events to ArangoDB. There is no dedicated &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/02/26/more-es6-features/">More ES6 Features</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-02-26T12:00:46+01:00" pubdate data-updated="true">Feb 26<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>ArangoDB 2.5 comes with an upgraded version of V8, Google&rsquo;s open source JavaScript engine.</p>
+
+<p>The built-in version of V8 has been upgraded from 3.29.54 to 3.31.74.1.</p>
+
+<p>In addition to several already usable ES6 features (detailed in
+<a href="https://jsteemann.github.io/blog/2014/12/19/using-es6-features-in-arangodb/">this blog</a>,
+the following ES6 features are activated in ArangoDB 2.5 by default:</p>
+
+<ul>
+<li>iterators and generators</li>
+<li>template strings</li>
+<li>enhanced object literals</li>
+<li>enhanced numeric literals</li>
+<li>block scoping with <code>let</code> and constant variables using <code>const</code></li>
+<li>additional String methods (such as <code>startsWith</code>, <code>repeat</code> etc.)</li>
+</ul>
+
+
+<p>The above features are available in ArangoDB 2.5, and can now be used for scripting purposes
+in the ArangoShell and in server-side Foxx actions inside the database.</p>
+
+<p>This blog post briefly explains the features provides some quick examples for using them.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/02/26/more-es6-features/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/02/26/aql-improvements-in-25/">AQL Improvements in 2.5</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-02-26T10:35:31+01:00" pubdate data-updated="true">Feb 26<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>Contained in 2.5 are some small but useful AQL language improvements plus several AQL optimizer improvements.</p>
+
+<p>We are working on further AQL improvements for 2.5, but work is still ongoing.
+This post summarizes the improvements that are already completed and will be shipped with the initial ArangoDB
+2.5 release.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/02/26/aql-improvements-in-25/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/02/07/using-ccache-when-working-with-different-branches/">Using Ccache When Working With Different Branches</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-02-07T17:00:15+01:00" pubdate data-updated="true">Feb 7<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>Git makes working with many different branches in the same local repository easy and efficient.</p>
+
+<p>In a C/C++ project, the code must be re-compiled after switching into another branch.
+If the branches only differ minimally, running <code>make</code> will only re-compile the parts that are
+actually different, and after that re-link them. That won&rsquo;t take too long, though especially
+link times can be annoying.</p>
+
+<p>However, if there are differences in central header files that are included from every file,
+then <code>make</code> has no option but to <strong>re-compile everything</strong>. This can take significant amounts of
+time (and coffee).</p>
+
+<p>I just realized that there is a solution to speed up re-compilation in this situation:
+<a href="http://linux.die.net/man/1/ccache">ccache</a>!</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/02/07/using-ccache-when-working-with-different-branches/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -464,185 +622,6 @@ week. Time to play with some ES6 features!</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/12/14/99-bottles-of-beer/">99 Bottles of Beer</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-12-14T13:14:28+01:00" pubdate data-updated="true">Dec 14<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p><a href="http://www.99-bottles-of-beer.net/">99 bottles of beer</a> in AQL:</p>
-
-<figure class='code'><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-<span class='line-number'>16</span>
-<span class='line-number'>17</span>
-<span class='line-number'>18</span>
-<span class='line-number'>19</span>
-<span class='line-number'>20</span>
-<span class='line-number'>21</span>
-<span class='line-number'>22</span>
-<span class='line-number'>23</span>
-<span class='line-number'>24</span>
-<span class='line-number'>25</span>
-<span class='line-number'>26</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR quant IN 99..0 
-</span><span class='line'>  LET toPrint = (
-</span><span class='line'>    quant &gt; 1 ? 
-</span><span class='line'>      CONCAT(TO_STRING(quant), " bottles of beer on the wall, ", TO_STRING(quant), " bottles of beer.") : 
-</span><span class='line'>      (quant == 1 ? 
-</span><span class='line'>        "1 bottle of beer on the wall, 1 bottle of beer." :
-</span><span class='line'>        "No more bottles of beer on the wall, no more bottles of beer."
-</span><span class='line'>      )
-</span><span class='line'>  )
-</span><span class='line'> 
-</span><span class='line'>  LET suffix = (
-</span><span class='line'>    quant &gt; 2 ? 
-</span><span class='line'>      CONCAT(TO_STRING(quant - 1), " bottles of beer on the wall.") :
-</span><span class='line'>      (quant == 2 ? 
-</span><span class='line'>        "1 bottle of beer on the wall." :
-</span><span class='line'>        "no more bottles of beer on the wall."
-</span><span class='line'>      )
-</span><span class='line'>  )
-</span><span class='line'> 
-</span><span class='line'>  LET result = (
-</span><span class='line'>    quant &gt; 0 ? 
-</span><span class='line'>      CONCAT(toPrint, "\nTake one down, pass it around, ", suffix) : 
-</span><span class='line'>      CONCAT(toPrint, "\nGo to the store and buy some more, 99 bottles of beer on the wall.")
-</span><span class='line'>  )
-</span><span class='line'>
-</span><span class='line'>  RETURN result</span></code></pre></td></tr></table></div></figure>
-
-</div>
-  
-  
-
-
-    </article>
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/12/12/aql-improvements-for-24/">AQL Improvements for 2.4</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-12-12T23:35:08+01:00" pubdate data-updated="true">Dec 12<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>While on a retreat in Belgium, we found some spare time to
-work on improvements for AQL. These will be shipped with
-ArangoDB version 2.4, and are already available in the devel
-version for testing from now on.</p>
-
-<p>Here&rsquo;s a short overview of the improvements:</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2014/12/12/aql-improvements-for-24/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2014/11/07/a-tour-around-the-aql-query-optimizer/">A Tour Around the New AQL Query Optimizer</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2014-11-07T22:30:10+01:00" pubdate data-updated="true">Nov 7<span>th</span>, 2014</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>The major new feature in ArangoDB 2.3 is the shiny new
-AQL query optimizer and executor. These parts of ArangoDB have been
-rewritten in 2.3 to make AQL much better for our end users.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2014/11/07/a-tour-around-the-aql-query-optimizer/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/6/">&larr; Older</a>
@@ -667,6 +646,18 @@ rewritten in 2.3 to make AQL much better for our end users.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-explain-improvements/">Small Things in 2.8: Explain Improvements</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-pow/">Small Things in 2.8: POW</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-arangoimp-collection-type/">Small Things in 2.8: Collection Type for Arangoimp</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/12/22/aql-optimizer-improvements-for-28/">AQL Optimizer Improvements for 2.8</a>
       </li>
     
@@ -678,18 +669,6 @@ rewritten in 2.3 to make AQL much better for our end users.</p>
         <a href="/blog/2015/11/20/using-multiple-indexes-per-collection/">Using Multiple Indexes Per Collection</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/11/20/index-speedups-for-28/">Index Speedups in 2.8</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2015/11/18/improved-deadlock-detection/">Improved Deadlock Detection</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2015/11/18/bind-parameters-in-aql-editor/">Using Bind Parameters in the AQL Editor</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -698,11 +677,11 @@ rewritten in 2.3 to make AQL much better for our end users.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (34)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (55)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (7)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (23)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (36)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (58)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (8)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (23)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2016 (3)</li><ul class="month_list"><li class="month"><a href='/blog/2016/01/'>JAN (3)</a></li></ul><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

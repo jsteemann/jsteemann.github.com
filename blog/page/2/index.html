@@ -11,8 +11,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="We&rsquo;ve recently been working on improving ArangoDB&rsquo;s throughput,
-especially when using the ArangoDB&rsquo;s interface. In this post, I &hellip;">
+  <meta name="description" content="While preparing the release of ArangoDB 2.7, some improvements were made for the
+PHP driver for ArangoDB. The 2.7 version of the PHP driver now &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -82,6 +82,254 @@ especially when using the ArangoDB&rsquo;s interface. In this post, I &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/09/10/arangodb-php-driver-improvements/">ArangoDB-PHP Driver Improvements</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-09-10T14:05:40+02:00" pubdate data-updated="true">Sep 10<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>While preparing the release of ArangoDB 2.7, some improvements were made for the
+<a href="https://github.com/arangodb/arangodb-php">PHP driver for ArangoDB</a>.</p>
+
+<p>The 2.7 version of the PHP driver now supports the AQL query results cache. The
+cache can be turned on or off globally, or be set to demand mode. The demand mode will
+allow controlling caching on a per-AQL-query basis.</p>
+
+<p>Additionally, the HTTP transport layer in the PHP driver was improved. Some internal
+string handling methods were optimized so that the transport part becomes cheaper. All
+driver operations that communicate with the ArangoDB server will benefit from this.</p>
+
+<p>For a demonstration of the improvements, here is a script that creates 100,000
+documents in a local ArangoDB database via the PHP driver. As we&rsquo;re interested in assessing
+the HTTP layer improvements, the script intentionally issues 100,000 HTTP requests
+instead of using the specialized <code>import</code> method provided by the driver.</p>
+
+<p>The script code can be found <a href="https://github.com/arangodb/arangodb-php/blob/devel/examples/http-test.php">here</a>.</p>
+
+<p>The baseline for the improvments is the (non-optimized) 2.6 version of the PHP
+driver. Here are the results for issuing 100,000 requests with the 2.6 driver
+(script was run twice to see if there are variations in execution time):</p>
+
+<figure class='code'><figcaption><span>execution times with 2.6 driver</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>creating 100000 documents
+</span><span class='line'>creating documents took 55.144556999207 s
+</span><span class='line'>
+</span><span class='line'>creating 100000 documents
+</span><span class='line'>creating documents took 54.476955890656 s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Running it with the 2.7 version of the PHP driver now shows the improvements.
+Execution time for the same script goes down from 54 seconds to 42 seconds:</p>
+
+<figure class='code'><figcaption><span>execution times with 2.7 driver</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>creating 100000 documents
+</span><span class='line'>creating documents took 42.886090040207 s
+</span><span class='line'>
+</span><span class='line'>creating 100000 documents
+</span><span class='line'>creating documents took 42.578990936279 s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The PHP version used here was:</p>
+
+<figure class='code'><figcaption><span>PHP version details</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>PHP 5.5.12-2ubuntu4.6 (cli) (built: Jul  2 2015 15:27:14) 
+</span><span class='line'>Copyright (c) 1997-2014 The PHP Group
+</span><span class='line'>Zend Engine v2.5.0, Copyright (c) 1998-2014 Zend Technologies
+</span><span class='line'>    with Zend OPcache v7.0.4-dev, Copyright (c) 1999-2014, by Zend Technologies</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Following are the results from a different machine, this time using PHP 5.6:</p>
+
+<figure class='code'><figcaption><span>execution times with 2.6 driver</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>creating 100000 documents
+</span><span class='line'>creating documents took 48.394731044769 s
+</span><span class='line'>
+</span><span class='line'>creating 100000 documents
+</span><span class='line'>creating documents took 47.618598937988 s</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>execution times with 2.7 driver</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>creating 100000 documents
+</span><span class='line'>creating documents took 40.535583972931 s
+</span><span class='line'>
+</span><span class='line'>creating 100000 documents
+</span><span class='line'>creating documents took 40.041265010834 s</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The PHP version details for this machine were:</p>
+
+<figure class='code'><figcaption><span>PHP version details</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>PHP 5.6.4-4ubuntu6.2 (cli) (built: Jul  2 2015 15:29:28) 
+</span><span class='line'>Copyright (c) 1997-2014 The PHP Group
+</span><span class='line'>Zend Engine v2.6.0, Copyright (c) 1998-2014 Zend Technologies
+</span><span class='line'>    with Zend OPcache v7.0.4-dev, Copyright (c) 1999-2014, by Zend Technologies</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The actual improvements depend on many factors, so your exact mileage may vary.
+The improvements may not be noticable for applications that issue only a few
+requests with the driver, but they will be significant when performing lots of
+requests, as in the above examples.</p>
+</div>
+  
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/08/30/on-building-aql-query-strings/">On Building AQL Query Strings</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-08-30T23:14:42+02:00" pubdate data-updated="true">Aug 30<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>I recently wrote two recipes about generating AQL query
+strings. They are contained in the ArangoDB cookbook by now:</p>
+
+<ul>
+<li><a href="https://docs.arangodb.com/cookbook/AvoidingInjection.html">Avoiding parameter injection in AQL</a></li>
+<li><a href="https://docs.arangodb.com/cookbook/MultilineQueryStrings.html">Writing multi-line AQL queries</a></li>
+</ul>
+
+
+<p>After that, Github user <em>tracker1</em> suggested in <a href="https://github.com/arangodb/arangodb/issues/1457">Github issue 1457</a>
+to take the ES6 template string variant even further, using a generator function for
+string building, and also using promises and ES7 async/await.</p>
+
+<p>We can&rsquo;t use ES7 async/await in ArangoDB at the moment due to lacking support
+in V8, but the suggested template string generator function seemed to be an
+obvious improvement that deserved inclusion in ArangoDB.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/08/30/on-building-aql-query-strings/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/08/01/how-v8-is-used-in-arangodb/">How V8 Is Used in ArangoDB</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-08-01T19:06:04+02:00" pubdate data-updated="true">Aug 1<span>st</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>ArangoDB allows running user-defined JavaScript code in the database.
+This can be used for more complex, <em>stored procedures</em>-like database operations.
+Additionally, ArangoDB&rsquo;s <a href="https://www.arangodb.com/foxx/">Foxx framework</a> can
+be used to make any database functionality available via an HTTP REST API.
+It&rsquo;s easy to build microservices with it, using the scripting functionality
+for tasks like access control, data validation, sanitation etc.</p>
+
+<p>We often get asked how the scripting functionality is implemented under the hood.
+Additionally, several people have asked how ArangoDB&rsquo;s JavaScript functionality
+relates to node.js.</p>
+
+<p>This post tries to explain that in detail.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/08/01/how-v8-is-used-in-arangodb/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -425,141 +673,6 @@ array elements? This is what we want to be able to do:</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/06/15/speeding-up-array-slash-object-literal-access/">Speeding Up Array/object Literal Access</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-06-15T15:56:27+02:00" pubdate data-updated="true">Jun 15<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>Last week some further optimization slipped into 2.6. The optimization can
-provide significant speedups in AQL queries using huge array/object bind parameters
-and passing them into V8-based functions.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/06/15/speeding-up-array-slash-object-literal-access/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/06/01/on-getting-unique-values/">On Getting Unique Values</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-06-01T13:27:13+02:00" pubdate data-updated="true">Jun 1<span>st</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>While paging through the issues in the <a href="https://github.com/arangodb/arangodb">ArangoDB issue tracker</a>
-I came across <a href="https://github.com/arangodb/arangodb/issues/987">issue #987</a>, titled
-<em>Trying to get distinct document attribute values from a large collection fails</em>.</p>
-
-<p>The issue was opened around 10 months ago when ArangoDB 2.2 was around. We improved AQL performance
-somewhat since then, so I was eager to see how the query would perform in ArangoDB 2.6, especially
-when comparing it to 2.2.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/06/01/on-getting-unique-values/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/05/26/diffing-two-documents-in-aql/">Diffing Two Documents in AQL</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-05-26T11:08:31+02:00" pubdate data-updated="true">May 26<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>I just stumbled upon a <a href="https://www.arangodb.com/2015/04/aql-functions-improvements/">comment in the ArangoDB blog</a>
-asking how to create a diff of two documents with AQL.</p>
-
-<p>Though there is no built-in AQL function to diff two documents, it is easily possible to build your own like in
-the following query.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/05/26/diffing-two-documents-in-aql/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/3/">&larr; Older</a>
@@ -584,6 +697,18 @@ the following query.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-explain-improvements/">Small Things in 2.8: Explain Improvements</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-pow/">Small Things in 2.8: POW</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-arangoimp-collection-type/">Small Things in 2.8: Collection Type for Arangoimp</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2015/12/22/aql-optimizer-improvements-for-28/">AQL Optimizer Improvements for 2.8</a>
       </li>
     
@@ -595,18 +720,6 @@ the following query.</p>
         <a href="/blog/2015/11/20/using-multiple-indexes-per-collection/">Using Multiple Indexes Per Collection</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/11/20/index-speedups-for-28/">Index Speedups in 2.8</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2015/11/18/improved-deadlock-detection/">Improved Deadlock Detection</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2015/11/18/bind-parameters-in-aql-editor/">Using Bind Parameters in the AQL Editor</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -615,11 +728,11 @@ the following query.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (34)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (55)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (7)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (23)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (36)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (58)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (8)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (23)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2016 (3)</li><ul class="month_list"><li class="month"><a href='/blog/2016/01/'>JAN (3)</a></li></ul><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-01-19T14:53:45+01:00</updated>
+  <updated>2016-01-26T23:09:26+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,87 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Small Things in 2.8: Explain Improvements]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-explain-improvements/"/>
+    <updated>2016-01-26T22:08:11+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-explain-improvements</id>
+    <content type="html"><![CDATA[<p>Explaining AQL queries becomes even easier in ArangoDB 2.8.</p>
+
+<p>While previous versions required writing a hard-to-memoize command like</p>
+
+<p><code>js explaining a query in 2.7
+require("org/arangodb/aql/explainer").explain(query);
+</code></p>
+
+<p>to explain an AQL query from the ArangoShell, 2.8 reduces this task to
+a mere</p>
+
+<p><code>js explaining a query in 2.8
+db._explain(query);
+</code></p>
+
+<p>Apart from that, explain in 2.8 is smarter when confronted with very lengthy
+query strings, and with queries that contain huge hard-coded string, array,
+or object values.</p>
+
+<!-- more -->
+
+
+<p>For example, when creating an array bind variable with 1,000 values and
+using them in an explained query, 2.7 would print the entire 1,000 array values
+in the explain output:</p>
+
+<p>```js explaining a query with 1000 array values
+var keys = [];
+for (var i = 0; i &lt; 1000; ++i) {
+  keys.push(&ldquo;test&rdquo; + i);
+}</p>
+
+<p>var query = &ldquo;FOR i IN @keys RETURN i&rdquo;;
+require(&ldquo;org/arangodb/aql/explainer&rdquo;).explain({
+  query: query,
+  bindVars: {</p>
+
+<pre><code>keys: keys 
+</code></pre>
+
+<p>  }
+});
+```</p>
+
+<p><img src="/downloads/screenshots/explain-27.png"></p>
+
+<p>2.8 will instead truncate longer arrays and objects in the explain output for
+much improved readability:</p>
+
+<p><img src="/downloads/screenshots/explain-28.png"></p>
+
+<p>Automatic value truncation will occur for array and object values with
+more than 20 elements or for string values longer than 1,024 characters. The
+truncation for explain will occur if these values are hard-coded into the
+query or are passed via bind parameters.</p>
+
+<p>Truncation only happens inside the explain results processing and thus
+cannot affect the actual query results.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Small Things in 2.8: POW]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-pow/"/>
+    <updated>2016-01-26T21:59:17+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-pow</id>
+    <content type="html"><![CDATA[<p>ArangoDB 2.8 now provides a dedicated AQL function for exponentiation.
+This will save users a lot of trouble in case exponentiation is needed
+inside an AQL query, which up to 2.7 required writing and registering an
+AQL user-defined function.</p>
+
+<p>With 2.8 it becomes as simple as <code>RETURN POW(2, 16)</code> to raise <em>2</em>
+to the power of <em>16</em> from inside AQL.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Optimizer Improvements for 2.8]]></title>
@@ -386,266 +467,6 @@ but to do a full collection scan.</p>
 
 <p>For queries that combine multiple FILTER conditions with a logical AND, the optimizer
 will still try to pick the most selective index for the query and use it for the collection.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Index Speedups in 2.8]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28/"/>
-    <updated>2015-11-20T15:11:00+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28</id>
-    <content type="html"><![CDATA[<p>The upcoming 2.8 version of ArangoDB will provide several improvements in
-the area of index usage and query optimization.</p>
-
-<p>First of all, hash and skiplist indexes can now index individual array values.
-A dedicated post on this will follow shortly. Second, the query optimizer can
-make use multiple indexes per collection for queries with OR-combined filter
-conditions. This again is a subject for <a href="/blog/2015/11/20/using-multiple-indexes-per-collection/">another post</a>.
-Third, there have been some speed improvements due to changes in the general
-index handling code. This is what this post is about.</p>
-
-<!-- more -->
-
-
-<p>In order to assess the speedups in 2.8, I have run some already existing performance
-tests that I initially ran when comparing ArangoDB 2.5 with 2.6. The test cases and
-methodology are detailed in <a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">this earlier blog post</a>.</p>
-
-<p>For measuring the index-related performance improvements, I simply re-ran the
-index related tests in 2.7 and in 2.8 / devel. I did not bother re-running all
-tests from the original blog article because only some are index-related. In
-particular, I only ran these tests again:</p>
-
-<ul>
-<li><em>join-key</em>: for each document in the collection, perform a join on the <code>_key</code> attribute on the collection
- itself (i.e. <code>FOR c1 IN @@c FOR c2 IN @@c FILTER c1._key == c2._key RETURN c1</code>)</li>
-<li><em>join-id</em>: ditto, but perform the join using the <code>_id</code> attribute</li>
-<li><em>join-hash-number</em> and <em>join-hash-string</em>: ditto, but join using a hash index on a numeric or string
- attribute</li>
-<li><em>join-skiplist-number</em> and <em>join-skiplist-string</em>: ditto, but join using a skiplist index on a numeric or
- string attribute</li>
-<li><em>lookup-key</em>, <em>lookup-hash-number</em>, <em>lookup-hash-string</em>, <em>lookup-skiplist-number</em>, <em>lookup-skiplist-string</em>:
- compile an IN-list of 10,000 lookup values and search these 10,000 documents in the collection using
- either the primary index (<code>_key</code> attribute), a hash index or a skiplist index. The latter two are tested
- on numeric and string attributes.</li>
-</ul>
-
-
-<p>The test queries were run 5 times each on collections containing 10,000, 100,000 and
-1,000,000 documents.</p>
-
-<p>Here are the query execution times from 2.7 and 2.8 for the individual tests, in
-seconds (less is better):</p>
-
-<p>```plain test results</p>
-
-<h2>test name                collection     avg 2.7 (s)      avg 2.8 (s)</h2>
-
-<p>join-key                 10k                 0.0997           0.0612
-join-key                 100k                1.0611           0.6538
-join-key                 1000k              10.2975           6.2507
-join-id                  10k                 0.1088           0.0606
-join-id                  100k                1.1126           0.6694
-join-id                  1000k              10.8180           6.5336
-join-hash-number         10k                 0.1044           0.0679
-join-hash-number         100k                1.1137           0.7430
-join-hash-number         1000k              10.7923           7.1534
-join-hash-string         10k                 0.1193           0.0712
-join-hash-string         100k                1.2656           0.7915
-join-hash-string         1000k              12.3075           7.6667
-join-skiplist-number     10k                 0.1387           0.1030
-join-skiplist-number     100k                1.6693           1.3062
-join-skiplist-number     1000k              18.0406          15.5203
-join-skiplist-string     10k                 0.1928           0.1469
-join-skiplist-string     100k                2.3166           1.8997
-join-skiplist-string     1000k              27.1513          23.2058
-lookup-key               10k                 1.4996           1.5245
-lookup-key               100k                1.4951           1.5189
-lookup-key               1000k               1.5545           1.5662
-lookup-hash-number       10k                 1.5572           1.5526
-lookup-hash-number       100k                1.5595           1.5435
-lookup-hash-number       1000k               1.5436           1.5648
-lookup-hash-string       10k                 1.6023           1.5623
-lookup-hash-string       100k                1.5892           1.5741
-lookup-hash-string       1000k               1.5841           1.5770
-lookup-skiplist-number   10k                 1.5978           1.6145
-lookup-skiplist-number   100k                1.5782           1.6269
-lookup-skiplist-number   1000k               1.5891           1.6258
-lookup-skiplist-string   10k                 1.6443           1.6840
-lookup-skiplist-string   100k                1.6787           1.6985
-lookup-skiplist-string   1000k               1.7319           1.7562
-in-key                   10k                 0.1076           0.0754
-in-key                   100k                0.1083           0.0775
-in-key                   1000k               0.1104           0.0773
-in-hash-number           10k                 0.0898           0.0696
-in-hash-number           100k                0.0889           0.0674
-in-hash-number           1000k               0.0877           0.0675
-in-hash-string           10k                 0.1174           0.0867
-in-hash-string           100k                0.1188           0.0878
-in-hash-string           1000k               0.1174           0.0853
-in-skiplist-number       10k                 0.1095           0.0849
-in-skiplist-number       100k                0.1110           0.0873
-in-skiplist-number       1000k               0.1106           0.0910
-in-skiplist-string       10k                 0.1744           0.1315
-in-skiplist-string       100k                0.1990           0.1594
-in-skiplist-string       1000k               0.2369           0.1968
-```</p>
-
-<p>It looks like joins and IN list lookups got significantly faster in 2.8, whereas
-the performance for point lookups is more or less the same as in 2.7.</p>
-
-<p>Note that the changes to the index code in 2.8 only affect how indexes are accessed
-from within AQL queries and how filtering works. No changes have been made for other
-index operations such as insert, updates, and removals.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Improved Deadlock Detection]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/11/18/improved-deadlock-detection/"/>
-    <updated>2015-11-18T19:24:24+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/11/18/improved-deadlock-detection</id>
-    <content type="html"><![CDATA[<p>The upcoming ArangoDB version 2.8 (currently in devel) will
-provide a much better deadlock detection mechanism than its
-predecessors.</p>
-
-<p>The new deadlock detection mechanism will kick in automatically
-when it detects operations that are mutually waiting for each other.
-In case it finds such deadlock, it will abort one of the operations
-so that the others can continue and overall progress can be made.</p>
-
-<!-- more -->
-
-
-<p>In previous versions of ArangoDB, deadlocks could make operations
-wait forever, requiring the server to be stopped and restarted.</p>
-
-<h2>How deadlocks can occur</h2>
-
-<p>Here&rsquo;s a simple example for getting into a deadlock state:</p>
-
-<p>Transaction A wants to write to collection c1 and to read from collection
-c2. In parallel, transaction B wants to write to collection c2 and read
-from collection c1. If the sequence of operations is interleaved as follows,
-then the two transactions prevent each other from making progress:</p>
-
-<ul>
-<li>transaction A successfully acquires write-lock on c1</li>
-<li>transaction B sucessfull acquires write-lock on c2</li>
-<li>transaction A tries to acquire read-lock on c2 (and must wait for B)</li>
-<li>transaction B tries to acquire read-lock on c1 (and must wait for A)</li>
-</ul>
-
-
-<p>Here&rsquo;s these such two transactions being started from two ArangoShell
-instances in parallel (left is A, right is B):</p>
-
-<p><img src="/downloads/screenshots/deadlock.png"></p>
-
-<p>(note that this screenshot is from 2.8 and the automatic deadlock detection
-had already detected the deadlock and aborted one of the transactions)</p>
-
-<p>In general, deadlocks can occur only when multiple operations (AQL
-queries or other transactions) try to access the same resources
-(collections) at the same time, and only if the operations already
-have already acquired some locks on these resources. And finally
-each operation needs to involve more than one collection, so there
-is the potential for already having acquired some locks but having
-to wait for others.</p>
-
-<h2>Dynamically added collections</h2>
-
-<p>Most operations will just work fine and will not cause any deadlocks.
-This is especially true for all operations that involve only a single
-collection. This leaves multi-collection AQL queries and multi-collection
-userland transactions.</p>
-
-<p>Normally these will also work fine. This is because when a query or
-transaction starts, it will tell the transaction manager about the resources
-(collections) it will need. The transaction manager can then acquire the
-required resources in a deterministic fashion that prevents deadlocks.
-If all queries and transactions properly announce upfront which collections
-they will access, there will also be no deadlocks.</p>
-
-<p>But for some operations its hard to predict at transaction start which
-collections will be accessed. This includes some AQL functions that
-can dynamically access collection data without having to specify the
-collection name anywhere in the query.</p>
-
-<p>A good example for this is the <code>GRAPH_EDGES</code> AQL function, which will get
-a graph name as its first input parameter, but not the names of the underlying
-edge collection(s). When this function is used in an AQL query, the
-query parser will just find a function parameter containing a graph name
-but doesn&rsquo;t know it&rsquo;s a collection name.</p>
-
-<p><code>
-GRAPH_EDGES("myEdges", [ { type: "friend" } ])
-</code></p>
-
-<p>The <code>"myEdges"</code> graph name will look like any other string to the parser.
-It does not know about the contexts in which strings may have special meanings.</p>
-
-<p>Note that even if this would be fixed, the problem won&rsquo;t go away entirely:
-a function call parameter in a query isn&rsquo;t necessarily a constant but can
-be an arbitrary expression:</p>
-
-<p><code>
-FOR doc IN collection
-  RETURN GRAPH_EDGES(CONCAT(doc.graphName, '-test'), [ doc.example ])
-</code></p>
-
-<p>At least in this case the AQL query parser won&rsquo;t find a collection name,
-so when the AQL query starts it is yet unknown which collections will be
-accessed. Only at runtime when the function is actually executed, the
-collection names will be looked up by finding the graph description in the
-<code>_graphs</code>system collection. Then the edge collections participating in
-the graph will be added to the query dynamically. Only this dynamic addition
-adds the potential for deadlock.</p>
-
-<p>This dynamic addition of collections in unavoidable for conveniently
-querying data from collections whose names are unknown when the query starts.</p>
-
-<h2>Deadlock detection</h2>
-
-<p>Whenever transaction manager detects a deadlock in ArangoDB 2.8, it will
-automatically abort one of the blocking transactions. The transaction will
-be rolled back and all modifications it has made will be reverted. The
-operation will fail with error code 29 (<em>deadlock detected</em>) and raise an
-exception that the user can handle in the calling code.</p>
-
-<p>Deadlocks will be found if two transactions mutually lock each other as
-seen in the screenshot above, but also for more complex setups. The following
-screenshot shows four parallel transactions that block each other indirectly.</p>
-
-<p><img src="/downloads/screenshots/threeway-deadlock.png"></p>
-
-<p>The top left window (transaction 1) will block the one in the top right
-(transaction 2), and is itself blocked by the transaction in the bottom left
-(transaction 3).</p>
-
-<p>The transaction in the top right window (transaction 2) blocks the one in the
-bottom left (transaction 3), and is itself blocked by the one in the top left
-(transaction 1).</p>
-
-<p>Transaction 3 (bottom left) is blocked by transaction 2 (top right).
-Transaction 4 (bottom right) does exactly the same as transaction 3.</p>
-
-<p>With these transactions, we end up in this waiting state:</p>
-
-<ul>
-<li>T1 waits for T3 and T4</li>
-<li>T2 waits for T1</li>
-<li>T3 waits for T2</li>
-<li>T4 waits for T2</li>
-</ul>
-
-
-<p>This waiting state is cyclic (T1 &lt; T3 &lt; T2 &lt; T1) and therefore no progress
-can be made. This is exactly a situation in which the transaction manager
-will abort one of the transactions.</p>
-
-<p>No configuration is required for the deadlock detection mechanism. It will
-always be active and cannot be configured or turned off.</p>
 ]]></content>
   </entry>
   
