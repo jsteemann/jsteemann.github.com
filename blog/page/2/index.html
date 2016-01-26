@@ -11,8 +11,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="While preparing the release of ArangoDB 2.7, some improvements were made for the
-PHP driver for ArangoDB. The 2.7 version of the PHP driver now &hellip;">
+  <meta name="description" content="Preventing leaks in throwing constructors The easiest way to prevent memory leaks is to create all objects on
+the stack and not using dynamic memory &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -82,6 +82,60 @@ PHP driver for ArangoDB. The 2.7 version of the PHP driver now &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2015/11/18/on-exception-handling/">C++ Constructors and Memory Leaks</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2015-11-18T01:10:51+01:00" pubdate data-updated="true">Nov 18<span>th</span>, 2015</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><h2>Preventing leaks in throwing constructors</h2>
+
+<p>The easiest way to prevent memory leaks is to create all objects on
+the stack and not using dynamic memory at all. However, often this is not
+possible, for example because stack size is limited or objects need to
+outlive the caller&rsquo;s scope.</p>
+
+<p>Another way to prevent memory leaks and leaks of other resources is
+obviously to employ the RAII pattern. How can it be used safely and
+easily in practice, so memory leaks can be avoided?</p>
+
+<p>This post will start with a few seemingly working but subtly ill-formed
+techniques that a few common pitfalls. Later on it will provide a few
+very simple solutions for getting it right.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2015/11/18/on-exception-handling/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -612,67 +666,6 @@ be the foundation for the 2.7 release.</p>
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/06/16/parsing-php-arrays-with-php/">Parsing PHP Arrays With PHP</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-06-16T23:37:48+02:00" pubdate data-updated="true">Jun 16<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>By accident I found <a href="http://stackoverflow.com/questions/30877671/how-i-can-convert-a-string-format-array-to-array-type-in-php">this StackOverflow question</a>
-about how to convert a PHP string with array data into an actual PHP array variable.</p>
-
-<p>For example, if your application gets this string from somewhere:</p>
-
-<figure class='code'><figcaption><span>example string data</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="nv">$string</span> <span class="o">=</span> <span class="s2">&quot;array(array(&#39;aaa&#39;,&#39;bbb&#39;,&#39;ccc&#39;,&#39;ddd&#39;),array(&#39;AAA&#39;,&#39;BBB&#39;,&#39;CCC&#39;,&#39;DDD&#39;))&quot;</span><span class="p">;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>How do you convert this into a PHP array variable so you can access the individual
-array elements? This is what we want to be able to do:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class='php'><span class='line'><span class="nv">$result</span> <span class="o">=</span> <span class="nx">magicallyConvertStringToArray</span><span class="p">(</span><span class="nv">$string</span><span class="p">);</span>
-</span><span class='line'><span class="nb">var_dump</span><span class="p">(</span><span class="nv">$result</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="mi">0</span><span class="p">]);</span>  <span class="c1">// should be &#39;aaa&#39;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>How do we get to our variable?</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/06/16/parsing-php-arrays-with-php/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/3/">&larr; Older</a>
@@ -697,6 +690,10 @@ array elements? This is what we want to be able to do:</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2016/01/26/killing-a-long-running-query/">Killing a Long-running Query</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2016/01/26/small-things-in-28-explain-improvements/">Small Things in 2.8: Explain Improvements</a>
       </li>
     
@@ -716,10 +713,6 @@ array elements? This is what we want to be able to do:</p>
         <a href="/blog/2015/11/20/aql-function-speedups/">AQL Function Speedups</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2015/11/20/using-multiple-indexes-per-collection/">Using Multiple Indexes Per Collection</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -728,11 +721,11 @@ array elements? This is what we want to be able to do:</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (36)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (58)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (8)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (23)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (37)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (59)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (9)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (23)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2016 (3)</li><ul class="month_list"><li class="month"><a href='/blog/2016/01/'>JAN (3)</a></li></ul><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2016 (4)</li><ul class="month_list"><li class="month"><a href='/blog/2016/01/'>JAN (4)</a></li></ul><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

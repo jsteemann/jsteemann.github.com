@@ -4,7 +4,7 @@
   <title><![CDATA[Category: AQL | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/aql/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-01-26T23:09:26+01:00</updated>
+  <updated>2016-01-26T23:49:30+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,98 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Killing a Long-running Query]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/01/26/killing-a-long-running-query/"/>
+    <updated>2016-01-26T23:13:33+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/01/26/killing-a-long-running-query</id>
+    <content type="html"><![CDATA[<p>Suppose there is an AQL query that&rsquo;s executing in the server
+for a long time already and you want to get rid of it. What can
+be done to abort that query?</p>
+
+<p>If a connection to the server can still be established, the easiest
+is to use the ArangoShell to fetch the list of currently executing
+AQL queries and send a <em>kill</em> command to the server for the correct query.</p>
+
+<!-- more -->
+
+
+<p>To start, we can fetch the list of all running queries and print
+their ids, query strings and runtimes. This is only inspection and does
+not abort any query:</p>
+
+<p><code>js printing all currently running queries
+var queries = require("org/arangodb/aql/queries");
+queries.current();
+</code></p>
+
+<p>Here&rsquo;s an example result for the list of running queries:</p>
+
+<p>```json example list of currently running queries
+[
+  {</p>
+
+<pre><code>"id" : "190", 
+"query" : "RETURN SLEEP(1000)", 
+"started" : "2016-01-26T22:41:24Z", 
+"runTime" : 218.49146389961243 
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<p>To now kill a query from the list, we can pass the query&rsquo;s id to <em>kill</em>:</p>
+
+<p><code>js killing a specific query
+var queries = require("org/arangodb/aql/queries");
+queries.kill("190");  /* insert actual query id here */
+</code></p>
+
+<p>If a query was actually killed on the server, that call should return without
+an error, and the server should have logged a warning in addition.</p>
+
+<p>If we wanted to abort one or many queries from the list solely by
+looking at query string patterns or query runtime, we could iterate
+over the list of current queries and kill each one that matches
+a predicate.</p>
+
+<p>For example, the following snippet will abort all currently running
+queries that contain the string <code>SLEEP</code> anywhere inside their query string:</p>
+
+<p>```js aborting all queries containing the word SLEEP inside the query string
+var queries = require(&ldquo;org/arangodb/aql/queries&rdquo;);</p>
+
+<p>queries.current().filter(function(query) {
+  return query.query.match(/SLEEP/);  /<em> predicate based on query string </em>/
+}).forEach(function(query) {
+  print(&ldquo;killing query: &rdquo;, query);    /<em> print what we&rsquo;re killing </em>/
+  queries.kill(query.id);             /<em> actually kill query </em>/
+});
+```</p>
+
+<p>Filtering based on current query runtime is also simple, by adjusting the
+predicate. To abort all queries that ran longer than 30 seconds use:</p>
+
+<p>```js aborting all queries running at least 30 seconds
+var queries = require(&ldquo;org/arangodb/aql/queries&rdquo;);</p>
+
+<p>queries.current().filter(function(query) {
+  return query.runTime > 30;          /<em> predicate based on query runtime </em>/
+}).forEach(function(query) {
+  print(&ldquo;killing query: &rdquo;, query);    /<em> print what we&rsquo;re killing </em>/
+  queries.kill(query.id);             /<em> actually kill query </em>/
+});
+```</p>
+
+<p>Please make sure the predicates are correct so only the actually intended
+queries get aborted!</p>
+
+<p>To test a predicate without killing a query, use the above code without the
+<code>forEach</code> part that did the killing.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Small Things in 2.8: Explain Improvements]]></title>
@@ -336,137 +428,6 @@ of the above functions:</p>
 <p>Please note that not in every case there will be a tremendous speedup. As usual,
 it depends on how often a function is called inside a query and what other constructs
 are used. Your mileage may vary.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Using Multiple Indexes Per Collection]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection/"/>
-    <updated>2015-11-20T15:30:05+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/11/20/using-multiple-indexes-per-collection</id>
-    <content type="html"><![CDATA[<p>The query optimizer in ArangoDB 2.8 has been improved in terms of how it can
-make use of indexes. In previous versions of ArangoDB, the query optimizer could
-use only one index per collection used in an AQL query. When using a logical OR
-in a FILTER condition, the optimizer did not use any index for the collection in
-order to ensure the result is still correct.</p>
-
-<p>This is much better in 2.8. Now the query optimizer can use multiple indexes on
-the same collection for FILTER conditions that are combined with a logical OR.</p>
-
-<!-- more -->
-
-
-<p>For all following queries, I have set up a collection named <code>test</code>, which has
-two isolated hash indexes on the attributes <code>value1</code> and <code>value2</code>, and a skiplist
-index on attribute <code>value3</code>.</p>
-
-<p>Let&rsquo;s first try an AQL queries that uses a logical OR on two different attributes of the
-collection:</p>
-
-<p><code>plain example query
-FOR doc IN test
-  FILTER doc.value1 == 11 || doc.value2 == 19
-  RETURN doc
-</code></p>
-
-<p>The execution plan for this query in 2.7 reveals that query will perform a full
-collection scan and cannot use indexes because of the logical OR on two different
-attributes:</p>
-
-<p><code>``plain 2.7 query execution plan
-Execution plan:
- Id   NodeType                  Est.   Comment
-  1   SingletonNode                1   * ROOT
-  2   EnumerateCollectionNode      0     - FOR doc IN test   /* full collection scan */
-  3   CalculationNode              0       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2` == 19
-  4   FilterNode                   0       &ndash; FILTER #1
-  5   ReturnNode                   0       &ndash; RETURN doc</p>
-
-<p>Indexes used:
- none</p>
-
-<p>Optimization rules applied:
- none
-```</p>
-
-<p>Running the same query in 2.8 / devel will produce a much better execution plan:</p>
-
-<p><code>``plain 2.8 query execution plan
-Execution plan:
- Id   NodeType          Est.   Comment
-  1   SingletonNode        1   * ROOT
-  6   IndexNode            2     - FOR doc IN test   /* hash index scan, hash index scan */
-  3   CalculationNode      2       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2` == 19<br/>
-  4   FilterNode           2       &ndash; FILTER #1
-  5   ReturnNode           2       &ndash; RETURN doc</p>
-
-<p>Indexes used:
- By   Type   Collection   Unique   Sparse   Selectivity   Fields         Ranges
-  6   hash   test         false    false       100.00 %   [ <code>value1</code> ]   doc.<code>value1</code> == 11
-  6   hash   test         false    false       100.00 %   [ <code>value2</code> ]   doc.<code>value2</code> == 19</p>
-
-<p>Optimization rules applied:
- Id   RuleName
-  1   use-indexes
-```</p>
-
-<p>Multiple indexes will also be used if different index types are accessed, or for non-equality
-filter conditions. For example, the following query will make use of the two hash indexes
-and also the skiplist index:</p>
-
-<p><code>plain example query
-FOR doc IN test
-  FILTER doc.value1 == 11 || doc.value2 == 19 || doc.value3 &gt; 42
-  RETURN doc
-</code></p>
-
-<p>Here is its execution plan from 2.8:</p>
-
-<p><code>``plain 2.8 query execution plan
-Execution plan:
- Id   NodeType          Est.   Comment
-  1   SingletonNode        1   * ROOT
-  6   IndexNode            3     - FOR doc IN test   /* hash index scan, hash index scan, skiplist index scan */
-  3   CalculationNode      3       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2<code>== 19 || doc.</code>value3` > 42
-  4   FilterNode           3       &ndash; FILTER #1
-  5   ReturnNode           3       &ndash; RETURN doc</p>
-
-<p>Indexes used:
- By   Type       Collection   Unique   Sparse   Selectivity   Fields         Ranges
-  6   hash       test         false    false       100.00 %   [ <code>value1</code> ]   doc.<code>value1</code> == 11
-  6   hash       test         false    false       100.00 %   [ <code>value2</code> ]   doc.<code>value2</code> == 19
-  6   skiplist   test         false    false            n/a   [ <code>value3</code> ]   doc.<code>value3</code> > 42</p>
-
-<p>Optimization rules applied:
- Id   RuleName
-  1   use-indexes
-```</p>
-
-<p>For comparison, here is the non-optimized plan from 2.7 for the same query:</p>
-
-<p><code>``plain 2.7 query execution plan
-Execution plan:
- Id   NodeType                  Est.   Comment
-  1   SingletonNode                1   * ROOT
-  2   EnumerateCollectionNode      0     - FOR doc IN test   /* full collection scan */
-  3   CalculationNode              0       - LET #1 = doc.</code>value1<code>== 11 || doc.</code>value2<code>== 19 || doc.</code>value3` > 42
-  4   FilterNode                   0       &ndash; FILTER #1
-  5   ReturnNode                   0       &ndash; RETURN doc</p>
-
-<p>Indexes used:
- none</p>
-
-<p>Optimization rules applied:
- none
-```</p>
-
-<p>Still the query optimizer will not be able to use any indexes on a collection when
-there are multiple FILTER conditions combined with logical OR and at least one of them
-is not satisfisable by an index of the collection. In this case it has no other choice
-but to do a full collection scan.</p>
-
-<p>For queries that combine multiple FILTER conditions with a logical AND, the optimizer
-will still try to pick the most selective index for the query and use it for the collection.</p>
 ]]></content>
   </entry>
   

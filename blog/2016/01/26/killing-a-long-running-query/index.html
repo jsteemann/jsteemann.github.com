@@ -1,0 +1,372 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>Killing a Long-running Query - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="Suppose there is an AQL query that&rsquo;s executing in the server
+for a long time already and you want to get rid of it. What can
+be done to abort &hellip;">
+  <meta name="keywords" content="ArangoDB, database, AQL, ArangoShell">
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2016/01/26/killing-a-long-running-query">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>{ "subject" : "ArangoDB", "tags": [ "multi-model", "nosql", "database" ] }</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Killing a Long-running Query</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-01-26T23:13:33+01:00" pubdate data-updated="true">Jan 26<span>th</span>, 2016</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>Suppose there is an AQL query that&rsquo;s executing in the server
+for a long time already and you want to get rid of it. What can
+be done to abort that query?</p>
+
+<p>If a connection to the server can still be established, the easiest
+is to use the ArangoShell to fetch the list of currently executing
+AQL queries and send a <em>kill</em> command to the server for the correct query.</p>
+
+<!-- more -->
+
+
+<p>To start, we can fetch the list of all running queries and print
+their ids, query strings and runtimes. This is only inspection and does
+not abort any query:</p>
+
+<figure class='code'><figcaption><span>printing all currently running queries</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">queries</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/queries&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="nx">queries</span><span class="p">.</span><span class="nx">current</span><span class="p">();</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Here&rsquo;s an example result for the list of running queries:</p>
+
+<figure class='code'><figcaption><span>example list of currently running queries</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
+</span><span class='line'>  <span class="p">{</span>
+</span><span class='line'>    <span class="nt">&quot;id&quot;</span> <span class="p">:</span> <span class="s2">&quot;190&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">&quot;query&quot;</span> <span class="p">:</span> <span class="s2">&quot;RETURN SLEEP(1000)&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">&quot;started&quot;</span> <span class="p">:</span> <span class="s2">&quot;2016-01-26T22:41:24Z&quot;</span><span class="p">,</span>
+</span><span class='line'>    <span class="nt">&quot;runTime&quot;</span> <span class="p">:</span> <span class="mf">218.49146389961243</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'><span class="p">]</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To now kill a query from the list, we can pass the query&rsquo;s id to <em>kill</em>:</p>
+
+<figure class='code'><figcaption><span>killing a specific query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">queries</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/queries&quot;</span><span class="p">);</span>
+</span><span class='line'><span class="nx">queries</span><span class="p">.</span><span class="nx">kill</span><span class="p">(</span><span class="s2">&quot;190&quot;</span><span class="p">);</span>  <span class="cm">/* insert actual query id here */</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p></p>
+
+<p>If a query was actually killed on the server, that call should return without
+an error, and the server should have logged a warning in addition.</p>
+
+<p>If we wanted to abort one or many queries from the list solely by
+looking at query string patterns or query runtime, we could iterate
+over the list of current queries and kill each one that matches
+a predicate.</p>
+
+<p>For example, the following snippet will abort all currently running
+queries that contain the string <code>SLEEP</code> anywhere inside their query string:</p>
+
+<figure class='code'><figcaption><span>aborting all queries containing the word SLEEP inside the query string</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">queries</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/queries&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">queries</span><span class="p">.</span><span class="nx">current</span><span class="p">().</span><span class="nx">filter</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">query</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">query</span><span class="p">.</span><span class="nx">query</span><span class="p">.</span><span class="nx">match</span><span class="p">(</span><span class="sr">/SLEEP/</span><span class="p">);</span>  <span class="cm">/* predicate based on query string */</span>
+</span><span class='line'><span class="p">}).</span><span class="nx">forEach</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">query</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">print</span><span class="p">(</span><span class="s2">&quot;killing query: &quot;</span><span class="p">,</span> <span class="nx">query</span><span class="p">);</span>    <span class="cm">/* print what we&#39;re killing */</span>
+</span><span class='line'>  <span class="nx">queries</span><span class="p">.</span><span class="nx">kill</span><span class="p">(</span><span class="nx">query</span><span class="p">.</span><span class="nx">id</span><span class="p">);</span>             <span class="cm">/* actually kill query */</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Filtering based on current query runtime is also simple, by adjusting the
+predicate. To abort all queries that ran longer than 30 seconds use:</p>
+
+<figure class='code'><figcaption><span>aborting all queries running at least 30 seconds</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">var</span> <span class="nx">queries</span> <span class="o">=</span> <span class="nx">require</span><span class="p">(</span><span class="s2">&quot;org/arangodb/aql/queries&quot;</span><span class="p">);</span>
+</span><span class='line'>
+</span><span class='line'><span class="nx">queries</span><span class="p">.</span><span class="nx">current</span><span class="p">().</span><span class="nx">filter</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">query</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="k">return</span> <span class="nx">query</span><span class="p">.</span><span class="nx">runTime</span> <span class="o">&gt;</span> <span class="mi">30</span><span class="p">;</span>          <span class="cm">/* predicate based on query runtime */</span>
+</span><span class='line'><span class="p">}).</span><span class="nx">forEach</span><span class="p">(</span><span class="kd">function</span><span class="p">(</span><span class="nx">query</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="nx">print</span><span class="p">(</span><span class="s2">&quot;killing query: &quot;</span><span class="p">,</span> <span class="nx">query</span><span class="p">);</span>    <span class="cm">/* print what we&#39;re killing */</span>
+</span><span class='line'>  <span class="nx">queries</span><span class="p">.</span><span class="nx">kill</span><span class="p">(</span><span class="nx">query</span><span class="p">.</span><span class="nx">id</span><span class="p">);</span>             <span class="cm">/* actually kill query */</span>
+</span><span class='line'><span class="p">});</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Please make sure the predicates are correct so only the actually intended
+queries get aborted!</p>
+
+<p>To test a predicate without killing a query, use the above code without the
+<code>forEach</code> part that did the killing.</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-01-26T23:13:33+01:00" pubdate data-updated="true">Jan 26<span>th</span>, 2016</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/aql/'>AQL</a>, <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/arangoshell/'>ArangoShell</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2016/01/26/killing-a-long-running-query/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2016/01/26/killing-a-long-running-query/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2016/01/26/small-things-in-28-explain-improvements/" title="Previous Post: Small things in 2.8: explain improvements">&laquo; Small things in 2.8: explain improvements</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2016/01/26/killing-a-long-running-query/">Killing a Long-running Query</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-explain-improvements/">Small Things in 2.8: Explain Improvements</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-pow/">Small Things in 2.8: POW</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-arangoimp-collection-type/">Small Things in 2.8: Collection Type for Arangoimp</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/12/22/aql-optimizer-improvements-for-28/">AQL Optimizer Improvements for 2.8</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2015/11/20/aql-function-speedups/">AQL Function Speedups</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (37)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (59)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (9)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (23)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2016 (4)</li><ul class="month_list"><li class="month"><a href='/blog/2016/01/'>JAN (4)</a></li></ul><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2016 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

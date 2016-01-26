@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoShell | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangoshell/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-01-26T23:09:26+01:00</updated>
+  <updated>2016-01-26T23:49:30+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,98 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Killing a Long-running Query]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/01/26/killing-a-long-running-query/"/>
+    <updated>2016-01-26T23:13:33+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/01/26/killing-a-long-running-query</id>
+    <content type="html"><![CDATA[<p>Suppose there is an AQL query that&rsquo;s executing in the server
+for a long time already and you want to get rid of it. What can
+be done to abort that query?</p>
+
+<p>If a connection to the server can still be established, the easiest
+is to use the ArangoShell to fetch the list of currently executing
+AQL queries and send a <em>kill</em> command to the server for the correct query.</p>
+
+<!-- more -->
+
+
+<p>To start, we can fetch the list of all running queries and print
+their ids, query strings and runtimes. This is only inspection and does
+not abort any query:</p>
+
+<p><code>js printing all currently running queries
+var queries = require("org/arangodb/aql/queries");
+queries.current();
+</code></p>
+
+<p>Here&rsquo;s an example result for the list of running queries:</p>
+
+<p>```json example list of currently running queries
+[
+  {</p>
+
+<pre><code>"id" : "190", 
+"query" : "RETURN SLEEP(1000)", 
+"started" : "2016-01-26T22:41:24Z", 
+"runTime" : 218.49146389961243 
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<p>To now kill a query from the list, we can pass the query&rsquo;s id to <em>kill</em>:</p>
+
+<p><code>js killing a specific query
+var queries = require("org/arangodb/aql/queries");
+queries.kill("190");  /* insert actual query id here */
+</code></p>
+
+<p>If a query was actually killed on the server, that call should return without
+an error, and the server should have logged a warning in addition.</p>
+
+<p>If we wanted to abort one or many queries from the list solely by
+looking at query string patterns or query runtime, we could iterate
+over the list of current queries and kill each one that matches
+a predicate.</p>
+
+<p>For example, the following snippet will abort all currently running
+queries that contain the string <code>SLEEP</code> anywhere inside their query string:</p>
+
+<p>```js aborting all queries containing the word SLEEP inside the query string
+var queries = require(&ldquo;org/arangodb/aql/queries&rdquo;);</p>
+
+<p>queries.current().filter(function(query) {
+  return query.query.match(/SLEEP/);  /<em> predicate based on query string </em>/
+}).forEach(function(query) {
+  print(&ldquo;killing query: &rdquo;, query);    /<em> print what we&rsquo;re killing </em>/
+  queries.kill(query.id);             /<em> actually kill query </em>/
+});
+```</p>
+
+<p>Filtering based on current query runtime is also simple, by adjusting the
+predicate. To abort all queries that ran longer than 30 seconds use:</p>
+
+<p>```js aborting all queries running at least 30 seconds
+var queries = require(&ldquo;org/arangodb/aql/queries&rdquo;);</p>
+
+<p>queries.current().filter(function(query) {
+  return query.runTime > 30;          /<em> predicate based on query runtime </em>/
+}).forEach(function(query) {
+  print(&ldquo;killing query: &rdquo;, query);    /<em> print what we&rsquo;re killing </em>/
+  queries.kill(query.id);             /<em> actually kill query </em>/
+});
+```</p>
+
+<p>Please make sure the predicates are correct so only the actually intended
+queries get aborted!</p>
+
+<p>To test a predicate without killing a query, use the above code without the
+<code>forEach</code> part that did the killing.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Small Things in 2.8: Collection Type for Arangoimp]]></title>
@@ -550,182 +642,6 @@ from within ArangoDB. If there is an updated version of this module, we use npm 
 install it in a subdirectory of ArangoDB. As per npm convention, the node.js modules
 shipped with ArangoDB reside in a directory named <code>node_modules</code>. Probably this is
 what caused some of the confusion.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[ES6 Features in ArangoDB 2.7]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/14/es6-features-in-arangodb-27/"/>
-    <updated>2015-07-14T20:33:55+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/14/es6-features-in-arangodb-27</id>
-    <content type="html"><![CDATA[<p>ArangoDB 2.6 uses V8 engine version 3.31.74.1 for running its own and all user-defined
-JavaScript code. In ArangoDB 2.7 (currently in development), we have upgraded V8 to
-version 4.3.61.</p>
-
-<p>The new V8 version in ArangoDB 2.7 provides several additional ES6 features that can
-be used to improve JavaScript usability and code quality. This blog post showcases <em>strong
-mode</em> and <em>rest parameters</em>, and also shows how to activate <em>TurboFan</em>, V8&rsquo;s new JIT compiler
-for JavaScript.</p>
-
-<p>ArangoDB 2.7 is in development right now, but it can be tried today by
-<a href="/blog/2014/10/16/how-to-compile-arangodb-from-source/">compiling it from source</a>.</p>
-
-<!-- more -->
-
-
-<h2>JavaScript strong mode</h2>
-
-<p>V8 v4 comes with an optional and experimental <em>strong mode</em>. This mode provides only a
-subset of JavaScript, with the idea of intentionally deactivating some of
-<a href="http://archive.oreilly.com/pub/a/javascript/excerpts/javascript-good-parts/bad-parts.html">JavaScript&rsquo;s bad parts</a>.
-It is based on <em>strict mode</em>, but goes further.</p>
-
-<p>Committing to <em>strong mode</em> may not only provide better and stronger semantics, but may
-also enable more optimization opportunities for the JavaScript compiler. For example, the
-strong mode disables JavaScript&rsquo;s <em>with</em> statement and <code>delete</code>! Additionally, <code>var</code> cannot
-be used anymore but is deprecated in favor of <code>let</code> and <code>const</code>.</p>
-
-<p>The proposal for the strong mode can be found
-<a href="https://docs.google.com/document/d/1Qk0qC4s_XNCLemj42FqfsRLp49nDQMZ1y7fwf5YjaI4/view">here</a>,
-and the V8 team also has a <a href="https://developers.google.com/v8/experiments">page about it</a>.</p>
-
-<p>Strong mode must be turned on explicitly. This can be done by adding the <code>--strong-mode=true</code>
-v8 option when starting <em>arangod</em> or <em>arangosh</em>:</p>
-
-<p><code>bash enabling strong mode
-arangosh  --javascript.v8-options="--strong_mode=true"
-</code></p>
-
-<p>Note that I am using <em>arangosh</em> above, but the same would work for <em>arangod</em>, too, so the feature
-can be used for Foxx routes as well.</p>
-
-<h2>Rest parameters</h2>
-
-<p>How to pass a variable number of arguments to a function?</p>
-
-<p>C and C++ programmers have been using and abusing the ellipsis (<code>...</code>) and <code>__VA_ARGS__</code> features
-of the C preprocessor for a long time. Then came the macros of <code>stdarg.h</code> / <code>cstdarg</code>,
-until C++11 really improved the situation with <code>std::initializer_list</code> and variadic templates.</p>
-
-<p>In JavaScript, one can use the <code>arguments</code> object:
-```js
-function logSimple () {
-  for (value of arguments) {</p>
-
-<pre><code>console.log(value);
-</code></pre>
-
-<p>  }
-}</p>
-
-<p>logSimple(&ldquo;foo&rdquo;, &ldquo;bar&rdquo;, &ldquo;baz&rdquo;);
-```</p>
-
-<p>This does the job, and the above will print something like:
-<code>plain
-2015-07-14T19:01:51Z [5245] INFO foo
-2015-07-14T19:01:51Z [5245] INFO bar
-2015-07-14T19:01:51Z [5245] INFO baz
-</code></p>
-
-<p>This is fine as long as all arguments shall be treated the same way. But what if some
-arguments have a designated meaning and should be treated specially?</p>
-
-<p>The solution is to use <em>ES6 rest parameters</em>. The last parameter in an argument list can be
-prefixed with <code>...</code> to capture any number of function parameters:</p>
-
-<p>```js
-function logWithContext (context, &hellip;values) {
-  for (value of values) {</p>
-
-<pre><code>console.log('[' + context + '] ' + value);
-</code></pre>
-
-<p>  }
-}</p>
-
-<p>logWithContext(&ldquo;es6&rdquo;, &ldquo;foo&rdquo;, &ldquo;bar&rdquo;, &ldquo;baz&rdquo;);
-```</p>
-
-<p>As can be seen, the <code>logWithContext</code> function specially handles its <code>context</code> argument, while
-we can still pass any number of further parameters into it. Here&rsquo;s what the above will print:</p>
-
-<p><code>plain
-2015-07-14T19:07:27Z [5245] INFO [es6]: foo
-2015-07-14T19:07:27Z [5245] INFO [es6]: bar
-2015-07-14T19:07:27Z [5245] INFO [es6]: baz
-</code></p>
-
-<p>Note that rest parameters cannot be used with the default configuration and must be turned on
-explicitly in <em>arangosh</em> or <em>arangod</em>.</p>
-
-<p>The startup option to turn them on is:</p>
-
-<p><code>bash enabling rest parameters
-arangosh --javascript.v8-options="--harmony_rest_parameters=true"
-</code></p>
-
-<h2>TurboFan</h2>
-
-<p>The new V8 version comes with <em>TurboFan</em>, a new JIT compiler for JavaScript.
-According to <a href="http://blog.chromium.org/2015/07/revving-up-javascript-performance-with.html">this post</a>
-it is already used in Chrome for compiling certain types of JavaScript code.</p>
-
-<p>As fas as I can see, it is turned off by default in our version of V8, and the compiler
-also seems to be rather experimental. To get an idea of what it can already do and where
-its limits are, it can already be tried in ArangoDB 2.7.</p>
-
-<p>By default, it seems to be turned off. Using the following startup option, it can be turned on for
-JavaScript functions with a certain name pattern (i.e. all function names starting with <em>testTurboFan</em>):</p>
-
-<p><code>bash starting ArangoShell with TurboFan enabled
-arangosh --javascript.v8-options="--turbo-filter=testTurboFan*"`
-</code></p>
-
-<p>Without turning on V8 tracing, one will not be able to tell which compiler is used to compile a
-specific function. To turn it on and actually confirm V8 is using TurboFan, use these options:</p>
-
-<p><code>bash starting ArangoShell with TurboFan and debug output
-arangosh --javascript.v8-options="--always-opt --trace_opt --turbo-filter=testTurboFan*"
-</code></p>
-
-<p>This will be very verbose, but it is good to tell which internal compiler is used to compile a given
-JavaScript function.</p>
-
-<p>For example, after starting the ArangoShell with the above options, run the following test code
-to see that V8 uses TurboFan for compiling the first two functions (which match the name pattern),
-and Crankshaft for the third (which does not match the name pattern):</p>
-
-<p>```js test code for invoking the TurboFan compiler
-function testTurboFan1 () {
-  console.log(&ldquo;turbo-fan 1&rdquo;);
-}
-testTurboFan1();</p>
-
-<p>function testTurboFan2 () {
-  console.log(&ldquo;turbo-fan 2&rdquo;);
-}
-testTurboFan2();</p>
-
-<p>function testSomethingElse () {
-  console.log(&ldquo;something else&rdquo;);
-}
-testSomethingElse();
-```</p>
-
-<p>Here&rsquo;s the confirmation that TurboFan is used:</p>
-
-<p><code>plain debug output
-...
-[compiling method 0x31ca8804e351 &lt;JS Function testTurboFan1 (SharedFunctionInfo 0x31ca8804e171)&gt; using TurboFan]
-...
-[compiling method 0x31ca8804e7f9 &lt;JS Function testTurboFan2 (SharedFunctionInfo 0x31ca8804e619)&gt; using TurboFan]
-...
-[compiling method 0x31ca8804ec71 &lt;JS Function testSomethingElse (SharedFunctionInfo 0x31ca8804ea91)&gt; using Crankshaft]
-...
-</code></p>
-
-<p>Have fun!</p>
 ]]></content>
   </entry>
   

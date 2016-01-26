@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-01-26T23:09:26+01:00</updated>
+  <updated>2016-01-26T23:49:30+01:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,98 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Killing a Long-running Query]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/01/26/killing-a-long-running-query/"/>
+    <updated>2016-01-26T23:13:33+01:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/01/26/killing-a-long-running-query</id>
+    <content type="html"><![CDATA[<p>Suppose there is an AQL query that&rsquo;s executing in the server
+for a long time already and you want to get rid of it. What can
+be done to abort that query?</p>
+
+<p>If a connection to the server can still be established, the easiest
+is to use the ArangoShell to fetch the list of currently executing
+AQL queries and send a <em>kill</em> command to the server for the correct query.</p>
+
+<!-- more -->
+
+
+<p>To start, we can fetch the list of all running queries and print
+their ids, query strings and runtimes. This is only inspection and does
+not abort any query:</p>
+
+<p><code>js printing all currently running queries
+var queries = require("org/arangodb/aql/queries");
+queries.current();
+</code></p>
+
+<p>Here&rsquo;s an example result for the list of running queries:</p>
+
+<p>```json example list of currently running queries
+[
+  {</p>
+
+<pre><code>"id" : "190", 
+"query" : "RETURN SLEEP(1000)", 
+"started" : "2016-01-26T22:41:24Z", 
+"runTime" : 218.49146389961243 
+</code></pre>
+
+<p>  }
+]
+```</p>
+
+<p>To now kill a query from the list, we can pass the query&rsquo;s id to <em>kill</em>:</p>
+
+<p><code>js killing a specific query
+var queries = require("org/arangodb/aql/queries");
+queries.kill("190");  /* insert actual query id here */
+</code></p>
+
+<p>If a query was actually killed on the server, that call should return without
+an error, and the server should have logged a warning in addition.</p>
+
+<p>If we wanted to abort one or many queries from the list solely by
+looking at query string patterns or query runtime, we could iterate
+over the list of current queries and kill each one that matches
+a predicate.</p>
+
+<p>For example, the following snippet will abort all currently running
+queries that contain the string <code>SLEEP</code> anywhere inside their query string:</p>
+
+<p>```js aborting all queries containing the word SLEEP inside the query string
+var queries = require(&ldquo;org/arangodb/aql/queries&rdquo;);</p>
+
+<p>queries.current().filter(function(query) {
+  return query.query.match(/SLEEP/);  /<em> predicate based on query string </em>/
+}).forEach(function(query) {
+  print(&ldquo;killing query: &rdquo;, query);    /<em> print what we&rsquo;re killing </em>/
+  queries.kill(query.id);             /<em> actually kill query </em>/
+});
+```</p>
+
+<p>Filtering based on current query runtime is also simple, by adjusting the
+predicate. To abort all queries that ran longer than 30 seconds use:</p>
+
+<p>```js aborting all queries running at least 30 seconds
+var queries = require(&ldquo;org/arangodb/aql/queries&rdquo;);</p>
+
+<p>queries.current().filter(function(query) {
+  return query.runTime > 30;          /<em> predicate based on query runtime </em>/
+}).forEach(function(query) {
+  print(&ldquo;killing query: &rdquo;, query);    /<em> print what we&rsquo;re killing </em>/
+  queries.kill(query.id);             /<em> actually kill query </em>/
+});
+```</p>
+
+<p>Please make sure the predicates are correct so only the actually intended
+queries get aborted!</p>
+
+<p>To test a predicate without killing a query, use the above code without the
+<code>forEach</code> part that did the killing.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Small Things in 2.8: Explain Improvements]]></title>
@@ -304,78 +396,6 @@ FOR doc IN collection
   LIMIT 1000000, 10
   RETURN doc
 </code></p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Function Speedups]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/11/20/aql-function-speedups/"/>
-    <updated>2015-11-20T16:55:34+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/11/20/aql-function-speedups</id>
-    <content type="html"><![CDATA[<p>While working on the upcoming ArangoDB 2.8, we have reimplemented some AQL
-functions in C++ for improved performance. AQL queries using these functions
-may benefit from using the new implementation of the function.</p>
-
-<p>The following list shows the AQL functions for which a C++ implementation has
-been added in 2.8. The other C++-based AQL function implementations added since
-ArangoDB 2.5 are also still available. Here&rsquo;s the list of functions added in 2.8:</p>
-
-<!-- more -->
-
-
-<ul>
-<li>document-related functions: DOCUMENT, EDGES, PARSE_IDENTIFIER</li>
-<li>numerical functions: ABS, FLOOR, RAND, ROUND, SQRT</li>
-<li>statistical functions: MEDIAN, PERCENTILE, STDDEV_POPULATION, STDDEV_SAMPLE, VARIANCE_POPULATION, VARIANCE_SAMPLE</li>
-<li>geo functions: NEAR, WITHIN</li>
-<li>array functions: APPEND, FIRST, FLATTEN, LAST, MINUS, NTH, POP, POSITION, PUSH, REMOVE_NTH, REMOVE_VALUE, REMOVE_VALUES, SHIFT, UNSHIFT</li>
-<li>informational functions: COLLECTIONS, CURRENT_DATABASE, FIRST_DOCUMENT, FIRST_LIST, NOT_NULL</li>
-<li>object-related functions: MERGE_RECURSIVE, ZIP</li>
-</ul>
-
-
-<p>Following are a few example queries that benefit from using the C++ variants of some
-of the above functions:</p>
-
-<h3>Fetching documents programmatically using the <code>DOCUMENT</code> function:</h3>
-
-<ul>
-<li>query: <code>FOR i IN 1..10000 RETURN DOCUMENT(test, CONCAT('test', i))</code></li>
-<li>2.7: 0.3005 s</li>
-<li>2.8: 0.1050 s</li>
-</ul>
-
-
-<h3>Fetching edges programmatically using the <code>EDGES</code> function:</h3>
-
-<ul>
-<li>query: <code>FOR i IN 1..100000 RETURN EDGES(edges, CONCAT('test/test', i), 'outbound')</code>:</li>
-<li>2.7: 4.3590 s</li>
-<li>2.8: 1.4469 s</li>
-</ul>
-
-
-<h3>Fetching many documents from a geo index, post-filtering most of them:</h3>
-
-<ul>
-<li>query: <code>FOR doc IN WITHIN(locations, 0, 0, 100000) FILTER doc.value2 == 'test1001' LIMIT 1 RETURN doc</code></li>
-<li>2.7: 2.9876 s</li>
-<li>2.8: 0.4087 s</li>
-</ul>
-
-
-<h3>Generating random numbers:</h3>
-
-<ul>
-<li>query: <code>FOR value IN 1..100000 RETURN RAND() * 50</code></li>
-<li>2.7: 0.1743 s</li>
-<li>2.8: 0.1364 s</li>
-</ul>
-
-
-<p>Please note that not in every case there will be a tremendous speedup. As usual,
-it depends on how often a function is called inside a query and what other constructs
-are used. Your mileage may vary.</p>
 ]]></content>
   </entry>
   
