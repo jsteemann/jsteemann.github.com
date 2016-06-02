@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-01-26T23:49:30+01:00</updated>
+  <updated>2016-06-03T00:48:00+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,226 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Fastest String-to-uint64 Conversion Method?]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/02/fastest-string-to-uint64-conversion-method/"/>
+    <updated>2016-06-02T20:15:27+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/02/fastest-string-to-uint64-conversion-method</id>
+    <content type="html"><![CDATA[<p>While doing some optimization work for the upcoming ArangoDB 3.0 release,
+we had to figure out what was the &ldquo;ideal&rdquo; way of converting a string
+representation of a number into a C++ uint64_t (64 bit unsigned integer type).
+This kind of operation is performed a lot during the lifetime of an ArangoDB
+server process, so it seemed worthwhile making it as fast as possible.</p>
+
+<!-- more -->
+
+
+<h2>std::stoull and std::strtoull</h2>
+
+<p>The natural solution for this kind of conversion is the standard library&rsquo;s
+<a href="http://en.cppreference.com/w/cpp/string/basic_string/stoul">std::stoull</a>
+function. On the one hand, that solution is potentially optimized and definitely
+robust. It performs validation of the input characters and is also battle-tested
+by millions of users.</p>
+
+<p>On the other hand, std::stoull has a few &ldquo;features&rdquo; that some would consider
+&ldquo;anti&rdquo;-features, and that sound like they could negatively influence performance:</p>
+
+<ul>
+<li>it may behave locale-dependent</li>
+<li>it can parse and will let pass negative input values, which is often not desired
+for a result of unsigned type</li>
+<li>it can perform base conversion</li>
+</ul>
+
+
+<p>In C++11 there is also the alternative
+<a href="http://en.cppreference.com/w/cpp/string/byte/strtoul">std::strtoull</a>.
+It should behave about the same as std::stoull except in case of error.
+std::stoull will throw and std::strtoull will not.</p>
+
+<p>That&rsquo;s what we get from the standard library for long unsigned integer types.</p>
+
+<h2>Alternative implementations (w/o error checking)</h2>
+
+<p>Another alternative is to roll a string to number conversion function ourselves.
+If we hard-code it to base 10 and do not care about error checking, a naive
+implementation may look like this:</p>
+
+<p>```cpp
+inline uint64_t naive(std::string const&amp; value) {
+  uint64_t result = 0;
+  char const<em> p = value.c_str();
+  char const</em> q = p + value.size();
+  while (p &lt; q) {</p>
+
+<pre><code>result *= 10;
+result += *(p++) - '0';
+</code></pre>
+
+<p>  }
+  return result;
+}
+```</p>
+
+<p>Obviously the above will produce wrong results for invalid
+input data, but for &ldquo;trusted&rdquo; (known to be valid) input it may
+be just fine.</p>
+
+<p>Here&rsquo;s just another implementation for the problem at hand. This one
+doesn&rsquo;t perform the times 10 operation, but splits it into two bitshifting
+operations:</p>
+
+<p>```cpp
+inline uint64_t bitshift(std::string const&amp; value) {
+  uint64_t result = 0;</p>
+
+<p>  char const<em> p = value.c_str();
+  char const</em> q = p + value.size();
+  while (p &lt; q) {</p>
+
+<pre><code>result = (result &lt;&lt; 1) + (result &lt;&lt; 3) + *(p++) - '0';
+</code></pre>
+
+<p>  }
+  return result;
+}
+```</p>
+
+<p>Again no error checking is present in the above function, but it
+should be ok for trusted inputs.</p>
+
+<p>By manually unrolling the while loop and converting it into a switch
+statement, we can also come up with a conversion function that has minimal
+branching:</p>
+
+<p>```cpp
+inline uint64_t unrolled(std::string const&amp; value) {
+  uint64_t result = 0;</p>
+
+<p>  size_t const length = value.size();
+  switch (length) {</p>
+
+<pre><code>case 20:    result += (value[length - 20] - '0') * 10000000000000000000ULL;
+case 19:    result += (value[length - 19] - '0') * 1000000000000000000ULL;
+case 18:    result += (value[length - 18] - '0') * 100000000000000000ULL;
+case 17:    result += (value[length - 17] - '0') * 10000000000000000ULL;
+case 16:    result += (value[length - 16] - '0') * 1000000000000000ULL;
+case 15:    result += (value[length - 15] - '0') * 100000000000000ULL;
+case 14:    result += (value[length - 14] - '0') * 10000000000000ULL;
+case 13:    result += (value[length - 13] - '0') * 1000000000000ULL;
+case 12:    result += (value[length - 12] - '0') * 100000000000ULL;
+case 11:    result += (value[length - 11] - '0') * 10000000000ULL;
+case 10:    result += (value[length - 10] - '0') * 1000000000ULL;
+case  9:    result += (value[length -  9] - '0') * 100000000ULL;
+case  8:    result += (value[length -  8] - '0') * 10000000ULL;
+case  7:    result += (value[length -  7] - '0') * 1000000ULL;
+case  6:    result += (value[length -  6] - '0') * 100000ULL;
+case  5:    result += (value[length -  5] - '0') * 10000ULL;
+case  4:    result += (value[length -  4] - '0') * 1000ULL;
+case  3:    result += (value[length -  3] - '0') * 100ULL;
+case  2:    result += (value[length -  2] - '0') * 10ULL;
+case  1:    result += (value[length -  1] - '0');
+</code></pre>
+
+<p>  }
+  return result;
+}
+```</p>
+
+<h2>Performance testing</h2>
+
+<p>To check out how all these alternatives perform, I put them into a small
+<a href="/downloads/code/stoull-test.cpp">test driver program</a>. To compile it with
+g++ and run it, I used this command:</p>
+
+<p><code>bash
+g++ -Wall -Wextra -march=native -std=c++11 -O3 stdoull-test.cpp &amp;&amp; ./a.out
+</code></p>
+
+<p>The test program will convert input strings of different lengths to uint64_t
+using the above (and some other) implementations, going up from 10,000 iterations
+per string up to 100,000,000. It also prints the wall-clock time spent in each
+run. The most interesting output it prints is in the &ldquo;ms&rdquo; column. The &ldquo;result&rdquo;
+column can be fully ignored. It&rsquo;s only there so the compiler won&rsquo;t optimize away
+the calls to the conversion functions.</p>
+
+<p>The timings from my local laptop (Intel Core i7-4710HQ CPU @ 2.50GHz, Ubuntu 16.04,
+g++ 5.3.1 &ndash; your mileage may vary!) for the 100,000,000 conversions are:</p>
+
+<p>```plain execution times for various string-to-uint64 implementations
+test &lsquo;std::stoull&rsquo;       string &lsquo;1&rsquo;                           1209 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;99&rsquo;                          1382 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;1234&rsquo;                        1725 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;1234567&rsquo;                     2257 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;1234567891&rsquo;                  2764 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;12345678901234&rsquo;              3899 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;12345678901234678901&rsquo;        7391 ms</p>
+
+<p>test &lsquo;std::strtoull&rsquo;     string &lsquo;1&rsquo;                           1104 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;99&rsquo;                          1300 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;1234&rsquo;                        1628 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;1234567&rsquo;                     2428 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;1234567891&rsquo;                  2662 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;12345678901234&rsquo;              3705 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;12345678901234678901&rsquo;        6631 ms</p>
+
+<p>test &lsquo;naive&rsquo;             string &lsquo;1&rsquo;                            202 ms
+test &lsquo;naive&rsquo;             string &lsquo;99&rsquo;                           314 ms
+test &lsquo;naive&rsquo;             string &lsquo;1234&rsquo;                         475 ms
+test &lsquo;naive&rsquo;             string &lsquo;1234567&rsquo;                      732 ms
+test &lsquo;naive&rsquo;             string &lsquo;1234567891&rsquo;                   987 ms
+test &lsquo;naive&rsquo;             string &lsquo;12345678901234&rsquo;              1343 ms
+test &lsquo;naive&rsquo;             string &lsquo;12345678901234678901&rsquo;        1862 ms</p>
+
+<p>test &lsquo;bitshift&rsquo;          string &lsquo;1&rsquo;                            188 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;99&rsquo;                           245 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;1234&rsquo;                         397 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;1234567&rsquo;                      462 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;1234567891&rsquo;                   666 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;12345678901234&rsquo;               888 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;12345678901234678901&rsquo;        1277 ms</p>
+
+<p>test &lsquo;unrolled&rsquo;          string &lsquo;1&rsquo;                            289 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;99&rsquo;                           289 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;1234&rsquo;                         351 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;1234567&rsquo;                      408 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;1234567891&rsquo;                   547 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;12345678901234&rsquo;               778 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;12345678901234678901&rsquo;        1068 ms
+```</p>
+
+<p>It&rsquo;s no surprise the standard library functions with their generality and
+error checking features are slower than the specialized functions that took
+the liberty to ignore all that.</p>
+
+<p>Which method is fastest now?</p>
+
+<p>As can be seen above, the &ldquo;bitshift&rdquo; variant was fastest for short and medium
+length inputs in my environment. At some point when input values get longer,
+the &ldquo;bitshift&rdquo; methods gets overtaken by the &ldquo;unrolled&rdquo; variant. The &ldquo;naive&rdquo;
+variant was slower than the two in most cases, but still performs surprisingly
+well.</p>
+
+<h2>Conclusion</h2>
+
+<p>The take-away: even though string-to-number conversion routines are
+present in the standard library, it can still be beneficial to hand-craft
+specialized variants of them for maximum performance. This is especially true
+when most of the generality that the standard library routines provide is not
+required in your use case.</p>
+
+<p>For example, if you know that the conversion functions will only operate on
+&ldquo;trusted&rdquo; input (only numeric digit input characters, length of input string
+won&rsquo;t exceed the maximum length of a uint64_t number etc.) then error checking
+is not required.</p>
+
+<p>Additionally, if you can limit yourself to numbers of a specific base and
+don&rsquo;t negative base conversion nor the handling of negative values, a lot of
+the generality and safety overhead of std::stoull may be avoided.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[AQL Optimizer Improvements for 2.8]]></title>
@@ -497,97 +717,6 @@ the performance for point lookups is more or less the same as in 2.7.</p>
 <p>Note that the changes to the index code in 2.8 only affect how indexes are accessed
 from within AQL queries and how filtering works. No changes have been made for other
 index operations such as insert, updates, and removals.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[ArangoDB-PHP Driver Improvements]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/09/10/arangodb-php-driver-improvements/"/>
-    <updated>2015-09-10T14:05:40+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/09/10/arangodb-php-driver-improvements</id>
-    <content type="html"><![CDATA[<p>While preparing the release of ArangoDB 2.7, some improvements were made for the
-<a href="https://github.com/arangodb/arangodb-php">PHP driver for ArangoDB</a>.</p>
-
-<p>The 2.7 version of the PHP driver now supports the AQL query results cache. The
-cache can be turned on or off globally, or be set to demand mode. The demand mode will
-allow controlling caching on a per-AQL-query basis.</p>
-
-<p>Additionally, the HTTP transport layer in the PHP driver was improved. Some internal
-string handling methods were optimized so that the transport part becomes cheaper. All
-driver operations that communicate with the ArangoDB server will benefit from this.</p>
-
-<p>For a demonstration of the improvements, here is a script that creates 100,000
-documents in a local ArangoDB database via the PHP driver. As we&rsquo;re interested in assessing
-the HTTP layer improvements, the script intentionally issues 100,000 HTTP requests
-instead of using the specialized <code>import</code> method provided by the driver.</p>
-
-<p>The script code can be found <a href="https://github.com/arangodb/arangodb-php/blob/devel/examples/http-test.php">here</a>.</p>
-
-<p>The baseline for the improvments is the (non-optimized) 2.6 version of the PHP
-driver. Here are the results for issuing 100,000 requests with the 2.6 driver
-(script was run twice to see if there are variations in execution time):</p>
-
-<p>```plain execution times with 2.6 driver
-creating 100000 documents
-creating documents took 55.144556999207 s</p>
-
-<p>creating 100000 documents
-creating documents took 54.476955890656 s
-```</p>
-
-<p>Running it with the 2.7 version of the PHP driver now shows the improvements.
-Execution time for the same script goes down from 54 seconds to 42 seconds:
-```plain execution times with 2.7 driver
-creating 100000 documents
-creating documents took 42.886090040207 s</p>
-
-<p>creating 100000 documents
-creating documents took 42.578990936279 s
-```</p>
-
-<p>The PHP version used here was:
-```plain PHP version details
-PHP 5.5.12-2ubuntu4.6 (cli) (built: Jul  2 2015 15:27:14)
-Copyright &copy; 1997-2014 The PHP Group
-Zend Engine v2.5.0, Copyright &copy; 1998-2014 Zend Technologies</p>
-
-<pre><code>with Zend OPcache v7.0.4-dev, Copyright (c) 1999-2014, by Zend Technologies
-</code></pre>
-
-<p>```</p>
-
-<p>Following are the results from a different machine, this time using PHP 5.6:
-```plain execution times with 2.6 driver
-creating 100000 documents
-creating documents took 48.394731044769 s</p>
-
-<p>creating 100000 documents
-creating documents took 47.618598937988 s
-```</p>
-
-<p>```plain execution times with 2.7 driver
-creating 100000 documents
-creating documents took 40.535583972931 s</p>
-
-<p>creating 100000 documents
-creating documents took 40.041265010834 s
-```</p>
-
-<p>The PHP version details for this machine were:
-```plain PHP version details
-PHP 5.6.4-4ubuntu6.2 (cli) (built: Jul  2 2015 15:29:28)
-Copyright &copy; 1997-2014 The PHP Group
-Zend Engine v2.6.0, Copyright &copy; 1998-2014 Zend Technologies</p>
-
-<pre><code>with Zend OPcache v7.0.4-dev, Copyright (c) 1999-2014, by Zend Technologies
-</code></pre>
-
-<p>```</p>
-
-<p>The actual improvements depend on many factors, so your exact mileage may vary.
-The improvements may not be noticable for applications that issue only a few
-requests with the driver, but they will be significant when performing lots of
-requests, as in the above examples.</p>
 ]]></content>
   </entry>
   

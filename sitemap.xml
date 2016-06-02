@@ -313,12 +313,28 @@
         <lastmod>2016-01-26T23:48:37+01:00</lastmod>
     </url>
     <url>
+        <loc>http://jsteemann.github.io/blog/2016/06/02/compiling-v8-with-g-plus-plus-6/</loc>
+        <lastmod>2016-06-03T00:44:56+02:00</lastmod>
+    </url>
+    <url>
+        <loc>
+            http://jsteemann.github.io/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu/
+        </loc>
+        <lastmod>2016-06-03T00:46:13+02:00</lastmod>
+    </url>
+    <url>
+        <loc>
+            http://jsteemann.github.io/blog/2016/06/02/fastest-string-to-uint64-conversion-method/
+        </loc>
+        <lastmod>2016-06-02T22:14:00+02:00</lastmod>
+    </url>
+    <url>
         <loc>http://jsteemann.github.io/about/</loc>
-        <lastmod>2016-01-26T23:48:37+01:00</lastmod>
+        <lastmod>2016-06-03T00:46:13+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2016-01-26T23:48:37+01:00</lastmod>
+        <lastmod>2016-06-03T00:46:13+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -326,6 +342,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2016-01-26T23:48:37+01:00</lastmod>
+        <lastmod>2016-06-03T00:46:13+02:00</lastmod>
     </url>
 </urlset>

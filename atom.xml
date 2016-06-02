@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-01-26T23:49:30+01:00</updated>
+  <updated>2016-06-03T00:48:00+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,580 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Fastest String-to-uint64 Conversion Method?]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/02/fastest-string-to-uint64-conversion-method/"/>
+    <updated>2016-06-02T20:15:27+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/02/fastest-string-to-uint64-conversion-method</id>
+    <content type="html"><![CDATA[<p>While doing some optimization work for the upcoming ArangoDB 3.0 release,
+we had to figure out what was the &ldquo;ideal&rdquo; way of converting a string
+representation of a number into a C++ uint64_t (64 bit unsigned integer type).
+This kind of operation is performed a lot during the lifetime of an ArangoDB
+server process, so it seemed worthwhile making it as fast as possible.</p>
+
+<!-- more -->
+
+
+<h2>std::stoull and std::strtoull</h2>
+
+<p>The natural solution for this kind of conversion is the standard library&rsquo;s
+<a href="http://en.cppreference.com/w/cpp/string/basic_string/stoul">std::stoull</a>
+function. On the one hand, that solution is potentially optimized and definitely
+robust. It performs validation of the input characters and is also battle-tested
+by millions of users.</p>
+
+<p>On the other hand, std::stoull has a few &ldquo;features&rdquo; that some would consider
+&ldquo;anti&rdquo;-features, and that sound like they could negatively influence performance:</p>
+
+<ul>
+<li>it may behave locale-dependent</li>
+<li>it can parse and will let pass negative input values, which is often not desired
+for a result of unsigned type</li>
+<li>it can perform base conversion</li>
+</ul>
+
+
+<p>In C++11 there is also the alternative
+<a href="http://en.cppreference.com/w/cpp/string/byte/strtoul">std::strtoull</a>.
+It should behave about the same as std::stoull except in case of error.
+std::stoull will throw and std::strtoull will not.</p>
+
+<p>That&rsquo;s what we get from the standard library for long unsigned integer types.</p>
+
+<h2>Alternative implementations (w/o error checking)</h2>
+
+<p>Another alternative is to roll a string to number conversion function ourselves.
+If we hard-code it to base 10 and do not care about error checking, a naive
+implementation may look like this:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="kr">inline</span> <span class="n">uint64_t</span> <span class="n">naive</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="k">const</span><span class="o">&amp;</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">uint64_t</span> <span class="n">result</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>  <span class="kt">char</span> <span class="k">const</span><span class="o">*</span> <span class="n">p</span> <span class="o">=</span> <span class="n">value</span><span class="p">.</span><span class="n">c_str</span><span class="p">();</span>
+</span><span class='line'>  <span class="kt">char</span> <span class="k">const</span><span class="o">*</span> <span class="n">q</span> <span class="o">=</span> <span class="n">p</span> <span class="o">+</span> <span class="n">value</span><span class="p">.</span><span class="n">size</span><span class="p">();</span>
+</span><span class='line'>  <span class="k">while</span> <span class="p">(</span><span class="n">p</span> <span class="o">&lt;</span> <span class="n">q</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">result</span> <span class="o">*=</span> <span class="mi">10</span><span class="p">;</span>
+</span><span class='line'>    <span class="n">result</span> <span class="o">+=</span> <span class="o">*</span><span class="p">(</span><span class="n">p</span><span class="o">++</span><span class="p">)</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Obviously the above will produce wrong results for invalid
+input data, but for &ldquo;trusted&rdquo; (known to be valid) input it may
+be just fine.</p>
+
+<p>Here&rsquo;s just another implementation for the problem at hand. This one
+doesn&rsquo;t perform the times 10 operation, but splits it into two bitshifting
+operations:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="kr">inline</span> <span class="n">uint64_t</span> <span class="n">bitshift</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="k">const</span><span class="o">&amp;</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">uint64_t</span> <span class="n">result</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="kt">char</span> <span class="k">const</span><span class="o">*</span> <span class="n">p</span> <span class="o">=</span> <span class="n">value</span><span class="p">.</span><span class="n">c_str</span><span class="p">();</span>
+</span><span class='line'>  <span class="kt">char</span> <span class="k">const</span><span class="o">*</span> <span class="n">q</span> <span class="o">=</span> <span class="n">p</span> <span class="o">+</span> <span class="n">value</span><span class="p">.</span><span class="n">size</span><span class="p">();</span>
+</span><span class='line'>  <span class="k">while</span> <span class="p">(</span><span class="n">p</span> <span class="o">&lt;</span> <span class="n">q</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="n">result</span> <span class="o">=</span> <span class="p">(</span><span class="n">result</span> <span class="o">&lt;&lt;</span> <span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">result</span> <span class="o">&lt;&lt;</span> <span class="mi">3</span><span class="p">)</span> <span class="o">+</span> <span class="o">*</span><span class="p">(</span><span class="n">p</span><span class="o">++</span><span class="p">)</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">;</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Again no error checking is present in the above function, but it
+should be ok for trusted inputs.</p>
+
+<p>By manually unrolling the while loop and converting it into a switch
+statement, we can also come up with a conversion function that has minimal
+branching:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+</pre></td><td class='code'><pre><code class='cpp'><span class='line'><span class="kr">inline</span> <span class="n">uint64_t</span> <span class="n">unrolled</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">string</span> <span class="k">const</span><span class="o">&amp;</span> <span class="n">value</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>  <span class="n">uint64_t</span> <span class="n">result</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+</span><span class='line'>
+</span><span class='line'>  <span class="n">size_t</span> <span class="k">const</span> <span class="n">length</span> <span class="o">=</span> <span class="n">value</span><span class="p">.</span><span class="n">size</span><span class="p">();</span>
+</span><span class='line'>  <span class="k">switch</span> <span class="p">(</span><span class="n">length</span><span class="p">)</span> <span class="p">{</span>
+</span><span class='line'>    <span class="k">case</span> <span class="mi">20</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">20</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">10000000000000000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span> <span class="mi">19</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">19</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000000000000000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span> <span class="mi">18</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">18</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100000000000000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span> <span class="mi">17</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">17</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">10000000000000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span> <span class="mi">16</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">16</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000000000000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span> <span class="mi">15</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">15</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100000000000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span> <span class="mi">14</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">14</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">10000000000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span> <span class="mi">13</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">13</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000000000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span> <span class="mi">12</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">12</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100000000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span> <span class="mi">11</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">11</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">10000000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span> <span class="mi">10</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span> <span class="mi">10</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span>  <span class="mi">9</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span>  <span class="mi">9</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span>  <span class="mi">8</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span>  <span class="mi">8</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">10000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span>  <span class="mi">7</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span>  <span class="mi">7</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span>  <span class="mi">6</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span>  <span class="mi">6</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span>  <span class="mi">5</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span>  <span class="mi">5</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">10000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span>  <span class="mi">4</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span>  <span class="mi">4</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">1000ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span>  <span class="mi">3</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span>  <span class="mi">3</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span>  <span class="mi">2</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span>  <span class="mi">2</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">)</span> <span class="o">*</span> <span class="mi">10ULL</span><span class="p">;</span>
+</span><span class='line'>    <span class="k">case</span>  <span class="mi">1</span><span class="o">:</span>    <span class="n">result</span> <span class="o">+=</span> <span class="p">(</span><span class="n">value</span><span class="p">[</span><span class="n">length</span> <span class="o">-</span>  <span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="sc">&#39;0&#39;</span><span class="p">);</span>
+</span><span class='line'>  <span class="p">}</span>
+</span><span class='line'>  <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+</span><span class='line'><span class="p">}</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Performance testing</h2>
+
+<p>To check out how all these alternatives perform, I put them into a small
+<a href="http://jsteemann.github.io/downloads/code/stoull-test.cpp">test driver program</a>. To compile it with
+g++ and run it, I used this command:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>g++ -Wall -Wextra -march<span class="o">=</span>native -std<span class="o">=</span>c++11 -O3 stdoull-test.cpp <span class="o">&amp;&amp;</span> ./a.out
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The test program will convert input strings of different lengths to uint64_t
+using the above (and some other) implementations, going up from 10,000 iterations
+per string up to 100,000,000. It also prints the wall-clock time spent in each
+run. The most interesting output it prints is in the &ldquo;ms&rdquo; column. The &ldquo;result&rdquo;
+column can be fully ignored. It&rsquo;s only there so the compiler won&rsquo;t optimize away
+the calls to the conversion functions.</p>
+
+<p>The timings from my local laptop (Intel Core i7-4710HQ CPU @ 2.50GHz, Ubuntu 16.04,
+g++ 5.3.1 &ndash; your mileage may vary!) for the 100,000,000 conversions are:</p>
+
+<figure class='code'><figcaption><span>execution times for various string-to-uint64 implementations</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+<span class='line-number'>39</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>test 'std::stoull'       string '1'                           1209 ms
+</span><span class='line'>test 'std::stoull'       string '99'                          1382 ms
+</span><span class='line'>test 'std::stoull'       string '1234'                        1725 ms
+</span><span class='line'>test 'std::stoull'       string '1234567'                     2257 ms
+</span><span class='line'>test 'std::stoull'       string '1234567891'                  2764 ms
+</span><span class='line'>test 'std::stoull'       string '12345678901234'              3899 ms
+</span><span class='line'>test 'std::stoull'       string '12345678901234678901'        7391 ms
+</span><span class='line'>
+</span><span class='line'>test 'std::strtoull'     string '1'                           1104 ms
+</span><span class='line'>test 'std::strtoull'     string '99'                          1300 ms
+</span><span class='line'>test 'std::strtoull'     string '1234'                        1628 ms
+</span><span class='line'>test 'std::strtoull'     string '1234567'                     2428 ms
+</span><span class='line'>test 'std::strtoull'     string '1234567891'                  2662 ms
+</span><span class='line'>test 'std::strtoull'     string '12345678901234'              3705 ms
+</span><span class='line'>test 'std::strtoull'     string '12345678901234678901'        6631 ms
+</span><span class='line'>
+</span><span class='line'>test 'naive'             string '1'                            202 ms
+</span><span class='line'>test 'naive'             string '99'                           314 ms
+</span><span class='line'>test 'naive'             string '1234'                         475 ms
+</span><span class='line'>test 'naive'             string '1234567'                      732 ms
+</span><span class='line'>test 'naive'             string '1234567891'                   987 ms
+</span><span class='line'>test 'naive'             string '12345678901234'              1343 ms
+</span><span class='line'>test 'naive'             string '12345678901234678901'        1862 ms
+</span><span class='line'>
+</span><span class='line'>test 'bitshift'          string '1'                            188 ms
+</span><span class='line'>test 'bitshift'          string '99'                           245 ms
+</span><span class='line'>test 'bitshift'          string '1234'                         397 ms
+</span><span class='line'>test 'bitshift'          string '1234567'                      462 ms
+</span><span class='line'>test 'bitshift'          string '1234567891'                   666 ms
+</span><span class='line'>test 'bitshift'          string '12345678901234'               888 ms
+</span><span class='line'>test 'bitshift'          string '12345678901234678901'        1277 ms
+</span><span class='line'>
+</span><span class='line'>test 'unrolled'          string '1'                            289 ms
+</span><span class='line'>test 'unrolled'          string '99'                           289 ms
+</span><span class='line'>test 'unrolled'          string '1234'                         351 ms
+</span><span class='line'>test 'unrolled'          string '1234567'                      408 ms
+</span><span class='line'>test 'unrolled'          string '1234567891'                   547 ms
+</span><span class='line'>test 'unrolled'          string '12345678901234'               778 ms
+</span><span class='line'>test 'unrolled'          string '12345678901234678901'        1068 ms</span></code></pre></td></tr></table></div></figure>
+
+
+<p>It&rsquo;s no surprise the standard library functions with their generality and
+error checking features are slower than the specialized functions that took
+the liberty to ignore all that.</p>
+
+<p>Which method is fastest now?</p>
+
+<p>As can be seen above, the &ldquo;bitshift&rdquo; variant was fastest for short and medium
+length inputs in my environment. At some point when input values get longer,
+the &ldquo;bitshift&rdquo; methods gets overtaken by the &ldquo;unrolled&rdquo; variant. The &ldquo;naive&rdquo;
+variant was slower than the two in most cases, but still performs surprisingly
+well.</p>
+
+<h2>Conclusion</h2>
+
+<p>The take-away: even though string-to-number conversion routines are
+present in the standard library, it can still be beneficial to hand-craft
+specialized variants of them for maximum performance. This is especially true
+when most of the generality that the standard library routines provide is not
+required in your use case.</p>
+
+<p>For example, if you know that the conversion functions will only operate on
+&ldquo;trusted&rdquo; input (only numeric digit input characters, length of input string
+won&rsquo;t exceed the maximum length of a uint64_t number etc.) then error checking
+is not required.</p>
+
+<p>Additionally, if you can limit yourself to numbers of a specific base and
+don&rsquo;t negative base conversion nor the handling of negative values, a lot of
+the generality and safety overhead of std::stoull may be avoided.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling ArangoDB 3.0 on Ubuntu]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu/"/>
+    <updated>2016-06-02T20:15:01+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu</id>
+    <content type="html"><![CDATA[<p>We have spent a lot of time working on ArangoDB 3.0. That
+version will not only provide major functionality and performance
+improvements, but will also come with an improved, CMake-based
+build system.</p>
+
+<p>This post explains how to use CMake to build ArangoDB 3.0 on a recent
+Ubuntu Linux. For the impatient there&rsquo;s a command summary at the end of
+this post.</p>
+
+<!-- more -->
+
+
+<h2>Installing prerequisites</h2>
+
+<p>Here&rsquo;s how to build ArangoDB 3.0 with cmake on a recent Ubuntu Linux.</p>
+
+<p>Ubuntu 15.x and 16.x should have recent enough packages so any missing
+prerequisites can be installed via a simple <code>sudo apt-get install</code> command:</p>
+
+<figure class='code'><figcaption><span>installing prerequisites</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo apt-get install cmake make build-essential openssl python2.7 g++ gcc
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Older versions of Ubuntu can be convinced to work too, but this requires
+a g++ version of at least 4.9. Ubuntu 14 ships with older g++
+versions by default, so you will first need to install a newer g++ version
+(see <a href="http://askubuntu.com/questions/466651/how-do-i-use-the-latest-gcc-on-ubuntu-14-04">here</a> or
+<a href="http://askubuntu.com/questions/428198/getting-installing-gcc-g-4-9-on-ubuntu">here</a> for
+some external instructions). Once the g++ and gcc compilers are recent enough,
+install the other prerequisites.</p>
+
+<h2>Cloning ArangoDB</h2>
+
+<p>After having installed the prerequisites, clone the ArangoDB repository
+from Github and then cd into the directory <code>arangodb</code> that the cloning
+will have created:</p>
+
+<figure class='code'><figcaption><span>cloning ArangoDB</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>git clone https://github.com/arangodb/arangodb
+</span><span class='line'><span class="nb">cd </span>arangodb
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Then check out the 3.0 branch and pull the latest changes:</p>
+
+<figure class='code'><figcaption><span>cloning ArangoDB</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>git checkout 3.0
+</span><span class='line'>git pull
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Building ArangoDB</h2>
+
+<p>A convention when using CMake is to not build directly in the source
+directory, but use a separate build directory instead. The benefit of
+this is that building in a separate directory won&rsquo;t change the source
+directory, and the build directory can be disposed easily.</p>
+
+<p>To create an initial build directory named <code>build</code> and cd into it,
+just type:</p>
+
+<figure class='code'><figcaption><span>creating a build directory</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>mkdir -p build
+</span><span class='line'><span class="nb">cd </span>build
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>It&rsquo;s now time to invoke CMake. CMake should be executed from the build
+directory, but needs to know where it&rsquo;s build instructions file
+(named <code>CMakeLists.txt</code> is). This file is located in the source directory.
+To run CMake without any specific options, we can use:</p>
+
+<figure class='code'><figcaption><span>running CMake</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>cmake -DCMAKE_BUILD_TYPE<span class="o">=</span>RelWithDebInfo ..
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will run CMake from inside the <code>build</code> directory and tell it to
+look for <code>CMakeLists.txt</code> in the source directory. The
+<code>-DCMAKE_BUILD_TYPE=RelWithDebInfo</code> part will tell CMake to build
+binaries with optimizations and debug symbols. Other useful build
+types are:</p>
+
+<ul>
+<li><code>-DCMAKE_BUILD_TYPE=Debug</code>: without optimizations, for debugging only</li>
+<li><code>-DCMAKE_BUILD_TYPE=Release</code>: with optimizations, no debug symbols,
+not useful for debugging</li>
+</ul>
+
+
+<p>Invoking CMake will perform some checks for required components, compiler
+and platform features. If anything fails, it should print some error
+message. If everything works well, the command should have created a
+<code>Makefile</code> in the <code>build</code> directory.</p>
+
+<p><em>side note: CMake on Linux will by default generate UNIX <code>Makefile</code>s,
+but it can also be told to generate <a href="https://ninja-build.org/">ninja</a>
+files instead. On Windows it can generate solution files for Visual
+Studio.</em></p>
+
+<p>Now that the <code>Makefile</code> is there, we can run <code>make</code> as usual (note that
+the <code>-j4</code> means to build with 4 parallel processes &ndash; adjust as needed!):</p>
+
+<figure class='code'><figcaption><span>running make</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>make -j4
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Starting arangod and arangosh</h2>
+
+<p>And that&rsquo;s already it for a normal build. Note that the build artefacts
+and thus the binaries will also be created inside the <code>build</code> directory.
+<code>arangod</code> and <code>arangosh</code> will be located in the <code>bin</code> subdirectory of
+the <code>build</code> directory. There is no need to install these binaries, they
+can be run without installing them first. However, starting them from
+inside the build directory will not work, because they will complain
+about missing files. It is better to cd one level up first and then
+start them:</p>
+
+<figure class='code'><figcaption><span>starting arangod</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">cd</span> ..
+</span><span class='line'>build/bin/arangod ~/testdata --server.authentication <span class="nb">false</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The former will start arangod with default configuration, with a fresh
+database directory located in <code>~/testdata</code>.</p>
+
+<p>If you ran all the commands on your local machine (127.0.0.1) then you
+can now open a browser and point it to <a href="http://127.0.0.1:8529/">http://127.0.0.1:8529/</a>.
+This should bring up ArangoDB&rsquo;s web interface.</p>
+
+<p>You can alternatively start an ArangoShell to connect to the ArangoDB
+server. In another terminal window, cd into the <code>arangodb</code> directory and
+start an ArangoShell as follows:</p>
+
+<figure class='code'><figcaption><span>starting arangosh</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">cd </span>arangodb
+</span><span class='line'>build/bin/arangosh
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>You should now see the ArangoShell prompt and be able to type some
+commands!</p>
+
+<h2>Command summary</h2>
+
+<p>Note: in contrast to the above step-by-step instructions, some commands
+here have been put together on a single line to make developer&rsquo;s life
+easier.</p>
+
+<figure class='code'><figcaption><span>installing prerequisites</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo apt-get install cmake make build-essential openssl python2.7 g++ gcc
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>initial checkout of the 3.0 branch and build configuration</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>git clone https://github.com/arangodb/arangodb
+</span><span class='line'><span class="nb">cd </span>arangodb
+</span><span class='line'>git checkout 3.0
+</span><span class='line'>git pull
+</span><span class='line'>mkdir -p build
+</span><span class='line'><span class="o">(</span><span class="nb">cd </span>build <span class="o">&amp;&amp;</span> cmake -DCMAKE_BUILD_TYPE<span class="o">=</span>RelWithDebInfo ..<span class="o">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>Update, build and run cycle </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>git pull
+</span><span class='line'><span class="o">(</span><span class="nb">cd </span>build <span class="o">&amp;&amp;</span> make -j4<span class="o">)</span>
+</span><span class='line'>build/bin/arangod ~/testdata --server.authentication <span class="nb">false</span>
+</span></code></pre></td></tr></table></div></figure>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling V8 With G++6]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/02/compiling-v8-with-g-plus-plus-6/"/>
+    <updated>2016-06-02T20:14:46+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/02/compiling-v8-with-g-plus-plus-6</id>
+    <content type="html"><![CDATA[<p>With g++ 6 becoming more and more adopted, it&rsquo;s about time to point out an issue
+that hit some of us ArangoDB developers and a few of our users that compile ArangoDB
+from source with g++ 6.</p>
+
+<p>The problem is that when compiling ArangoDB with g++6 with default options, arangod
+starts and almost immediately segfaults.</p>
+
+<!-- more -->
+
+
+<p>A backtrace of the crashed arangod process shows that the segfaults originate from
+the V8 JavaScript engine that ArangoDB uses internally.
+The problem seems to have affected other users of V8 as well, indicated by the following
+error reports:</p>
+
+<ul>
+<li>node.js: <a href="https://github.com/nodejs/node/issues/6724">https://github.com/nodejs/node/issues/6724</a></li>
+<li>chromium: <a href="https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68853">https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68853</a></li>
+</ul>
+
+
+<p>The reason for the error now popping up is a change in the g++ 6 optimizer as stated
+in the <a href="https://gcc.gnu.org/gcc-6/changes.html">gcc6 release notes</a>:</p>
+
+<blockquote><p>Value range propagation now assumes that the this pointer of C++ member functions is non-null.
+This eliminates common null pointer checks but also breaks some non-conforming code-bases (such as Qt-5, Chromium, KDevelop).
+As a temporary work-around -fno-delete-null-pointer-checks can be used. Wrong code can be identified by using -fsanitize=undefined.</p></blockquote>
+
+<p>That means if compiling ArangoDB 2.8 from source with g++ 6 or higher, please be sure to
+set the environment variables <code>CFLAGS="-fno-delete-null-pointer-checks"</code> and<br/>
+<code>CXXFLAGS="-fno-delete-null-pointer-checks"</code> before invoking the <code>configure</code> command:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>make setup
+</span><span class='line'><span class="nv">CFLAGS</span><span class="o">=</span><span class="s2">&quot;-fno-delete-null-pointer-checks&quot;</span> <span class="nv">CXXFLAGS</span><span class="o">=</span><span class="s2">&quot;-fno-delete-null-pointer-checks&quot;</span> ./configure
+</span><span class='line'>make
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The options will then be passed to the sub-make that builds the V8 engine. If you have
+already built V8 without these options, try removing the file <code>.v8-build-64</code> from the
+build directory and run <code>configure</code> and <code>make</code> again.</p>
+
+<p>As a reminder, ArangoDB 2.8 will also emit this big notice at the end of its <code>configure</code> output:</p>
+
+<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>configure: --------------------------------------------------------------------------------
+</span><span class='line'>configure:                                                                                 
+</span><span class='line'>configure: NOTE: if you are compiling ArangoDB with g++ 6.0 or higher, please make sure to 
+</span><span class='line'>configure: set the following environment variables when compiling ArangoDB:                
+</span><span class='line'>configure:                                                                                 
+</span><span class='line'>configure:   CFLAGS="-fno-delete-null-pointer-checks"                                      
+</span><span class='line'>configure:   CXXFLAGS="-fno-delete-null-pointer-checks"                                    
+</span><span class='line'>configure:                                                                                 
+</span><span class='line'>configure: --------------------------------------------------------------------------------</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Users of g++ 5.x do not need to set these flags, neither need users of clang++. And in the
+ArangoDB 3.0 build the options will be set automatically when compiling V8 if the compiler
+is g++. They will not be set for compiling any other parts of ArangoDB as it&rsquo;s only required
+for building V8.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Killing a Long-running Query]]></title>
@@ -2463,512 +3037,6 @@ be made unique using more than one criterion, e.g.</p>
 
 <p>This is currently not achievable via <code>RETURN DISTINCT</code>, as it only works
 with a single criterion.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Object Literal Simplification]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/27/aql-object-literal-simplification/"/>
-    <updated>2015-07-27T11:33:09+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/27/aql-object-literal-simplification</id>
-    <content type="html"><![CDATA[<p>ArangoDB&rsquo;s <code>devel</code> branch recently saw a change that makes writing
-some AQL queries a bit simpler.</p>
-
-<p>The change introduces an optional shorthand notation for object attributes
-in the style of ES6&rsquo;s enhanced object literal notation.</p>
-
-<!-- more -->
-
-
-<p>For example, consider the following query that groups values by <code>age</code>
-attribute and counts the number of documents per distinct <code>age</code> value:</p>
-
-<figure class='code'><figcaption><span>example query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection 
-</span><span class='line'>  COLLECT age = doc.age WITH COUNT INTO length
-</span><span class='line'>  RETURN { age: age, length: length } </span></code></pre></td></tr></table></div></figure>
-
-
-<p>The object declaration in the last line of the query is somewhat redundant
-because one has to type identical attribute names and values:</p>
-
-<figure class='code'><figcaption><span>the long notation for object literals</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN { age: age, length: length } </span></code></pre></td></tr></table></div></figure>
-
-
-<p>In this case, the new shorthand notation simplifies the <code>RETURN</code> to:</p>
-
-<figure class='code'><figcaption><span>using shorthand notation for object literals </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN { age, length } </span></code></pre></td></tr></table></div></figure>
-
-
-<p>In general, the shorthand notation can be used for all object literals when
-there is an attribute name that refers to a query variable of the same name.</p>
-
-<p>It can also be mixed with the longer notation, e.g.:</p>
-
-<figure class='code'><figcaption><span>mixing long and shorthand notation</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN { age, length, dateCreated: DATE_NOW() } </span></code></pre></td></tr></table></div></figure>
-
-
-
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[ES6 Features in ArangoDB 2.7]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/14/es6-features-in-arangodb-27/"/>
-    <updated>2015-07-14T20:33:55+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/14/es6-features-in-arangodb-27</id>
-    <content type="html"><![CDATA[<p>ArangoDB 2.6 uses V8 engine version 3.31.74.1 for running its own and all user-defined
-JavaScript code. In ArangoDB 2.7 (currently in development), we have upgraded V8 to
-version 4.3.61.</p>
-
-<p>The new V8 version in ArangoDB 2.7 provides several additional ES6 features that can
-be used to improve JavaScript usability and code quality. This blog post showcases <em>strong
-mode</em> and <em>rest parameters</em>, and also shows how to activate <em>TurboFan</em>, V8&rsquo;s new JIT compiler
-for JavaScript.</p>
-
-<p>ArangoDB 2.7 is in development right now, but it can be tried today by
-<a href="http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/">compiling it from source</a>.</p>
-
-<!-- more -->
-
-
-<h2>JavaScript strong mode</h2>
-
-<p>V8 v4 comes with an optional and experimental <em>strong mode</em>. This mode provides only a
-subset of JavaScript, with the idea of intentionally deactivating some of
-<a href="http://archive.oreilly.com/pub/a/javascript/excerpts/javascript-good-parts/bad-parts.html">JavaScript&rsquo;s bad parts</a>.
-It is based on <em>strict mode</em>, but goes further.</p>
-
-<p>Committing to <em>strong mode</em> may not only provide better and stronger semantics, but may
-also enable more optimization opportunities for the JavaScript compiler. For example, the
-strong mode disables JavaScript&rsquo;s <em>with</em> statement and <code>delete</code>! Additionally, <code>var</code> cannot
-be used anymore but is deprecated in favor of <code>let</code> and <code>const</code>.</p>
-
-<p>The proposal for the strong mode can be found
-<a href="https://docs.google.com/document/d/1Qk0qC4s_XNCLemj42FqfsRLp49nDQMZ1y7fwf5YjaI4/view">here</a>,
-and the V8 team also has a <a href="https://developers.google.com/v8/experiments">page about it</a>.</p>
-
-<p>Strong mode must be turned on explicitly. This can be done by adding the <code>--strong-mode=true</code>
-v8 option when starting <em>arangod</em> or <em>arangosh</em>:</p>
-
-<figure class='code'><figcaption><span>enabling strong mode</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh  --javascript.v8-options<span class="o">=</span><span class="s2">&quot;--strong_mode=true&quot;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Note that I am using <em>arangosh</em> above, but the same would work for <em>arangod</em>, too, so the feature
-can be used for Foxx routes as well.</p>
-
-<h2>Rest parameters</h2>
-
-<p>How to pass a variable number of arguments to a function?</p>
-
-<p>C and C++ programmers have been using and abusing the ellipsis (<code>...</code>) and <code>__VA_ARGS__</code> features
-of the C preprocessor for a long time. Then came the macros of <code>stdarg.h</code> / <code>cstdarg</code>,
-until C++11 really improved the situation with <code>std::initializer_list</code> and variadic templates.</p>
-
-<p>In JavaScript, one can use the <code>arguments</code> object:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">logSimple</span> <span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="nx">value</span> <span class="nx">of</span> <span class="nx">arguments</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">value</span><span class="p">);</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="nx">logSimple</span><span class="p">(</span><span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="s2">&quot;baz&quot;</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This does the job, and the above will print something like:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>2015-07-14T19:01:51Z [5245] INFO foo
-</span><span class='line'>2015-07-14T19:01:51Z [5245] INFO bar
-</span><span class='line'>2015-07-14T19:01:51Z [5245] INFO baz</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This is fine as long as all arguments shall be treated the same way. But what if some
-arguments have a designated meaning and should be treated specially?</p>
-
-<p>The solution is to use <em>ES6 rest parameters</em>. The last parameter in an argument list can be
-prefixed with <code>...</code> to capture any number of function parameters:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">logWithContext</span> <span class="p">(</span><span class="nx">context</span><span class="p">,</span> <span class="p">...</span><span class="nx">values</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>  <span class="k">for</span> <span class="p">(</span><span class="nx">value</span> <span class="nx">of</span> <span class="nx">values</span><span class="p">)</span> <span class="p">{</span>
-</span><span class='line'>    <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s1">&#39;[&#39;</span> <span class="o">+</span> <span class="nx">context</span> <span class="o">+</span> <span class="s1">&#39;] &#39;</span> <span class="o">+</span> <span class="nx">value</span><span class="p">);</span>
-</span><span class='line'>  <span class="p">}</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'>
-</span><span class='line'><span class="nx">logWithContext</span><span class="p">(</span><span class="s2">&quot;es6&quot;</span><span class="p">,</span> <span class="s2">&quot;foo&quot;</span><span class="p">,</span> <span class="s2">&quot;bar&quot;</span><span class="p">,</span> <span class="s2">&quot;baz&quot;</span><span class="p">);</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>As can be seen, the <code>logWithContext</code> function specially handles its <code>context</code> argument, while
-we can still pass any number of further parameters into it. Here&rsquo;s what the above will print:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>2015-07-14T19:07:27Z [5245] INFO [es6]: foo
-</span><span class='line'>2015-07-14T19:07:27Z [5245] INFO [es6]: bar
-</span><span class='line'>2015-07-14T19:07:27Z [5245] INFO [es6]: baz</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Note that rest parameters cannot be used with the default configuration and must be turned on
-explicitly in <em>arangosh</em> or <em>arangod</em>.</p>
-
-<p>The startup option to turn them on is:</p>
-
-<figure class='code'><figcaption><span>enabling rest parameters</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh --javascript.v8-options<span class="o">=</span><span class="s2">&quot;--harmony_rest_parameters=true&quot;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<h2>TurboFan</h2>
-
-<p>The new V8 version comes with <em>TurboFan</em>, a new JIT compiler for JavaScript.
-According to <a href="http://blog.chromium.org/2015/07/revving-up-javascript-performance-with.html">this post</a>
-it is already used in Chrome for compiling certain types of JavaScript code.</p>
-
-<p>As fas as I can see, it is turned off by default in our version of V8, and the compiler
-also seems to be rather experimental. To get an idea of what it can already do and where
-its limits are, it can already be tried in ArangoDB 2.7.</p>
-
-<p>By default, it seems to be turned off. Using the following startup option, it can be turned on for
-JavaScript functions with a certain name pattern (i.e. all function names starting with <em>testTurboFan</em>):</p>
-
-<figure class='code'><figcaption><span>starting ArangoShell with TurboFan enabled</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh --javascript.v8-options<span class="o">=</span><span class="s2">&quot;--turbo-filter=testTurboFan*&quot;</span><span class="sb">`</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Without turning on V8 tracing, one will not be able to tell which compiler is used to compile a
-specific function. To turn it on and actually confirm V8 is using TurboFan, use these options:</p>
-
-<figure class='code'><figcaption><span>starting ArangoShell with TurboFan and debug output</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>arangosh --javascript.v8-options<span class="o">=</span><span class="s2">&quot;--always-opt --trace_opt --turbo-filter=testTurboFan*&quot;</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This will be very verbose, but it is good to tell which internal compiler is used to compile a given
-JavaScript function.</p>
-
-<p>For example, after starting the ArangoShell with the above options, run the following test code
-to see that V8 uses TurboFan for compiling the first two functions (which match the name pattern),
-and Crankshaft for the third (which does not match the name pattern):</p>
-
-<figure class='code'><figcaption><span>test code for invoking the TurboFan compiler</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-</pre></td><td class='code'><pre><code class='js'><span class='line'><span class="kd">function</span> <span class="nx">testTurboFan1</span> <span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;turbo-fan 1&quot;</span><span class="p">);</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="nx">testTurboFan1</span><span class="p">();</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">function</span> <span class="nx">testTurboFan2</span> <span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;turbo-fan 2&quot;</span><span class="p">);</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="nx">testTurboFan2</span><span class="p">();</span>
-</span><span class='line'>
-</span><span class='line'><span class="kd">function</span> <span class="nx">testSomethingElse</span> <span class="p">()</span> <span class="p">{</span>
-</span><span class='line'>  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;something else&quot;</span><span class="p">);</span>
-</span><span class='line'><span class="p">}</span>
-</span><span class='line'><span class="nx">testSomethingElse</span><span class="p">();</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Here&rsquo;s the confirmation that TurboFan is used:</p>
-
-<figure class='code'><figcaption><span>debug output</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>...
-</span><span class='line'>[compiling method 0x31ca8804e351 &lt;JS Function testTurboFan1 (SharedFunctionInfo 0x31ca8804e171)&gt; using TurboFan]
-</span><span class='line'>...
-</span><span class='line'>[compiling method 0x31ca8804e7f9 &lt;JS Function testTurboFan2 (SharedFunctionInfo 0x31ca8804e619)&gt; using TurboFan]
-</span><span class='line'>...
-</span><span class='line'>[compiling method 0x31ca8804ec71 &lt;JS Function testSomethingElse (SharedFunctionInfo 0x31ca8804ea91)&gt; using Crankshaft]
-</span><span class='line'>...</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Have fun!</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Improvements for 2.7]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/06/17/aql-improvements-for-27/"/>
-    <updated>2015-06-17T12:35:16+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/06/17/aql-improvements-for-27</id>
-    <content type="html"><![CDATA[<p>With ArangoDB 2.6 being in beta already, it&rsquo;s time to look at some
-features scheduled for 2.7. Today I&rsquo;ll showcase a few AQL parser
-improvements that are present in the <code>devel</code> branch already, which will
-be the foundation for the 2.7 release.</p>
-
-<!-- more -->
-
-
-<h2>Star operator</h2>
-
-<p>The already existing star operator (<code>[*]</code>) is much more flexible in 2.7
-than in previous ArangoDB versions. It now allows filtering the values it
-iterates over, and optional projections.</p>
-
-<p>These features will be demonstrated using the following example members data:</p>
-
-<figure class='code'><figcaption><span>example data for queries</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;sir alfred&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">60</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;lettuce&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span> <span class="p">]</span> <span class="p">},</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;mozquito&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">15</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;skateboards&quot;</span><span class="p">,</span> <span class="s2">&quot;music&quot;</span> <span class="p">]</span> <span class="p">},</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;murphy&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">28</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;juice&quot;</span><span class="p">,</span> <span class="s2">&quot;tarts&quot;</span><span class="p">,</span> <span class="s2">&quot;cakes&quot;</span> <span class="p">]</span> <span class="p">},</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;helga&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">52</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;home&quot;</span><span class="p">,</span> <span class="s2">&quot;garden&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span> <span class="s2">&quot;cakes&quot;</span> <span class="p">]</span> <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>To return all members with an age of 40 or higher and that also like tortoises,
-we can now combine the star operator with an inline <code>FILTER</code> expression:</p>
-
-<figure class='code'><figcaption><span>star operator with inline FILTER</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes]</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The inline <code>FILTER</code> expression has access to the current array element via the
-pseudo-variable <code>CURRENT</code>. The <code>FILTER</code> expression can thus access the element&rsquo;s
-attributes and sub-attributes, and also use them in function expressions.</p>
-
-<p>The above query will return only two array members as expected:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;sir alfred&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">60</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;lettuce&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span> <span class="p">]</span> <span class="p">},</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;helga&quot;</span><span class="p">,</span> <span class="nt">&quot;age&quot;</span> <span class="p">:</span> <span class="mi">52</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="p">[</span> <span class="s2">&quot;home&quot;</span><span class="p">,</span> <span class="s2">&quot;garden&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span> <span class="s2">&quot;cakes&quot;</span> <span class="p">]</span> <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>It&rsquo;s also possible to extract just a specific sub-attribute of each result value:</p>
-
-<figure class='code'><figcaption><span>extracting just a sub-attribute</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes].name</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This will return:</p>
-
-<figure class='code'><figcaption><span>query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="s2">&quot;sir alfred&quot;</span><span class="p">,</span>
-</span><span class='line'>  <span class="s2">&quot;helga&quot;</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>If we don&rsquo;t want to return the whole match but a single attribute is not enough, the
-star operator can be used in combination with arbitrary projections, too.</p>
-
-<p>The following query extracts the matching members a <code>FILTER</code> as above, but now only
-returns each member&rsquo;s <code>age</code> attribute and the number of values in the member&rsquo;s <code>likes</code>
-attribute:</p>
-
-<figure class='code'><figcaption><span>extracting with a FILTER and a projection</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN members[* FILTER CURRENT.age &gt;= 40 && "tortoises" IN CURRENT.likes RETURN { 
-</span><span class='line'>  name: CURRENT.name, 
-</span><span class='line'>  likes: LENGTH(CURRENT.likes) 
-</span><span class='line'>}]</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This will produce the following result:</p>
-
-<figure class='code'><figcaption><span>query result</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;sir alfred&quot;</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="mi">2</span> <span class="p">},</span>
-</span><span class='line'>  <span class="p">{</span> <span class="nt">&quot;name&quot;</span> <span class="p">:</span> <span class="s2">&quot;helga&quot;</span><span class="p">,</span> <span class="nt">&quot;likes&quot;</span> <span class="p">:</span> <span class="mi">4</span> <span class="p">}</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>If only a certain number of values is required, the star operator can be combined
-with a <code>LIMIT</code> clause, too. This is useful for testing whether at least one of the
-array members satisfies a <code>FILTER</code> condition:</p>
-
-<figure class='code'><figcaption><span>limiting the number of results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN members[* FILTER "garden" IN CURRENT.likes LIMIT 1]</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Overall, the star operator is now much more powerful than before, so in many queries
-it can replace full-blown <code>FOR</code> loops and subqueries when the goal simply is to iterate
-over sub-parts of a result.</p>
-
-<h2>Multi-star operator</h2>
-
-<p>In 2.7 there is now also a <em>multi-star</em> operator (<code>[**]</code>). This operator can be used to
-iterate over an array, too. In addition it will also flatten its input, so it can be used
-for collapsing nested array structures.</p>
-
-<p>This is useful in cases where a flat result is required but the single star operator would
-return a nested array.</p>
-
-<p>Consider this query with the single star operator:</p>
-
-<figure class='code'><figcaption><span>extracting nested arrays</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN members[* FILTER CURRENT.age &gt;= 40].likes[*]</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This will produce:</p>
-
-<figure class='code'><figcaption><span>result of single star query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="p">[</span> <span class="s2">&quot;lettuce&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span> <span class="p">],</span>
-</span><span class='line'>  <span class="p">[</span> <span class="s2">&quot;home&quot;</span><span class="p">,</span> <span class="s2">&quot;garden&quot;</span><span class="p">,</span> <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span> <span class="s2">&quot;cakes&quot;</span> <span class="p">]</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>To get a collapsed array, we can employ the double star operator:</p>
-
-<figure class='code'><figcaption><span>extracting flattend arrays</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN members[* FILTER CURRENT.age &gt;= 40].likes[**]</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Then we&rsquo;ll get:</p>
-
-<figure class='code'><figcaption><span>result of double star query</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-</pre></td><td class='code'><pre><code class='json'><span class='line'><span class="p">[</span>
-</span><span class='line'>  <span class="s2">&quot;lettuce&quot;</span><span class="p">,</span>
-</span><span class='line'>  <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span>
-</span><span class='line'>  <span class="s2">&quot;home&quot;</span><span class="p">,</span>
-</span><span class='line'>  <span class="s2">&quot;garden&quot;</span><span class="p">,</span>
-</span><span class='line'>  <span class="s2">&quot;tortoises&quot;</span><span class="p">,</span>
-</span><span class='line'>  <span class="s2">&quot;cakes&quot;</span>
-</span><span class='line'><span class="p">]</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Note: the result of this query can also be made unique using the standard AQL
-function <code>UNIQUE()</code>.</p>
-
-<p>The star operator in 2.7 can have any number of levels. Using it with a single
-star will simply iterate over the input array, using it with two stars will
-collapse one level of the input, using it with three stars will collapse two
-levels of the input etc.</p>
-
-<h2>Subquery result usage</h2>
-
-<p>While working on the AQL parser anyway, the grammar has been modified so
-it allows a few more types of expressions.</p>
-
-<p>For example, the result of a subquery can now be used as an array and the
-subquery results can be accessed by position directly:</p>
-
-<figure class='code'><figcaption><span>accessing subquery results by position</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN (
-</span><span class='line'>  FOR i IN [ 1, 2, 3 ] 
-</span><span class='line'>    RETURN i
-</span><span class='line'>)[0]</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The trailing <code>[0]</code> led to a parse error in previous versions. To make this
-work in previous versions, the subquery result needs to be captured in an
-extra variable using <code>LET</code> before accessing the 0th member of that variable:</p>
-
-<figure class='code'><figcaption><span>workaround for accessing subquery results by position</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>LET temp = (
-</span><span class='line'>  FOR i IN [ 1, 2, 3 ] 
-</span><span class='line'>    RETURN i
-</span><span class='line'>)
-</span><span class='line'>RETURN temp[0]</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The parser generalizations now also allow to use the star operator directly
-on a subquery result and access its individual members:</p>
-
-<figure class='code'><figcaption><span>expanding subquery results using star operator</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>RETURN (
-</span><span class='line'>  FOR member IN [ 
-</span><span class='line'>    { name: "sir alfred" }, 
-</span><span class='line'>    { name: "mozquito" }
-</span><span class='line'>  ]
-</span><span class='line'>   RETURN member
-</span><span class='line'>)[*].name</span></code></pre></td></tr></table></div></figure>
-
-
-
 ]]></content>
   </entry>
   

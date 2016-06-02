@@ -11,9 +11,8 @@
   <meta name="author" content="jsteemann">
 
   
-  <meta name="description" content="Suppose there is an AQL query that&rsquo;s executing in the server
-for a long time already and you want to get rid of it. What can
-be done to abort &hellip;">
+  <meta name="description" content="While doing some optimization work for the upcoming ArangoDB 3.0 release,
+we had to figure out what was the &ldquo;ideal&rdquo; way of converting a &hellip;">
   
 
   <!-- http://t.co/dKP3o1e -->
@@ -83,6 +82,145 @@ be done to abort &hellip;">
     <div id="content">
       <div class="blog-index">
   
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2016/06/02/fastest-string-to-uint64-conversion-method/">Fastest String-to-uint64 Conversion Method?</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-06-02T20:15:27+02:00" pubdate data-updated="true">Jun 2<span>nd</span>, 2016</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>While doing some optimization work for the upcoming ArangoDB 3.0 release,
+we had to figure out what was the &ldquo;ideal&rdquo; way of converting a string
+representation of a number into a C++ uint64_t (64 bit unsigned integer type).
+This kind of operation is performed a lot during the lifetime of an ArangoDB
+server process, so it seemed worthwhile making it as fast as possible.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2016/06/02/fastest-string-to-uint64-conversion-method/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu/">Compiling ArangoDB 3.0 on Ubuntu</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-06-02T20:15:01+02:00" pubdate data-updated="true">Jun 2<span>nd</span>, 2016</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>We have spent a lot of time working on ArangoDB 3.0. That
+version will not only provide major functionality and performance
+improvements, but will also come with an improved, CMake-based
+build system.</p>
+
+<p>This post explains how to use CMake to build ArangoDB 3.0 on a recent
+Ubuntu Linux. For the impatient there&rsquo;s a command summary at the end of
+this post.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
+  
+  
+    <article>
+      
+  <header>
+    
+      <h1 class="entry-title"><a href="/blog/2016/06/02/compiling-v8-with-g-plus-plus-6/">Compiling V8 With G++6</a></h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-06-02T20:14:46+02:00" pubdate data-updated="true">Jun 2<span>nd</span>, 2016</time>
+        
+      </p>
+    
+  </header>
+
+
+  <div class="entry-content"><p>With g++ 6 becoming more and more adopted, it&rsquo;s about time to point out an issue
+that hit some of us ArangoDB developers and a few of our users that compile ArangoDB
+from source with g++ 6.</p>
+
+<p>The problem is that when compiling ArangoDB with g++6 with default options, arangod
+starts and almost immediately segfaults.</p>
+
+</div>
+  
+  
+    <footer>
+      <a rel="full-article" href="/blog/2016/06/02/compiling-v8-with-g-plus-plus-6/">Read on &rarr;</a>
+    </footer>
+  
+
+
+    </article>
   
   
     <article>
@@ -452,153 +590,6 @@ the same collection for FILTER conditions that are combined with a logical OR.</
 
     </article>
   
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/11/20/index-speedups-for-28/">Index Speedups in 2.8</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-11-20T15:11:00+01:00" pubdate data-updated="true">Nov 20<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>The upcoming 2.8 version of ArangoDB will provide several improvements in
-the area of index usage and query optimization.</p>
-
-<p>First of all, hash and skiplist indexes can now index individual array values.
-A dedicated post on this will follow shortly. Second, the query optimizer can
-make use multiple indexes per collection for queries with OR-combined filter
-conditions. This again is a subject for <a href="/blog/2015/11/20/using-multiple-indexes-per-collection/">another post</a>.
-Third, there have been some speed improvements due to changes in the general
-index handling code. This is what this post is about.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/11/20/index-speedups-for-28/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/11/18/improved-deadlock-detection/">Improved Deadlock Detection</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-11-18T19:24:24+01:00" pubdate data-updated="true">Nov 18<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>The upcoming ArangoDB version 2.8 (currently in devel) will
-provide a much better deadlock detection mechanism than its
-predecessors.</p>
-
-<p>The new deadlock detection mechanism will kick in automatically
-when it detects operations that are mutually waiting for each other.
-In case it finds such deadlock, it will abort one of the operations
-so that the others can continue and overall progress can be made.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/11/18/improved-deadlock-detection/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
-  
-    <article>
-      
-  <header>
-    
-      <h1 class="entry-title"><a href="/blog/2015/11/18/bind-parameters-in-aql-editor/">Using Bind Parameters in the AQL Editor</a></h1>
-    
-    
-      <p class="meta">
-        
-
-
-
-
-
-
-
-
-  
-
-
-<time datetime="2015-11-18T19:24:24+01:00" pubdate data-updated="true">Nov 18<span>th</span>, 2015</time>
-        
-      </p>
-    
-  </header>
-
-
-  <div class="entry-content"><p>The AQL editor in the web interface is useful for running ad hoc AQL
-queries and trying things out. It provides a feature to <em>explain</em> the
-query and inspect its execution plan. This can be used to check if the
-query uses indexes, and which.</p>
-
-<p>So far the AQL editor only supported using query string literals, but <strong>it
-lacked support for bind parameters</strong>. Queries issued by application code
-however often <strong>will use bind parameters</strong> for security reasons. Often
-enough this prevented copying &amp; pasting queries from the application code into
-the AQL editor and vice versa without making manual adjustments.</p>
-
-</div>
-  
-  
-    <footer>
-      <a rel="full-article" href="/blog/2015/11/18/bind-parameters-in-aql-editor/">Read on &rarr;</a>
-    </footer>
-  
-
-
-    </article>
-  
   <div class="pagination">
     
       <a class="prev" href="/blog/page/2/">&larr; Older</a>
@@ -621,6 +612,18 @@ the AQL editor and vice versa without making manual adjustments.</p>
   <ul id="recent_posts">
     
       <li class="post">
+        <a href="/blog/2016/06/02/fastest-string-to-uint64-conversion-method/">Fastest String-to-uint64 Conversion Method?</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu/">Compiling ArangoDB 3.0 on Ubuntu</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/06/02/compiling-v8-with-g-plus-plus-6/">Compiling V8 With G++6</a>
+      </li>
+    
+      <li class="post">
         <a href="/blog/2016/01/26/killing-a-long-running-query/">Killing a Long-running Query</a>
       </li>
     
@@ -632,18 +635,6 @@ the AQL editor and vice versa without making manual adjustments.</p>
         <a href="/blog/2016/01/26/small-things-in-28-pow/">Small Things in 2.8: POW</a>
       </li>
     
-      <li class="post">
-        <a href="/blog/2016/01/26/small-things-in-28-arangoimp-collection-type/">Small Things in 2.8: Collection Type for Arangoimp</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2015/12/22/aql-optimizer-improvements-for-28/">AQL Optimizer Improvements for 2.8</a>
-      </li>
-    
-      <li class="post">
-        <a href="/blog/2015/11/20/aql-function-speedups/">AQL Function Speedups</a>
-      </li>
-    
   </ul>
 </section>
 
@@ -652,11 +643,11 @@ the AQL editor and vice versa without making manual adjustments.</p>
 
 <section>
   <h1>Categories</h1>
-    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (37)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (59)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (9)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (8)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (7)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (7)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (23)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (37)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (62)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (9)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (11)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (10)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (8)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (24)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/v8/'>V8 (1)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
 </section>
 <section>
   <h1>Monthly Archives</h1>
-  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2016 (4)</li><ul class="month_list"><li class="month"><a href='/blog/2016/01/'>JAN (4)</a></li></ul><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2016 (7)</li><ul class="month_list"><li class="month"><a href='/blog/2016/06/'>JUN (3)</a></li><li class="month"><a href='/blog/2016/01/'>JAN (4)</a></li></ul><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
 </section>
 
 <section>

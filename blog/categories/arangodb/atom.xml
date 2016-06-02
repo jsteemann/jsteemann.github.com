@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-01-26T23:49:30+01:00</updated>
+  <updated>2016-06-03T00:48:00+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,463 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Fastest String-to-uint64 Conversion Method?]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/02/fastest-string-to-uint64-conversion-method/"/>
+    <updated>2016-06-02T20:15:27+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/02/fastest-string-to-uint64-conversion-method</id>
+    <content type="html"><![CDATA[<p>While doing some optimization work for the upcoming ArangoDB 3.0 release,
+we had to figure out what was the &ldquo;ideal&rdquo; way of converting a string
+representation of a number into a C++ uint64_t (64 bit unsigned integer type).
+This kind of operation is performed a lot during the lifetime of an ArangoDB
+server process, so it seemed worthwhile making it as fast as possible.</p>
+
+<!-- more -->
+
+
+<h2>std::stoull and std::strtoull</h2>
+
+<p>The natural solution for this kind of conversion is the standard library&rsquo;s
+<a href="http://en.cppreference.com/w/cpp/string/basic_string/stoul">std::stoull</a>
+function. On the one hand, that solution is potentially optimized and definitely
+robust. It performs validation of the input characters and is also battle-tested
+by millions of users.</p>
+
+<p>On the other hand, std::stoull has a few &ldquo;features&rdquo; that some would consider
+&ldquo;anti&rdquo;-features, and that sound like they could negatively influence performance:</p>
+
+<ul>
+<li>it may behave locale-dependent</li>
+<li>it can parse and will let pass negative input values, which is often not desired
+for a result of unsigned type</li>
+<li>it can perform base conversion</li>
+</ul>
+
+
+<p>In C++11 there is also the alternative
+<a href="http://en.cppreference.com/w/cpp/string/byte/strtoul">std::strtoull</a>.
+It should behave about the same as std::stoull except in case of error.
+std::stoull will throw and std::strtoull will not.</p>
+
+<p>That&rsquo;s what we get from the standard library for long unsigned integer types.</p>
+
+<h2>Alternative implementations (w/o error checking)</h2>
+
+<p>Another alternative is to roll a string to number conversion function ourselves.
+If we hard-code it to base 10 and do not care about error checking, a naive
+implementation may look like this:</p>
+
+<p>```cpp
+inline uint64_t naive(std::string const&amp; value) {
+  uint64_t result = 0;
+  char const<em> p = value.c_str();
+  char const</em> q = p + value.size();
+  while (p &lt; q) {</p>
+
+<pre><code>result *= 10;
+result += *(p++) - '0';
+</code></pre>
+
+<p>  }
+  return result;
+}
+```</p>
+
+<p>Obviously the above will produce wrong results for invalid
+input data, but for &ldquo;trusted&rdquo; (known to be valid) input it may
+be just fine.</p>
+
+<p>Here&rsquo;s just another implementation for the problem at hand. This one
+doesn&rsquo;t perform the times 10 operation, but splits it into two bitshifting
+operations:</p>
+
+<p>```cpp
+inline uint64_t bitshift(std::string const&amp; value) {
+  uint64_t result = 0;</p>
+
+<p>  char const<em> p = value.c_str();
+  char const</em> q = p + value.size();
+  while (p &lt; q) {</p>
+
+<pre><code>result = (result &lt;&lt; 1) + (result &lt;&lt; 3) + *(p++) - '0';
+</code></pre>
+
+<p>  }
+  return result;
+}
+```</p>
+
+<p>Again no error checking is present in the above function, but it
+should be ok for trusted inputs.</p>
+
+<p>By manually unrolling the while loop and converting it into a switch
+statement, we can also come up with a conversion function that has minimal
+branching:</p>
+
+<p>```cpp
+inline uint64_t unrolled(std::string const&amp; value) {
+  uint64_t result = 0;</p>
+
+<p>  size_t const length = value.size();
+  switch (length) {</p>
+
+<pre><code>case 20:    result += (value[length - 20] - '0') * 10000000000000000000ULL;
+case 19:    result += (value[length - 19] - '0') * 1000000000000000000ULL;
+case 18:    result += (value[length - 18] - '0') * 100000000000000000ULL;
+case 17:    result += (value[length - 17] - '0') * 10000000000000000ULL;
+case 16:    result += (value[length - 16] - '0') * 1000000000000000ULL;
+case 15:    result += (value[length - 15] - '0') * 100000000000000ULL;
+case 14:    result += (value[length - 14] - '0') * 10000000000000ULL;
+case 13:    result += (value[length - 13] - '0') * 1000000000000ULL;
+case 12:    result += (value[length - 12] - '0') * 100000000000ULL;
+case 11:    result += (value[length - 11] - '0') * 10000000000ULL;
+case 10:    result += (value[length - 10] - '0') * 1000000000ULL;
+case  9:    result += (value[length -  9] - '0') * 100000000ULL;
+case  8:    result += (value[length -  8] - '0') * 10000000ULL;
+case  7:    result += (value[length -  7] - '0') * 1000000ULL;
+case  6:    result += (value[length -  6] - '0') * 100000ULL;
+case  5:    result += (value[length -  5] - '0') * 10000ULL;
+case  4:    result += (value[length -  4] - '0') * 1000ULL;
+case  3:    result += (value[length -  3] - '0') * 100ULL;
+case  2:    result += (value[length -  2] - '0') * 10ULL;
+case  1:    result += (value[length -  1] - '0');
+</code></pre>
+
+<p>  }
+  return result;
+}
+```</p>
+
+<h2>Performance testing</h2>
+
+<p>To check out how all these alternatives perform, I put them into a small
+<a href="/downloads/code/stoull-test.cpp">test driver program</a>. To compile it with
+g++ and run it, I used this command:</p>
+
+<p><code>bash
+g++ -Wall -Wextra -march=native -std=c++11 -O3 stdoull-test.cpp &amp;&amp; ./a.out
+</code></p>
+
+<p>The test program will convert input strings of different lengths to uint64_t
+using the above (and some other) implementations, going up from 10,000 iterations
+per string up to 100,000,000. It also prints the wall-clock time spent in each
+run. The most interesting output it prints is in the &ldquo;ms&rdquo; column. The &ldquo;result&rdquo;
+column can be fully ignored. It&rsquo;s only there so the compiler won&rsquo;t optimize away
+the calls to the conversion functions.</p>
+
+<p>The timings from my local laptop (Intel Core i7-4710HQ CPU @ 2.50GHz, Ubuntu 16.04,
+g++ 5.3.1 &ndash; your mileage may vary!) for the 100,000,000 conversions are:</p>
+
+<p>```plain execution times for various string-to-uint64 implementations
+test &lsquo;std::stoull&rsquo;       string &lsquo;1&rsquo;                           1209 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;99&rsquo;                          1382 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;1234&rsquo;                        1725 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;1234567&rsquo;                     2257 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;1234567891&rsquo;                  2764 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;12345678901234&rsquo;              3899 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;12345678901234678901&rsquo;        7391 ms</p>
+
+<p>test &lsquo;std::strtoull&rsquo;     string &lsquo;1&rsquo;                           1104 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;99&rsquo;                          1300 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;1234&rsquo;                        1628 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;1234567&rsquo;                     2428 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;1234567891&rsquo;                  2662 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;12345678901234&rsquo;              3705 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;12345678901234678901&rsquo;        6631 ms</p>
+
+<p>test &lsquo;naive&rsquo;             string &lsquo;1&rsquo;                            202 ms
+test &lsquo;naive&rsquo;             string &lsquo;99&rsquo;                           314 ms
+test &lsquo;naive&rsquo;             string &lsquo;1234&rsquo;                         475 ms
+test &lsquo;naive&rsquo;             string &lsquo;1234567&rsquo;                      732 ms
+test &lsquo;naive&rsquo;             string &lsquo;1234567891&rsquo;                   987 ms
+test &lsquo;naive&rsquo;             string &lsquo;12345678901234&rsquo;              1343 ms
+test &lsquo;naive&rsquo;             string &lsquo;12345678901234678901&rsquo;        1862 ms</p>
+
+<p>test &lsquo;bitshift&rsquo;          string &lsquo;1&rsquo;                            188 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;99&rsquo;                           245 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;1234&rsquo;                         397 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;1234567&rsquo;                      462 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;1234567891&rsquo;                   666 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;12345678901234&rsquo;               888 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;12345678901234678901&rsquo;        1277 ms</p>
+
+<p>test &lsquo;unrolled&rsquo;          string &lsquo;1&rsquo;                            289 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;99&rsquo;                           289 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;1234&rsquo;                         351 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;1234567&rsquo;                      408 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;1234567891&rsquo;                   547 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;12345678901234&rsquo;               778 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;12345678901234678901&rsquo;        1068 ms
+```</p>
+
+<p>It&rsquo;s no surprise the standard library functions with their generality and
+error checking features are slower than the specialized functions that took
+the liberty to ignore all that.</p>
+
+<p>Which method is fastest now?</p>
+
+<p>As can be seen above, the &ldquo;bitshift&rdquo; variant was fastest for short and medium
+length inputs in my environment. At some point when input values get longer,
+the &ldquo;bitshift&rdquo; methods gets overtaken by the &ldquo;unrolled&rdquo; variant. The &ldquo;naive&rdquo;
+variant was slower than the two in most cases, but still performs surprisingly
+well.</p>
+
+<h2>Conclusion</h2>
+
+<p>The take-away: even though string-to-number conversion routines are
+present in the standard library, it can still be beneficial to hand-craft
+specialized variants of them for maximum performance. This is especially true
+when most of the generality that the standard library routines provide is not
+required in your use case.</p>
+
+<p>For example, if you know that the conversion functions will only operate on
+&ldquo;trusted&rdquo; input (only numeric digit input characters, length of input string
+won&rsquo;t exceed the maximum length of a uint64_t number etc.) then error checking
+is not required.</p>
+
+<p>Additionally, if you can limit yourself to numbers of a specific base and
+don&rsquo;t negative base conversion nor the handling of negative values, a lot of
+the generality and safety overhead of std::stoull may be avoided.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling ArangoDB 3.0 on Ubuntu]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu/"/>
+    <updated>2016-06-02T20:15:01+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu</id>
+    <content type="html"><![CDATA[<p>We have spent a lot of time working on ArangoDB 3.0. That
+version will not only provide major functionality and performance
+improvements, but will also come with an improved, CMake-based
+build system.</p>
+
+<p>This post explains how to use CMake to build ArangoDB 3.0 on a recent
+Ubuntu Linux. For the impatient there&rsquo;s a command summary at the end of
+this post.</p>
+
+<!-- more -->
+
+
+<h2>Installing prerequisites</h2>
+
+<p>Here&rsquo;s how to build ArangoDB 3.0 with cmake on a recent Ubuntu Linux.</p>
+
+<p>Ubuntu 15.x and 16.x should have recent enough packages so any missing
+prerequisites can be installed via a simple <code>sudo apt-get install</code> command:</p>
+
+<p><code>bash installing prerequisites
+sudo apt-get install cmake make build-essential openssl python2.7 g++ gcc
+</code></p>
+
+<p>Older versions of Ubuntu can be convinced to work too, but this requires
+a g++ version of at least 4.9. Ubuntu 14 ships with older g++
+versions by default, so you will first need to install a newer g++ version
+(see <a href="http://askubuntu.com/questions/466651/how-do-i-use-the-latest-gcc-on-ubuntu-14-04">here</a> or
+<a href="http://askubuntu.com/questions/428198/getting-installing-gcc-g-4-9-on-ubuntu">here</a> for
+some external instructions). Once the g++ and gcc compilers are recent enough,
+install the other prerequisites.</p>
+
+<h2>Cloning ArangoDB</h2>
+
+<p>After having installed the prerequisites, clone the ArangoDB repository
+from Github and then cd into the directory <code>arangodb</code> that the cloning
+will have created:</p>
+
+<p><code>bash cloning ArangoDB
+git clone https://github.com/arangodb/arangodb
+cd arangodb
+</code></p>
+
+<p>Then check out the 3.0 branch and pull the latest changes:
+<code>bash cloning ArangoDB
+git checkout 3.0
+git pull
+</code></p>
+
+<h2>Building ArangoDB</h2>
+
+<p>A convention when using CMake is to not build directly in the source
+directory, but use a separate build directory instead. The benefit of
+this is that building in a separate directory won&rsquo;t change the source
+directory, and the build directory can be disposed easily.</p>
+
+<p>To create an initial build directory named <code>build</code> and cd into it,
+just type:</p>
+
+<p><code>bash creating a build directory
+mkdir -p build
+cd build
+</code></p>
+
+<p>It&rsquo;s now time to invoke CMake. CMake should be executed from the build
+directory, but needs to know where it&rsquo;s build instructions file
+(named <code>CMakeLists.txt</code> is). This file is located in the source directory.
+To run CMake without any specific options, we can use:</p>
+
+<p><code>bash running CMake
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
+</code></p>
+
+<p>This will run CMake from inside the <code>build</code> directory and tell it to
+look for <code>CMakeLists.txt</code> in the source directory. The
+<code>-DCMAKE_BUILD_TYPE=RelWithDebInfo</code> part will tell CMake to build
+binaries with optimizations and debug symbols. Other useful build
+types are:</p>
+
+<ul>
+<li><code>-DCMAKE_BUILD_TYPE=Debug</code>: without optimizations, for debugging only</li>
+<li><code>-DCMAKE_BUILD_TYPE=Release</code>: with optimizations, no debug symbols,
+not useful for debugging</li>
+</ul>
+
+
+<p>Invoking CMake will perform some checks for required components, compiler
+and platform features. If anything fails, it should print some error
+message. If everything works well, the command should have created a
+<code>Makefile</code> in the <code>build</code> directory.</p>
+
+<p><em>side note: CMake on Linux will by default generate UNIX <code>Makefile</code>s,
+but it can also be told to generate <a href="https://ninja-build.org/">ninja</a>
+files instead. On Windows it can generate solution files for Visual
+Studio.</em></p>
+
+<p>Now that the <code>Makefile</code> is there, we can run <code>make</code> as usual (note that
+the <code>-j4</code> means to build with 4 parallel processes &ndash; adjust as needed!):</p>
+
+<p><code>bash running make
+make -j4
+</code></p>
+
+<h2>Starting arangod and arangosh</h2>
+
+<p>And that&rsquo;s already it for a normal build. Note that the build artefacts
+and thus the binaries will also be created inside the <code>build</code> directory.
+<code>arangod</code> and <code>arangosh</code> will be located in the <code>bin</code> subdirectory of
+the <code>build</code> directory. There is no need to install these binaries, they
+can be run without installing them first. However, starting them from
+inside the build directory will not work, because they will complain
+about missing files. It is better to cd one level up first and then
+start them:</p>
+
+<p><code>bash starting arangod
+cd ..
+build/bin/arangod ~/testdata --server.authentication false
+</code></p>
+
+<p>The former will start arangod with default configuration, with a fresh
+database directory located in <code>~/testdata</code>.</p>
+
+<p>If you ran all the commands on your local machine (127.0.0.1) then you
+can now open a browser and point it to <a href="http://127.0.0.1:8529/">http://127.0.0.1:8529/</a>.
+This should bring up ArangoDB&rsquo;s web interface.</p>
+
+<p>You can alternatively start an ArangoShell to connect to the ArangoDB
+server. In another terminal window, cd into the <code>arangodb</code> directory and
+start an ArangoShell as follows:</p>
+
+<p><code>bash starting arangosh
+cd arangodb
+build/bin/arangosh
+</code></p>
+
+<p>You should now see the ArangoShell prompt and be able to type some
+commands!</p>
+
+<h2>Command summary</h2>
+
+<p>Note: in contrast to the above step-by-step instructions, some commands
+here have been put together on a single line to make developer&rsquo;s life
+easier.</p>
+
+<p><code>bash installing prerequisites
+sudo apt-get install cmake make build-essential openssl python2.7 g++ gcc
+</code></p>
+
+<p><code>bash initial checkout of the 3.0 branch and build configuration
+git clone https://github.com/arangodb/arangodb
+cd arangodb
+git checkout 3.0
+git pull
+mkdir -p build
+(cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..)
+</code></p>
+
+<p><code>bash Update, build and run cycle
+git pull
+(cd build &amp;&amp; make -j4)
+build/bin/arangod ~/testdata --server.authentication false
+</code></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling V8 With G++6]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/02/compiling-v8-with-g-plus-plus-6/"/>
+    <updated>2016-06-02T20:14:46+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/02/compiling-v8-with-g-plus-plus-6</id>
+    <content type="html"><![CDATA[<p>With g++ 6 becoming more and more adopted, it&rsquo;s about time to point out an issue
+that hit some of us ArangoDB developers and a few of our users that compile ArangoDB
+from source with g++ 6.</p>
+
+<p>The problem is that when compiling ArangoDB with g++6 with default options, arangod
+starts and almost immediately segfaults.</p>
+
+<!-- more -->
+
+
+<p>A backtrace of the crashed arangod process shows that the segfaults originate from
+the V8 JavaScript engine that ArangoDB uses internally.
+The problem seems to have affected other users of V8 as well, indicated by the following
+error reports:</p>
+
+<ul>
+<li>node.js: <a href="https://github.com/nodejs/node/issues/6724">https://github.com/nodejs/node/issues/6724</a></li>
+<li>chromium: <a href="https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68853">https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68853</a></li>
+</ul>
+
+
+<p>The reason for the error now popping up is a change in the g++ 6 optimizer as stated
+in the <a href="https://gcc.gnu.org/gcc-6/changes.html">gcc6 release notes</a>:</p>
+
+<blockquote><p>Value range propagation now assumes that the this pointer of C++ member functions is non-null.
+This eliminates common null pointer checks but also breaks some non-conforming code-bases (such as Qt-5, Chromium, KDevelop).
+As a temporary work-around -fno-delete-null-pointer-checks can be used. Wrong code can be identified by using -fsanitize=undefined.</p></blockquote>
+
+<p>That means if compiling ArangoDB 2.8 from source with g++ 6 or higher, please be sure to
+set the environment variables <code>CFLAGS="-fno-delete-null-pointer-checks"</code> and<br/>
+<code>CXXFLAGS="-fno-delete-null-pointer-checks"</code> before invoking the <code>configure</code> command:</p>
+
+<p><code>bash
+make setup
+CFLAGS="-fno-delete-null-pointer-checks" CXXFLAGS="-fno-delete-null-pointer-checks" ./configure
+make
+</code></p>
+
+<p>The options will then be passed to the sub-make that builds the V8 engine. If you have
+already built V8 without these options, try removing the file <code>.v8-build-64</code> from the
+build directory and run <code>configure</code> and <code>make</code> again.</p>
+
+<p>As a reminder, ArangoDB 2.8 will also emit this big notice at the end of its <code>configure</code> output:</p>
+
+<p><code>plain
+configure: --------------------------------------------------------------------------------
+configure:                                                                                 
+configure: NOTE: if you are compiling ArangoDB with g++ 6.0 or higher, please make sure to
+configure: set the following environment variables when compiling ArangoDB:                
+configure:                                                                                 
+configure:   CFLAGS="-fno-delete-null-pointer-checks"                                      
+configure:   CXXFLAGS="-fno-delete-null-pointer-checks"                                    
+configure:                                                                                 
+configure: --------------------------------------------------------------------------------
+</code></p>
+
+<p>Users of g++ 5.x do not need to set these flags, neither need users of clang++. And in the
+ArangoDB 3.0 build the options will be set automatically when compiling V8 if the compiler
+is g++. They will not be set for compiling any other parts of ArangoDB as it&rsquo;s only required
+for building V8.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Killing a Long-running Query]]></title>
@@ -168,234 +625,6 @@ query or are passed via bind parameters.</p>
 
 <p>Truncation only happens inside the explain results processing and thus
 cannot affect the actual query results.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Small Things in 2.8: POW]]></title>
-    <link href="http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-pow/"/>
-    <updated>2016-01-26T21:59:17+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-pow</id>
-    <content type="html"><![CDATA[<p>ArangoDB 2.8 now provides a dedicated AQL function for exponentiation.
-This will save users a lot of trouble in case exponentiation is needed
-inside an AQL query, which up to 2.7 required writing and registering an
-AQL user-defined function.</p>
-
-<p>With 2.8 it becomes as simple as <code>RETURN POW(2, 16)</code> to raise <em>2</em>
-to the power of <em>16</em> from inside AQL.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Small Things in 2.8: Collection Type for Arangoimp]]></title>
-    <link href="http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-arangoimp-collection-type/"/>
-    <updated>2016-01-26T21:59:17+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-arangoimp-collection-type</id>
-    <content type="html"><![CDATA[<p>When trying to import data into ArangoDB from a JSON or CSV file using the
-<em>arangoimp</em> binary, there is always the chance that the target collection does
-not yet exist.</p>
-
-<p>In order to create a missing target collection <em>arangoimp</em> for long has
-provided the option <code>--create-collection true</code>:</p>
-
-<p><code>bash importing, optionally creating a missing collection
-arangoimp                       \
-  --file users.json             \
-  --collection users            \
-  --create-collection true
-</code></p>
-
-<p>However there hasn&rsquo;t been a way of specifying the <strong>type</strong> for the target collection,
-so the new collection was always created as <em>document</em> collection.</p>
-
-<p>To import data into an <em>edge</em> collection, the target collection needed to be created
-by another means, e.g. by using the ArangoShell. It would have been more handy if
-<em>arangoimp</em> were able to create <em>edge</em> collections too.</p>
-
-<p>2.8 finally adds that feature, and it&rsquo;s simple to use: to create an <em>edge</em> collection
-if the target collection does not exist, append the <code>--create-collection-type edge</code>
-option when invoking <em>arangoimp</em>:</p>
-
-<p><code>bash importing, optionally creating a missing edge collection
-arangoimp                       \
-  --file users.json             \
-  --collection users            \
-  --create-collection true      \
-  --create-collection-type edge
-</code></p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[AQL Optimizer Improvements for 2.8]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/12/22/aql-optimizer-improvements-for-28/"/>
-    <updated>2015-12-22T22:39:30+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/12/22/aql-optimizer-improvements-for-28</id>
-    <content type="html"><![CDATA[<p>With the 2.8 beta phase coming to an end it&rsquo;s time to shed some light
-on the improvements in the 2.8 AQL optimizer. This blog post summarizes
-a few of them, focusing on the query optimizer. There&rsquo;ll be a follow-up
-post that will explain dedicated new AQL features soon.</p>
-
-<!-- more -->
-
-
-<h2>Array indexes</h2>
-
-<p>2.8 allows creating hash and skiplist indexes on attributes which are arrays.
-Creating such index works similar to creating a non-array index, with the
-exception that the name of the array attribute needs to be followed by a <code>[*]</code>
-in the index fields definition:</p>
-
-<p><code>js creating an array index
-db._create("posts");
-db.posts.ensureIndex({ type: "hash", fields: [ "tags[*]" ] });
-</code></p>
-
-<p>Now if the <code>tags</code> attribute of a document in the <code>posts</code> collection is an array,
-each array member will be inserted into the index:</p>
-
-<p><code>js storing an array value
-db.posts.insert({ tags: [ "arangodb", "database", "aql" ] });
-db.posts.insert({ tags: [ "arangodb", "v8", "javascript" ] });
-db.posts.insert({ tags: [ "javascript", "v8", "nodejs" ] });
-</code></p>
-
-<p>The index on <code>tags[*]</code> will now contain the values <code>arangodb</code>, <code>database</code>, <code>aql</code> and
-<code>nosql</code> for the first document, <code>arangodb</code>, <code>v8</code> and <code>javascript</code> for the second, and
-<code>javascript</code>, <code>v8</code> and <code>nodejs</code> for the third.</p>
-
-<p>The following AQL will find any documents that have a value of <code>javascript</code> contained
-in their <code>tags</code> value:</p>
-
-<p><code>plain array index query
-FOR doc IN posts
-  FILTER 'javascript' IN doc.tags[*]
-  RETURN doc
-</code></p>
-
-<p>This will use the array index on <code>tags[*]</code>.</p>
-
-<p>The array index works by inserting all members from an array into the index
-separately. Duplicates are removed automatically when populating the index.</p>
-
-<p>An array index can also be created on a sub-attribute of array members. For
-example, the following definition will make sure the <code>name</code> sub-attributes of
-the <code>tags</code> array values will make it into the index:</p>
-
-<p><code>js creating an array index on a sub-attribute
-db.posts.ensureIndex({ type: "hash", fields: [ "tags[*].name" ] });
-</code></p>
-
-<p>That will allow storing data as follows:</p>
-
-<p><code>js storing an array value
-db.posts.insert({ tags: [ { name: "arangodb" }, { name: "database" }, { name: "aql" } ] });
-db.posts.insert({ tags: [ { name: "arangodb" }, { name: "v8" }, { name: "javascript" } ] });
-db.posts.insert({ tags: [ { name: "javascript" }, { name: "v8" }, { name: "nodejs" } ] });
-</code></p>
-
-<p>The (index-based) selection query for this data structure then becomes</p>
-
-<p><code>plain array index query using sub-attributes
-FOR doc IN posts
-  FILTER 'javascript' IN doc.tags[*].name
-  RETURN doc
-</code></p>
-
-<p>Contrary to MongoDB, there is no automatic conversion to array values when
-inserting non-array values in ArangoDB. For example, the following plain strings
-will not be inserted into an array index, simply because the value of the index
-attribute is not an array:</p>
-
-<p><code>js storing non array values without indexing
-db.posts.insert({ tags: "arangodb" });
-db.posts.insert({ tags: "javascript" });
-db.posts.insert({ tags: "nodejs" });
-</code></p>
-
-<p>Note that in this case a non-array index can still be used.</p>
-
-<h2>Use of multiple indexes per collection</h2>
-
-<p>The query optimizer can now make use of multiple indexes if multiple filter
-conditions are combined with logical ORs, and all of them are covered by
-indexes of the same collection.</p>
-
-<p>Provided there are separate indexes present on <code>name</code> and <code>status</code>, the
-following query can make use of index scans in 2.8, as opposed to full
-collection scans in 2.7:</p>
-
-<p><code>plain using multiple indexes
-FOR doc IN users
-  FILTER doc.name == 'root' || doc.status == 'active'
-  RETURN doc
-</code></p>
-
-<p><img src="/downloads/screenshots/multiple-indexes.png"></p>
-
-<p>If multiple filter conditions match for the same document, the result will
-automatically be deduplicated, so each document is still returned at most once.</p>
-
-<h2>Sorted IN comparison</h2>
-
-<p>Another improvement for the optimizer is to pre-sort comparison values for <code>IN</code> and
-<code>NOT IN</code> so these operators can use a (much faster) binary search instead of a linear search.</p>
-
-<p>The optimization will be applied automatically for <code>IN</code> / <code>NOT IN</code> comparison values used
-in filters, which are used inside of a <code>FOR</code> loop, and depend on runtime values. For example,
-the optimization will be applied for the following query:</p>
-
-<p><code>
-LET values = /* some runtime expression here */
-FOR doc IN collection
-  FILTER doc.value IN values
-  RETURN doc
-</code></p>
-
-<p>The optimization will not be applied for <code>IN</code> comparison values that are value
-literals and those that are used in index lookups. For these cases the comparison values
-were already deduplicated and sorted.</p>
-
-<p>&ldquo;sort-in-values&rdquo; will appear in the list of applied optimizer rules if the optimizer
-could apply the optimization:</p>
-
-<p><img src="/downloads/screenshots/sorted-in.png"></p>
-
-<h2>Optimization for LENGTH(collection)</h2>
-
-<p>There are multiple ways for counting the total number of documents in a collection from
-inside an AQL query. One obvious way is to use <code>RETURN LENGTH(collection)</code>.</p>
-
-<p>That variant however was inefficient as it fully materialized the documents before
-counting them. In 2.8 calling <code>LENGTH()</code> for a collection will get automatically replaced
-by a call to a special function that can efficiently determine the number of documents.
-For larger collections, this can be several thousand times faster than the naive 2.7
-solution.</p>
-
-<h2>C++ implementation for many AQL functions</h2>
-
-<p>Many existing AQL functions have been backed with a C++ implementation that removes
-the need for some data conversion that would otherwise happen if the function were
-implemented in V8/JavaScript only. More than 30+ functions have been changed, including
-several that may produce bigger result sets (such as <code>EDGES()</code>, <code>FULLTEXT()</code>, <code>WITHIN()</code>,
-<code>NEAR()</code>) and that will hugely benefit from this.</p>
-
-<h2>Improved skip performance</h2>
-
-<p>2.8 improves the performance of skipping over many documents in case no indexes and no
-filters are used. This might sound like an edge case, but it is quite common when the
-task is to fetch documents from a big collection in chunks and there is certainty that
-there will be no parallel modifications.</p>
-
-<p>For example, the following query runs about 3 to 5 times faster in 2.8, and this
-improvements can easily sum up to notable speedups if the query is called repeatedly
-with increasing offset values for <code>LIMIT</code>:</p>
-
-<p><code>plain query with huge skip
-FOR doc IN collection
-  LIMIT 1000000, 10
-  RETURN doc
-</code></p>
 ]]></content>
   </entry>
   

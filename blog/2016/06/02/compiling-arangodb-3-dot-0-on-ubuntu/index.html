@@ -1,0 +1,452 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <meta name="msvalidate.01" content="A77181372F70D1DC2CC14CE5A5074DD4" />
+  <meta name="google-site-verification" content="z-Pc5j8ZOiRrGa5d5_40zI-7Ub0Abh4AWPgidECbJ9c" />
+  <title>Compiling ArangoDB 3.0 on Ubuntu - J@ArangoDB</title>
+  <meta name="author" content="jsteemann">
+
+  
+  <meta name="description" content="We have spent a lot of time working on ArangoDB 3.0. That
+version will not only provide major functionality and performance
+improvements, but will &hellip;">
+  <meta name="keywords" content="ArangoDB; database, g++, cmake, Ubuntu">
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://jsteemann.github.io/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="J@ArangoDB" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<script src="/javascripts/monthly_archive.js"></script>
+
+  
+  <script type="text/javascript">
+    var _gaq = _gaq || [];
+    _gaq.push(['_setAccount', 'UA-53854700-1']);
+    _gaq.push(['_trackPageview']);
+
+    (function() {
+      var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+      ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+      var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+    })();
+  </script>
+
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">J@ArangoDB</a></h1>
+  
+    <h2>{ "subject" : "ArangoDB", "tags": [ "multi-model", "nosql", "database" ] }</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="https://www.google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:jsteemann.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+  <li><a href="/about">About</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Compiling ArangoDB 3.0 on Ubuntu</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-06-02T20:15:01+02:00" pubdate data-updated="true">Jun 2<span>nd</span>, 2016</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>We have spent a lot of time working on ArangoDB 3.0. That
+version will not only provide major functionality and performance
+improvements, but will also come with an improved, CMake-based
+build system.</p>
+
+<p>This post explains how to use CMake to build ArangoDB 3.0 on a recent
+Ubuntu Linux. For the impatient there&rsquo;s a command summary at the end of
+this post.</p>
+
+<!-- more -->
+
+
+<h2>Installing prerequisites</h2>
+
+<p>Here&rsquo;s how to build ArangoDB 3.0 with cmake on a recent Ubuntu Linux.</p>
+
+<p>Ubuntu 15.x and 16.x should have recent enough packages so any missing
+prerequisites can be installed via a simple <code>sudo apt-get install</code> command:</p>
+
+<figure class='code'><figcaption><span>installing prerequisites</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo apt-get install cmake make build-essential openssl python2.7 g++ gcc
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Older versions of Ubuntu can be convinced to work too, but this requires
+a g++ version of at least 4.9. Ubuntu 14 ships with older g++
+versions by default, so you will first need to install a newer g++ version
+(see <a href="http://askubuntu.com/questions/466651/how-do-i-use-the-latest-gcc-on-ubuntu-14-04">here</a> or
+<a href="http://askubuntu.com/questions/428198/getting-installing-gcc-g-4-9-on-ubuntu">here</a> for
+some external instructions). Once the g++ and gcc compilers are recent enough,
+install the other prerequisites.</p>
+
+<h2>Cloning ArangoDB</h2>
+
+<p>After having installed the prerequisites, clone the ArangoDB repository
+from Github and then cd into the directory <code>arangodb</code> that the cloning
+will have created:</p>
+
+<figure class='code'><figcaption><span>cloning ArangoDB</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>git clone https://github.com/arangodb/arangodb
+</span><span class='line'><span class="nb">cd </span>arangodb
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Then check out the 3.0 branch and pull the latest changes:</p>
+
+<figure class='code'><figcaption><span>cloning ArangoDB</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>git checkout 3.0
+</span><span class='line'>git pull
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Building ArangoDB</h2>
+
+<p>A convention when using CMake is to not build directly in the source
+directory, but use a separate build directory instead. The benefit of
+this is that building in a separate directory won&rsquo;t change the source
+directory, and the build directory can be disposed easily.</p>
+
+<p>To create an initial build directory named <code>build</code> and cd into it,
+just type:</p>
+
+<figure class='code'><figcaption><span>creating a build directory</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>mkdir -p build
+</span><span class='line'><span class="nb">cd </span>build
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>It&rsquo;s now time to invoke CMake. CMake should be executed from the build
+directory, but needs to know where it&rsquo;s build instructions file
+(named <code>CMakeLists.txt</code> is). This file is located in the source directory.
+To run CMake without any specific options, we can use:</p>
+
+<figure class='code'><figcaption><span>running CMake</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>cmake -DCMAKE_BUILD_TYPE<span class="o">=</span>RelWithDebInfo ..
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will run CMake from inside the <code>build</code> directory and tell it to
+look for <code>CMakeLists.txt</code> in the source directory. The
+<code>-DCMAKE_BUILD_TYPE=RelWithDebInfo</code> part will tell CMake to build
+binaries with optimizations and debug symbols. Other useful build
+types are:</p>
+
+<ul>
+<li><code>-DCMAKE_BUILD_TYPE=Debug</code>: without optimizations, for debugging only</li>
+<li><code>-DCMAKE_BUILD_TYPE=Release</code>: with optimizations, no debug symbols,
+not useful for debugging</li>
+</ul>
+
+
+<p>Invoking CMake will perform some checks for required components, compiler
+and platform features. If anything fails, it should print some error
+message. If everything works well, the command should have created a
+<code>Makefile</code> in the <code>build</code> directory.</p>
+
+<p><em>side note: CMake on Linux will by default generate UNIX <code>Makefile</code>s,
+but it can also be told to generate <a href="https://ninja-build.org/">ninja</a>
+files instead. On Windows it can generate solution files for Visual
+Studio.</em></p>
+
+<p>Now that the <code>Makefile</code> is there, we can run <code>make</code> as usual (note that
+the <code>-j4</code> means to build with 4 parallel processes &ndash; adjust as needed!):</p>
+
+<figure class='code'><figcaption><span>running make</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>make -j4
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Starting arangod and arangosh</h2>
+
+<p>And that&rsquo;s already it for a normal build. Note that the build artefacts
+and thus the binaries will also be created inside the <code>build</code> directory.
+<code>arangod</code> and <code>arangosh</code> will be located in the <code>bin</code> subdirectory of
+the <code>build</code> directory. There is no need to install these binaries, they
+can be run without installing them first. However, starting them from
+inside the build directory will not work, because they will complain
+about missing files. It is better to cd one level up first and then
+start them:</p>
+
+<figure class='code'><figcaption><span>starting arangod</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">cd</span> ..
+</span><span class='line'>build/bin/arangod ~/testdata --server.authentication <span class="nb">false</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The former will start arangod with default configuration, with a fresh
+database directory located in <code>~/testdata</code>.</p>
+
+<p>If you ran all the commands on your local machine (127.0.0.1) then you
+can now open a browser and point it to <a href="http://127.0.0.1:8529/">http://127.0.0.1:8529/</a>.
+This should bring up ArangoDB&rsquo;s web interface.</p>
+
+<p>You can alternatively start an ArangoShell to connect to the ArangoDB
+server. In another terminal window, cd into the <code>arangodb</code> directory and
+start an ArangoShell as follows:</p>
+
+<figure class='code'><figcaption><span>starting arangosh</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">cd </span>arangodb
+</span><span class='line'>build/bin/arangosh
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>You should now see the ArangoShell prompt and be able to type some
+commands!</p>
+
+<h2>Command summary</h2>
+
+<p>Note: in contrast to the above step-by-step instructions, some commands
+here have been put together on a single line to make developer&rsquo;s life
+easier.</p>
+
+<figure class='code'><figcaption><span>installing prerequisites</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>sudo apt-get install cmake make build-essential openssl python2.7 g++ gcc
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>initial checkout of the 3.0 branch and build configuration</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>git clone https://github.com/arangodb/arangodb
+</span><span class='line'><span class="nb">cd </span>arangodb
+</span><span class='line'>git checkout 3.0
+</span><span class='line'>git pull
+</span><span class='line'>mkdir -p build
+</span><span class='line'><span class="o">(</span><span class="nb">cd </span>build <span class="o">&amp;&amp;</span> cmake -DCMAKE_BUILD_TYPE<span class="o">=</span>RelWithDebInfo ..<span class="o">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+
+
+<figure class='code'><figcaption><span>Update, build and run cycle </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>git pull
+</span><span class='line'><span class="o">(</span><span class="nb">cd </span>build <span class="o">&amp;&amp;</span> make -j4<span class="o">)</span>
+</span><span class='line'>build/bin/arangod ~/testdata --server.authentication <span class="nb">false</span>
+</span></code></pre></td></tr></table></div></figure>
+
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">jsteemann</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2016-06-02T20:15:01+02:00" pubdate data-updated="true">Jun 2<span>nd</span>, 2016</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/arangodb/'>ArangoDB</a>, <a class='category' href='/blog/categories/c-plus-plus/'>C++</a>, <a class='category' href='/blog/categories/development/'>Development</a>, <a class='category' href='/blog/categories/linux/'>Linux</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://jsteemann.github.io/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu/" data-via="steemann" data-counturl="http://jsteemann.github.io/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2016/06/02/compiling-v8-with-g-plus-plus-6/" title="Previous Post: Compiling V8 with g++6">&laquo; Compiling V8 with g++6</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2016/06/02/fastest-string-to-uint64-conversion-method/" title="Next Post: Fastest string-to-uint64 conversion method?">Fastest string-to-uint64 conversion method? &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+	<h1>About ArangoDB</h1>
+	<ul>
+    <li><a href="https://www.arangodb.com/">ArangoDB homepage</a></li>
+    <li><a href="https://github.com/arangodb/arangodb">ArangoDB repository on Github</a></li>
+  </ul>
+</section>
+<section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2016/06/02/fastest-string-to-uint64-conversion-method/">Fastest String-to-uint64 Conversion Method?</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu/">Compiling ArangoDB 3.0 on Ubuntu</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/06/02/compiling-v8-with-g-plus-plus-6/">Compiling V8 With G++6</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/01/26/killing-a-long-running-query/">Killing a Long-running Query</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-explain-improvements/">Small Things in 2.8: Explain Improvements</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2016/01/26/small-things-in-28-pow/">Small Things in 2.8: POW</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+<section>
+  <h1>Categories</h1>
+    <ul id="category-list"><li><a href='/blog/categories/aql/'>AQL (37)</a></li><li><a href='/blog/categories/arangodb/'>ArangoDB (62)</a></li><li><a href='/blog/categories/arangoshell/'>ArangoShell (9)</a></li><li><a href='/blog/categories/bash/'>Bash (2)</a></li><li><a href='/blog/categories/c-plus-plus/'>C++ (11)</a></li><li><a href='/blog/categories/concepts/'>Concepts (8)</a></li><li><a href='/blog/categories/development/'>Development (10)</a></li><li><a href='/blog/categories/es6/'>ES6 (4)</a></li><li><a href='/blog/categories/foxx/'>Foxx (6)</a></li><li><a href='/blog/categories/git/'>Git (1)</a></li><li><a href='/blog/categories/graphs/'>Graphs (1)</a></li><li><a href='/blog/categories/indexes/'>Indexes (7)</a></li><li><a href='/blog/categories/javascript/'>JavaScript (8)</a></li><li><a href='/blog/categories/linux/'>Linux (8)</a></li><li><a href='/blog/categories/logstash/'>Logstash (1)</a></li><li><a href='/blog/categories/mysql/'>MySQL (1)</a></li><li><a href='/blog/categories/node-dot-js/'>Node.js (1)</a></li><li><a href='/blog/categories/parsing/'>Parsing (2)</a></li><li><a href='/blog/categories/performance/'>Performance (24)</a></li><li><a href='/blog/categories/php/'>PHP (3)</a></li><li><a href='/blog/categories/redis/'>Redis (1)</a></li><li><a href='/blog/categories/schemas/'>Schemas (3)</a></li><li><a href='/blog/categories/traversals/'>Traversals (1)</a></li><li><a href='/blog/categories/travisci/'>TravisCI (3)</a></li><li><a href='/blog/categories/v8/'>V8 (1)</a></li><li><a href='/blog/categories/wal/'>WAL (2)</a></li></ul>
+</section>
+<section>
+  <h1>Monthly Archives</h1>
+  <div class="monthly_archive"><ul class="year_list"><li class="year first_open">2016 (7)</li><ul class="month_list"><li class="month"><a href='/blog/2016/06/'>JUN (3)</a></li><li class="month"><a href='/blog/2016/01/'>JAN (4)</a></li></ul><li class="year first_open">2015 (46)</li><ul class="month_list"><li class="month"><a href='/blog/2015/12/'>DEC (1)</a></li><li class="month"><a href='/blog/2015/11/'>NOV (6)</a></li><li class="month"><a href='/blog/2015/09/'>SEP (1)</a></li><li class="month"><a href='/blog/2015/08/'>AUG (2)</a></li><li class="month"><a href='/blog/2015/07/'>JUL (5)</a></li><li class="month"><a href='/blog/2015/06/'>JUN (4)</a></li><li class="month"><a href='/blog/2015/05/'>MAY (8)</a></li><li class="month"><a href='/blog/2015/04/'>APR (7)</a></li><li class="month"><a href='/blog/2015/03/'>MAR (3)</a></li><li class="month"><a href='/blog/2015/02/'>FEB (5)</a></li><li class="month"><a href='/blog/2015/01/'>JAN (4)</a></li></ul><li class="year first_open">2014 (18)</li><ul class="month_list"><li class="month"><a href='/blog/2014/12/'>DEC (3)</a></li><li class="month"><a href='/blog/2014/11/'>NOV (3)</a></li><li class="month"><a href='/blog/2014/10/'>OCT (6)</a></li><li class="month"><a href='/blog/2014/08/'>AUG (5)</a></li><li class="month"><a href='/blog/2014/06/'>JUN (1)</a></li></ul></ul></div>
+</section>
+
+<section>
+<h1>Stack Overflow</h1>
+<a href="http://stackoverflow.com/users/3042070/stj">
+<img src="http://stackoverflow.com/users/flair/3042070.png" width="208" height="58" alt="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers" title="profile for stj at Stack Overflow, Q&amp;A for professional and enthusiast programmers">
+</a>
+</section>
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2016 - jsteemann -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

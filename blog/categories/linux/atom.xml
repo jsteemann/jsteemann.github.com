@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Linux | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/linux/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-01-26T23:49:30+01:00</updated>
+  <updated>2016-06-03T00:48:00+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,175 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling ArangoDB 3.0 on Ubuntu]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu/"/>
+    <updated>2016-06-02T20:15:01+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu</id>
+    <content type="html"><![CDATA[<p>We have spent a lot of time working on ArangoDB 3.0. That
+version will not only provide major functionality and performance
+improvements, but will also come with an improved, CMake-based
+build system.</p>
+
+<p>This post explains how to use CMake to build ArangoDB 3.0 on a recent
+Ubuntu Linux. For the impatient there&rsquo;s a command summary at the end of
+this post.</p>
+
+<!-- more -->
+
+
+<h2>Installing prerequisites</h2>
+
+<p>Here&rsquo;s how to build ArangoDB 3.0 with cmake on a recent Ubuntu Linux.</p>
+
+<p>Ubuntu 15.x and 16.x should have recent enough packages so any missing
+prerequisites can be installed via a simple <code>sudo apt-get install</code> command:</p>
+
+<p><code>bash installing prerequisites
+sudo apt-get install cmake make build-essential openssl python2.7 g++ gcc
+</code></p>
+
+<p>Older versions of Ubuntu can be convinced to work too, but this requires
+a g++ version of at least 4.9. Ubuntu 14 ships with older g++
+versions by default, so you will first need to install a newer g++ version
+(see <a href="http://askubuntu.com/questions/466651/how-do-i-use-the-latest-gcc-on-ubuntu-14-04">here</a> or
+<a href="http://askubuntu.com/questions/428198/getting-installing-gcc-g-4-9-on-ubuntu">here</a> for
+some external instructions). Once the g++ and gcc compilers are recent enough,
+install the other prerequisites.</p>
+
+<h2>Cloning ArangoDB</h2>
+
+<p>After having installed the prerequisites, clone the ArangoDB repository
+from Github and then cd into the directory <code>arangodb</code> that the cloning
+will have created:</p>
+
+<p><code>bash cloning ArangoDB
+git clone https://github.com/arangodb/arangodb
+cd arangodb
+</code></p>
+
+<p>Then check out the 3.0 branch and pull the latest changes:
+<code>bash cloning ArangoDB
+git checkout 3.0
+git pull
+</code></p>
+
+<h2>Building ArangoDB</h2>
+
+<p>A convention when using CMake is to not build directly in the source
+directory, but use a separate build directory instead. The benefit of
+this is that building in a separate directory won&rsquo;t change the source
+directory, and the build directory can be disposed easily.</p>
+
+<p>To create an initial build directory named <code>build</code> and cd into it,
+just type:</p>
+
+<p><code>bash creating a build directory
+mkdir -p build
+cd build
+</code></p>
+
+<p>It&rsquo;s now time to invoke CMake. CMake should be executed from the build
+directory, but needs to know where it&rsquo;s build instructions file
+(named <code>CMakeLists.txt</code> is). This file is located in the source directory.
+To run CMake without any specific options, we can use:</p>
+
+<p><code>bash running CMake
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
+</code></p>
+
+<p>This will run CMake from inside the <code>build</code> directory and tell it to
+look for <code>CMakeLists.txt</code> in the source directory. The
+<code>-DCMAKE_BUILD_TYPE=RelWithDebInfo</code> part will tell CMake to build
+binaries with optimizations and debug symbols. Other useful build
+types are:</p>
+
+<ul>
+<li><code>-DCMAKE_BUILD_TYPE=Debug</code>: without optimizations, for debugging only</li>
+<li><code>-DCMAKE_BUILD_TYPE=Release</code>: with optimizations, no debug symbols,
+not useful for debugging</li>
+</ul>
+
+
+<p>Invoking CMake will perform some checks for required components, compiler
+and platform features. If anything fails, it should print some error
+message. If everything works well, the command should have created a
+<code>Makefile</code> in the <code>build</code> directory.</p>
+
+<p><em>side note: CMake on Linux will by default generate UNIX <code>Makefile</code>s,
+but it can also be told to generate <a href="https://ninja-build.org/">ninja</a>
+files instead. On Windows it can generate solution files for Visual
+Studio.</em></p>
+
+<p>Now that the <code>Makefile</code> is there, we can run <code>make</code> as usual (note that
+the <code>-j4</code> means to build with 4 parallel processes &ndash; adjust as needed!):</p>
+
+<p><code>bash running make
+make -j4
+</code></p>
+
+<h2>Starting arangod and arangosh</h2>
+
+<p>And that&rsquo;s already it for a normal build. Note that the build artefacts
+and thus the binaries will also be created inside the <code>build</code> directory.
+<code>arangod</code> and <code>arangosh</code> will be located in the <code>bin</code> subdirectory of
+the <code>build</code> directory. There is no need to install these binaries, they
+can be run without installing them first. However, starting them from
+inside the build directory will not work, because they will complain
+about missing files. It is better to cd one level up first and then
+start them:</p>
+
+<p><code>bash starting arangod
+cd ..
+build/bin/arangod ~/testdata --server.authentication false
+</code></p>
+
+<p>The former will start arangod with default configuration, with a fresh
+database directory located in <code>~/testdata</code>.</p>
+
+<p>If you ran all the commands on your local machine (127.0.0.1) then you
+can now open a browser and point it to <a href="http://127.0.0.1:8529/">http://127.0.0.1:8529/</a>.
+This should bring up ArangoDB&rsquo;s web interface.</p>
+
+<p>You can alternatively start an ArangoShell to connect to the ArangoDB
+server. In another terminal window, cd into the <code>arangodb</code> directory and
+start an ArangoShell as follows:</p>
+
+<p><code>bash starting arangosh
+cd arangodb
+build/bin/arangosh
+</code></p>
+
+<p>You should now see the ArangoShell prompt and be able to type some
+commands!</p>
+
+<h2>Command summary</h2>
+
+<p>Note: in contrast to the above step-by-step instructions, some commands
+here have been put together on a single line to make developer&rsquo;s life
+easier.</p>
+
+<p><code>bash installing prerequisites
+sudo apt-get install cmake make build-essential openssl python2.7 g++ gcc
+</code></p>
+
+<p><code>bash initial checkout of the 3.0 branch and build configuration
+git clone https://github.com/arangodb/arangodb
+cd arangodb
+git checkout 3.0
+git pull
+mkdir -p build
+(cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..)
+</code></p>
+
+<p><code>bash Update, build and run cycle
+git pull
+(cd build &amp;&amp; make -j4)
+build/bin/arangod ~/testdata --server.authentication false
+</code></p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[How to Set Up Fish Completion for ArangoDB]]></title>
@@ -294,162 +463,6 @@ Otherwise backtraces might reveal less useful information for debugging.</p>
 
 <p>On a side note: the <a href="http://lint.travis-ci.org/">Travis WebLint</a> is a
 handy tool for validating <code>.travis.yml</code> files <em>before</em> pushing them.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[How to Set Up Bash Completion for ArangoDB]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/"/>
-    <updated>2014-10-22T23:10:32+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb</id>
-    <content type="html"><![CDATA[<p>I was interested in how bash auto-completion works and how to write
-a custom completer. After about an hour of work, I came up with a
-solution that at least seems to work on Ubuntu. I now have auto-completion
-for ArangoDB and all its client tools!</p>
-
-<!-- more -->
-
-
-<h2>The problem</h2>
-
-<p>I use the command-line for almost everything, including starting
-and stopping ArangoDB and its client tools. They provide lots
-of options which I cannot completely memorize.</p>
-
-<p>The bash solution for &ldquo;I don&rsquo;t know what I am looking for&rdquo; is to
-press the <strong>TAB</strong> key. This will bring up a list of suggestions for
-how to complete the currently entered word. I thought using the
-same thing for ArangoDB&rsquo;s command-line options would be nice, too.</p>
-
-<h2>The solution</h2>
-
-<p>It turned out that I needed to put a shell script that generates the
-auto completion for <code>arangod</code> and all the other tools into <code>/etc/bash_completion.d</code>.
-From there, the system will automatically pick it up when auto-completion
-is initialized.</p>
-
-<p>The script is rather simple. For example, to have auto-completion for
-<code>arangosh</code> it would look like this:</p>
-
-<p>```bash completion script example for arangosh
-_arangosh()
-{</p>
-
-<pre><code>local cur prev opts
-COMPREPLY=()
-cur="${COMP_WORDS[COMP_CWORD]}"
-prev="${COMP_WORDS[COMP_CWORD-1]}"
-opts="--help --server.endpoint --server.username" # ...all the options go here
-
-if [[ ${cur} == -* ]] ; then
-    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
-    return 0
-fi
-</code></pre>
-
-<p>}</p>
-
-<p>complete -o default -F _arangosh arangosh
-```</p>
-
-<p>As can be seen, the variable <code>opts</code> should be filled with the list of possible
-options. Determining the options for a binary can be achieved by invoking it with its
-<code>--help</code> option, e.g.:</p>
-
-<p>```bash figuring out program options
-arangosh &mdash;help | grep -o &ldquo;^\ +&mdash;[a-z-]+(.[a-z0-9-]+)\?&rdquo; | xargs</p>
-
-<h1>this will generate something like the following output:</h1>
-
-<h1>&mdash;audit-log &mdash;chunk-size &mdash;configuration &mdash;help &mdash;no-auto-complete &mdash;no-colors &mdash;pager &mdash;pretty-print &mdash;prompt &mdash;quiet &mdash;temp-path &mdash;use-pager &mdash;javascript.check &mdash;javascript.current-module-directory &mdash;javascript.execute &mdash;javascript.execute-string &mdash;javascript.gc-interval &mdash;javascript.startup-directory &mdash;javascript.unit-tests &mdash;jslint &mdash;log.level &mdash;log.use-local-time &mdash;server.connect-timeout &mdash;server.database &mdash;server.disable-authentication &mdash;server.endpoint &mdash;server.password &mdash;server.request-timeout &mdash;server.ssl-protocol &mdash;server.username</h1>
-
-<p>```</p>
-
-<p>That has to be repeated for all binaries in the ArangoDB package (i.e. arangob, arangosh,
-arangoimp, arangodump, arangorestore, and arangod).</p>
-
-<p>As the available options might change over time, I wrote a script that extracts them
-from the binaries and puts together the completions file. This script can be downloaded
-<a href="/downloads/code/build-completions.sh">here</a>. The script expects the already-built ArangoDB
-binaries to be located in the <code>bin</code> subdirectory. Provided that ArangoDB was compiled from
-source, this should already be the case.</p>
-
-<p>The script should then be run from the base directory:
-<code>bash
-build-completions.sh arangodb
-</code>
-This will write the completions script for all binaries into the file <code>arangodb</code>.
-Pre-generated completion scripts for various ArangoDB versions can be found here:
-<a href="/downloads/code/completions-2.2">2.2</a> <a href="/downloads/code/completions-2.3">2.3</a>
-<a href="/downloads/code/completions-2.4">2.4</a> <a href="/downloads/code/completions-2.5">2.5</a>
-<a href="/downloads/code/completions-2.6">2.6</a> <a href="/downloads/code/completions-2.7">2.7</a>
-<a href="/downloads/code/completions-2.8">2.8</a></p>
-
-<p>To activate completions, copy the appropriate file into <code>/etc/bash_completion.d/arangodb</code>.
-Note that completion may need to be re-initialized once in order to make work:
-<code>bash
-. /etc/bash_completion.d/arangodb
-</code></p>
-
-<h2>Quick setup</h2>
-
-<p>The following command should install the completions for 2.7 and activate them:
-```bash activate completions for ArangoDB 2.7
-sudo \
-  wget -O /etc/bash_completion.d/arangodb \</p>
-
-<pre><code>https://jsteemann.github.io/downloads/code/completions-2.7 &amp;&amp; \
-</code></pre>
-
-<p>  . /etc/bash_completion.d/arangodb
-```</p>
-
-<p>The command for 2.6 is:
-```bash activate completions for ArangoDB 2.6
-sudo \
-  wget -O /etc/bash_completion.d/arangodb \</p>
-
-<pre><code>https://jsteemann.github.io/downloads/code/completions-2.6 &amp;&amp; \
-</code></pre>
-
-<p>  . /etc/bash_completion.d/arangodb
-```</p>
-
-<p>The command for 2.5 is:
-```bash activate completions for ArangoDB 2.5
-sudo \
-  wget -O /etc/bash_completion.d/arangodb \</p>
-
-<pre><code>https://jsteemann.github.io/downloads/code/completions-2.5 &amp;&amp; \
-</code></pre>
-
-<p>  . /etc/bash_completion.d/arangodb
-```</p>
-
-<p>To see it in action, type <code>arangosh --</code> and then press <strong>TAB</strong>.</p>
-
-<h2>Other environments (MacOS etc.)</h2>
-
-<p><em>Note: I have checked that the above works on Ubuntu and OpenSuSE. I have no idea whether this works
-with other Linux distributions let alone other shells.</em></p>
-
-<p>Some Linux/Unix distros do not have <code>/etc/bash_completion.d</code> at all. I was told MacOS is one
-of them. For such environments, downloading and sourcing the completions script should work:</p>
-
-<p>```bash activate completion without bash_completion.d
-wget -O ~/arangodb-completions-2.5 \</p>
-
-<pre><code>https://jsteemann.github.io/downloads/code/completions-2.5
-</code></pre>
-
-<p>. ~/arangodb-completions-2.5
-```</p>
-
-<p>This will enable the completions in the current shell. To enable them permanently, add the
-completions script to your <code>.bashrc</code> file:
-<code>bash adding completions to .bashrc
-echo ". ~/arangodb-completions-2.5" &gt;&gt; ~/.bashrc
-</code></p>
 ]]></content>
   </entry>
   

@@ -4,7 +4,7 @@
   <title><![CDATA[Category: C++ | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/c-plus-plus/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-01-26T23:49:30+01:00</updated>
+  <updated>2016-06-03T00:48:00+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,463 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Fastest String-to-uint64 Conversion Method?]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/02/fastest-string-to-uint64-conversion-method/"/>
+    <updated>2016-06-02T20:15:27+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/02/fastest-string-to-uint64-conversion-method</id>
+    <content type="html"><![CDATA[<p>While doing some optimization work for the upcoming ArangoDB 3.0 release,
+we had to figure out what was the &ldquo;ideal&rdquo; way of converting a string
+representation of a number into a C++ uint64_t (64 bit unsigned integer type).
+This kind of operation is performed a lot during the lifetime of an ArangoDB
+server process, so it seemed worthwhile making it as fast as possible.</p>
+
+<!-- more -->
+
+
+<h2>std::stoull and std::strtoull</h2>
+
+<p>The natural solution for this kind of conversion is the standard library&rsquo;s
+<a href="http://en.cppreference.com/w/cpp/string/basic_string/stoul">std::stoull</a>
+function. On the one hand, that solution is potentially optimized and definitely
+robust. It performs validation of the input characters and is also battle-tested
+by millions of users.</p>
+
+<p>On the other hand, std::stoull has a few &ldquo;features&rdquo; that some would consider
+&ldquo;anti&rdquo;-features, and that sound like they could negatively influence performance:</p>
+
+<ul>
+<li>it may behave locale-dependent</li>
+<li>it can parse and will let pass negative input values, which is often not desired
+for a result of unsigned type</li>
+<li>it can perform base conversion</li>
+</ul>
+
+
+<p>In C++11 there is also the alternative
+<a href="http://en.cppreference.com/w/cpp/string/byte/strtoul">std::strtoull</a>.
+It should behave about the same as std::stoull except in case of error.
+std::stoull will throw and std::strtoull will not.</p>
+
+<p>That&rsquo;s what we get from the standard library for long unsigned integer types.</p>
+
+<h2>Alternative implementations (w/o error checking)</h2>
+
+<p>Another alternative is to roll a string to number conversion function ourselves.
+If we hard-code it to base 10 and do not care about error checking, a naive
+implementation may look like this:</p>
+
+<p>```cpp
+inline uint64_t naive(std::string const&amp; value) {
+  uint64_t result = 0;
+  char const<em> p = value.c_str();
+  char const</em> q = p + value.size();
+  while (p &lt; q) {</p>
+
+<pre><code>result *= 10;
+result += *(p++) - '0';
+</code></pre>
+
+<p>  }
+  return result;
+}
+```</p>
+
+<p>Obviously the above will produce wrong results for invalid
+input data, but for &ldquo;trusted&rdquo; (known to be valid) input it may
+be just fine.</p>
+
+<p>Here&rsquo;s just another implementation for the problem at hand. This one
+doesn&rsquo;t perform the times 10 operation, but splits it into two bitshifting
+operations:</p>
+
+<p>```cpp
+inline uint64_t bitshift(std::string const&amp; value) {
+  uint64_t result = 0;</p>
+
+<p>  char const<em> p = value.c_str();
+  char const</em> q = p + value.size();
+  while (p &lt; q) {</p>
+
+<pre><code>result = (result &lt;&lt; 1) + (result &lt;&lt; 3) + *(p++) - '0';
+</code></pre>
+
+<p>  }
+  return result;
+}
+```</p>
+
+<p>Again no error checking is present in the above function, but it
+should be ok for trusted inputs.</p>
+
+<p>By manually unrolling the while loop and converting it into a switch
+statement, we can also come up with a conversion function that has minimal
+branching:</p>
+
+<p>```cpp
+inline uint64_t unrolled(std::string const&amp; value) {
+  uint64_t result = 0;</p>
+
+<p>  size_t const length = value.size();
+  switch (length) {</p>
+
+<pre><code>case 20:    result += (value[length - 20] - '0') * 10000000000000000000ULL;
+case 19:    result += (value[length - 19] - '0') * 1000000000000000000ULL;
+case 18:    result += (value[length - 18] - '0') * 100000000000000000ULL;
+case 17:    result += (value[length - 17] - '0') * 10000000000000000ULL;
+case 16:    result += (value[length - 16] - '0') * 1000000000000000ULL;
+case 15:    result += (value[length - 15] - '0') * 100000000000000ULL;
+case 14:    result += (value[length - 14] - '0') * 10000000000000ULL;
+case 13:    result += (value[length - 13] - '0') * 1000000000000ULL;
+case 12:    result += (value[length - 12] - '0') * 100000000000ULL;
+case 11:    result += (value[length - 11] - '0') * 10000000000ULL;
+case 10:    result += (value[length - 10] - '0') * 1000000000ULL;
+case  9:    result += (value[length -  9] - '0') * 100000000ULL;
+case  8:    result += (value[length -  8] - '0') * 10000000ULL;
+case  7:    result += (value[length -  7] - '0') * 1000000ULL;
+case  6:    result += (value[length -  6] - '0') * 100000ULL;
+case  5:    result += (value[length -  5] - '0') * 10000ULL;
+case  4:    result += (value[length -  4] - '0') * 1000ULL;
+case  3:    result += (value[length -  3] - '0') * 100ULL;
+case  2:    result += (value[length -  2] - '0') * 10ULL;
+case  1:    result += (value[length -  1] - '0');
+</code></pre>
+
+<p>  }
+  return result;
+}
+```</p>
+
+<h2>Performance testing</h2>
+
+<p>To check out how all these alternatives perform, I put them into a small
+<a href="/downloads/code/stoull-test.cpp">test driver program</a>. To compile it with
+g++ and run it, I used this command:</p>
+
+<p><code>bash
+g++ -Wall -Wextra -march=native -std=c++11 -O3 stdoull-test.cpp &amp;&amp; ./a.out
+</code></p>
+
+<p>The test program will convert input strings of different lengths to uint64_t
+using the above (and some other) implementations, going up from 10,000 iterations
+per string up to 100,000,000. It also prints the wall-clock time spent in each
+run. The most interesting output it prints is in the &ldquo;ms&rdquo; column. The &ldquo;result&rdquo;
+column can be fully ignored. It&rsquo;s only there so the compiler won&rsquo;t optimize away
+the calls to the conversion functions.</p>
+
+<p>The timings from my local laptop (Intel Core i7-4710HQ CPU @ 2.50GHz, Ubuntu 16.04,
+g++ 5.3.1 &ndash; your mileage may vary!) for the 100,000,000 conversions are:</p>
+
+<p>```plain execution times for various string-to-uint64 implementations
+test &lsquo;std::stoull&rsquo;       string &lsquo;1&rsquo;                           1209 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;99&rsquo;                          1382 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;1234&rsquo;                        1725 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;1234567&rsquo;                     2257 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;1234567891&rsquo;                  2764 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;12345678901234&rsquo;              3899 ms
+test &lsquo;std::stoull&rsquo;       string &lsquo;12345678901234678901&rsquo;        7391 ms</p>
+
+<p>test &lsquo;std::strtoull&rsquo;     string &lsquo;1&rsquo;                           1104 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;99&rsquo;                          1300 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;1234&rsquo;                        1628 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;1234567&rsquo;                     2428 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;1234567891&rsquo;                  2662 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;12345678901234&rsquo;              3705 ms
+test &lsquo;std::strtoull&rsquo;     string &lsquo;12345678901234678901&rsquo;        6631 ms</p>
+
+<p>test &lsquo;naive&rsquo;             string &lsquo;1&rsquo;                            202 ms
+test &lsquo;naive&rsquo;             string &lsquo;99&rsquo;                           314 ms
+test &lsquo;naive&rsquo;             string &lsquo;1234&rsquo;                         475 ms
+test &lsquo;naive&rsquo;             string &lsquo;1234567&rsquo;                      732 ms
+test &lsquo;naive&rsquo;             string &lsquo;1234567891&rsquo;                   987 ms
+test &lsquo;naive&rsquo;             string &lsquo;12345678901234&rsquo;              1343 ms
+test &lsquo;naive&rsquo;             string &lsquo;12345678901234678901&rsquo;        1862 ms</p>
+
+<p>test &lsquo;bitshift&rsquo;          string &lsquo;1&rsquo;                            188 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;99&rsquo;                           245 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;1234&rsquo;                         397 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;1234567&rsquo;                      462 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;1234567891&rsquo;                   666 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;12345678901234&rsquo;               888 ms
+test &lsquo;bitshift&rsquo;          string &lsquo;12345678901234678901&rsquo;        1277 ms</p>
+
+<p>test &lsquo;unrolled&rsquo;          string &lsquo;1&rsquo;                            289 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;99&rsquo;                           289 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;1234&rsquo;                         351 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;1234567&rsquo;                      408 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;1234567891&rsquo;                   547 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;12345678901234&rsquo;               778 ms
+test &lsquo;unrolled&rsquo;          string &lsquo;12345678901234678901&rsquo;        1068 ms
+```</p>
+
+<p>It&rsquo;s no surprise the standard library functions with their generality and
+error checking features are slower than the specialized functions that took
+the liberty to ignore all that.</p>
+
+<p>Which method is fastest now?</p>
+
+<p>As can be seen above, the &ldquo;bitshift&rdquo; variant was fastest for short and medium
+length inputs in my environment. At some point when input values get longer,
+the &ldquo;bitshift&rdquo; methods gets overtaken by the &ldquo;unrolled&rdquo; variant. The &ldquo;naive&rdquo;
+variant was slower than the two in most cases, but still performs surprisingly
+well.</p>
+
+<h2>Conclusion</h2>
+
+<p>The take-away: even though string-to-number conversion routines are
+present in the standard library, it can still be beneficial to hand-craft
+specialized variants of them for maximum performance. This is especially true
+when most of the generality that the standard library routines provide is not
+required in your use case.</p>
+
+<p>For example, if you know that the conversion functions will only operate on
+&ldquo;trusted&rdquo; input (only numeric digit input characters, length of input string
+won&rsquo;t exceed the maximum length of a uint64_t number etc.) then error checking
+is not required.</p>
+
+<p>Additionally, if you can limit yourself to numbers of a specific base and
+don&rsquo;t negative base conversion nor the handling of negative values, a lot of
+the generality and safety overhead of std::stoull may be avoided.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling ArangoDB 3.0 on Ubuntu]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu/"/>
+    <updated>2016-06-02T20:15:01+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/02/compiling-arangodb-3-dot-0-on-ubuntu</id>
+    <content type="html"><![CDATA[<p>We have spent a lot of time working on ArangoDB 3.0. That
+version will not only provide major functionality and performance
+improvements, but will also come with an improved, CMake-based
+build system.</p>
+
+<p>This post explains how to use CMake to build ArangoDB 3.0 on a recent
+Ubuntu Linux. For the impatient there&rsquo;s a command summary at the end of
+this post.</p>
+
+<!-- more -->
+
+
+<h2>Installing prerequisites</h2>
+
+<p>Here&rsquo;s how to build ArangoDB 3.0 with cmake on a recent Ubuntu Linux.</p>
+
+<p>Ubuntu 15.x and 16.x should have recent enough packages so any missing
+prerequisites can be installed via a simple <code>sudo apt-get install</code> command:</p>
+
+<p><code>bash installing prerequisites
+sudo apt-get install cmake make build-essential openssl python2.7 g++ gcc
+</code></p>
+
+<p>Older versions of Ubuntu can be convinced to work too, but this requires
+a g++ version of at least 4.9. Ubuntu 14 ships with older g++
+versions by default, so you will first need to install a newer g++ version
+(see <a href="http://askubuntu.com/questions/466651/how-do-i-use-the-latest-gcc-on-ubuntu-14-04">here</a> or
+<a href="http://askubuntu.com/questions/428198/getting-installing-gcc-g-4-9-on-ubuntu">here</a> for
+some external instructions). Once the g++ and gcc compilers are recent enough,
+install the other prerequisites.</p>
+
+<h2>Cloning ArangoDB</h2>
+
+<p>After having installed the prerequisites, clone the ArangoDB repository
+from Github and then cd into the directory <code>arangodb</code> that the cloning
+will have created:</p>
+
+<p><code>bash cloning ArangoDB
+git clone https://github.com/arangodb/arangodb
+cd arangodb
+</code></p>
+
+<p>Then check out the 3.0 branch and pull the latest changes:
+<code>bash cloning ArangoDB
+git checkout 3.0
+git pull
+</code></p>
+
+<h2>Building ArangoDB</h2>
+
+<p>A convention when using CMake is to not build directly in the source
+directory, but use a separate build directory instead. The benefit of
+this is that building in a separate directory won&rsquo;t change the source
+directory, and the build directory can be disposed easily.</p>
+
+<p>To create an initial build directory named <code>build</code> and cd into it,
+just type:</p>
+
+<p><code>bash creating a build directory
+mkdir -p build
+cd build
+</code></p>
+
+<p>It&rsquo;s now time to invoke CMake. CMake should be executed from the build
+directory, but needs to know where it&rsquo;s build instructions file
+(named <code>CMakeLists.txt</code> is). This file is located in the source directory.
+To run CMake without any specific options, we can use:</p>
+
+<p><code>bash running CMake
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
+</code></p>
+
+<p>This will run CMake from inside the <code>build</code> directory and tell it to
+look for <code>CMakeLists.txt</code> in the source directory. The
+<code>-DCMAKE_BUILD_TYPE=RelWithDebInfo</code> part will tell CMake to build
+binaries with optimizations and debug symbols. Other useful build
+types are:</p>
+
+<ul>
+<li><code>-DCMAKE_BUILD_TYPE=Debug</code>: without optimizations, for debugging only</li>
+<li><code>-DCMAKE_BUILD_TYPE=Release</code>: with optimizations, no debug symbols,
+not useful for debugging</li>
+</ul>
+
+
+<p>Invoking CMake will perform some checks for required components, compiler
+and platform features. If anything fails, it should print some error
+message. If everything works well, the command should have created a
+<code>Makefile</code> in the <code>build</code> directory.</p>
+
+<p><em>side note: CMake on Linux will by default generate UNIX <code>Makefile</code>s,
+but it can also be told to generate <a href="https://ninja-build.org/">ninja</a>
+files instead. On Windows it can generate solution files for Visual
+Studio.</em></p>
+
+<p>Now that the <code>Makefile</code> is there, we can run <code>make</code> as usual (note that
+the <code>-j4</code> means to build with 4 parallel processes &ndash; adjust as needed!):</p>
+
+<p><code>bash running make
+make -j4
+</code></p>
+
+<h2>Starting arangod and arangosh</h2>
+
+<p>And that&rsquo;s already it for a normal build. Note that the build artefacts
+and thus the binaries will also be created inside the <code>build</code> directory.
+<code>arangod</code> and <code>arangosh</code> will be located in the <code>bin</code> subdirectory of
+the <code>build</code> directory. There is no need to install these binaries, they
+can be run without installing them first. However, starting them from
+inside the build directory will not work, because they will complain
+about missing files. It is better to cd one level up first and then
+start them:</p>
+
+<p><code>bash starting arangod
+cd ..
+build/bin/arangod ~/testdata --server.authentication false
+</code></p>
+
+<p>The former will start arangod with default configuration, with a fresh
+database directory located in <code>~/testdata</code>.</p>
+
+<p>If you ran all the commands on your local machine (127.0.0.1) then you
+can now open a browser and point it to <a href="http://127.0.0.1:8529/">http://127.0.0.1:8529/</a>.
+This should bring up ArangoDB&rsquo;s web interface.</p>
+
+<p>You can alternatively start an ArangoShell to connect to the ArangoDB
+server. In another terminal window, cd into the <code>arangodb</code> directory and
+start an ArangoShell as follows:</p>
+
+<p><code>bash starting arangosh
+cd arangodb
+build/bin/arangosh
+</code></p>
+
+<p>You should now see the ArangoShell prompt and be able to type some
+commands!</p>
+
+<h2>Command summary</h2>
+
+<p>Note: in contrast to the above step-by-step instructions, some commands
+here have been put together on a single line to make developer&rsquo;s life
+easier.</p>
+
+<p><code>bash installing prerequisites
+sudo apt-get install cmake make build-essential openssl python2.7 g++ gcc
+</code></p>
+
+<p><code>bash initial checkout of the 3.0 branch and build configuration
+git clone https://github.com/arangodb/arangodb
+cd arangodb
+git checkout 3.0
+git pull
+mkdir -p build
+(cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..)
+</code></p>
+
+<p><code>bash Update, build and run cycle
+git pull
+(cd build &amp;&amp; make -j4)
+build/bin/arangod ~/testdata --server.authentication false
+</code></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling V8 With G++6]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/02/compiling-v8-with-g-plus-plus-6/"/>
+    <updated>2016-06-02T20:14:46+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/02/compiling-v8-with-g-plus-plus-6</id>
+    <content type="html"><![CDATA[<p>With g++ 6 becoming more and more adopted, it&rsquo;s about time to point out an issue
+that hit some of us ArangoDB developers and a few of our users that compile ArangoDB
+from source with g++ 6.</p>
+
+<p>The problem is that when compiling ArangoDB with g++6 with default options, arangod
+starts and almost immediately segfaults.</p>
+
+<!-- more -->
+
+
+<p>A backtrace of the crashed arangod process shows that the segfaults originate from
+the V8 JavaScript engine that ArangoDB uses internally.
+The problem seems to have affected other users of V8 as well, indicated by the following
+error reports:</p>
+
+<ul>
+<li>node.js: <a href="https://github.com/nodejs/node/issues/6724">https://github.com/nodejs/node/issues/6724</a></li>
+<li>chromium: <a href="https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68853">https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68853</a></li>
+</ul>
+
+
+<p>The reason for the error now popping up is a change in the g++ 6 optimizer as stated
+in the <a href="https://gcc.gnu.org/gcc-6/changes.html">gcc6 release notes</a>:</p>
+
+<blockquote><p>Value range propagation now assumes that the this pointer of C++ member functions is non-null.
+This eliminates common null pointer checks but also breaks some non-conforming code-bases (such as Qt-5, Chromium, KDevelop).
+As a temporary work-around -fno-delete-null-pointer-checks can be used. Wrong code can be identified by using -fsanitize=undefined.</p></blockquote>
+
+<p>That means if compiling ArangoDB 2.8 from source with g++ 6 or higher, please be sure to
+set the environment variables <code>CFLAGS="-fno-delete-null-pointer-checks"</code> and<br/>
+<code>CXXFLAGS="-fno-delete-null-pointer-checks"</code> before invoking the <code>configure</code> command:</p>
+
+<p><code>bash
+make setup
+CFLAGS="-fno-delete-null-pointer-checks" CXXFLAGS="-fno-delete-null-pointer-checks" ./configure
+make
+</code></p>
+
+<p>The options will then be passed to the sub-make that builds the V8 engine. If you have
+already built V8 without these options, try removing the file <code>.v8-build-64</code> from the
+build directory and run <code>configure</code> and <code>make</code> again.</p>
+
+<p>As a reminder, ArangoDB 2.8 will also emit this big notice at the end of its <code>configure</code> output:</p>
+
+<p><code>plain
+configure: --------------------------------------------------------------------------------
+configure:                                                                                 
+configure: NOTE: if you are compiling ArangoDB with g++ 6.0 or higher, please make sure to
+configure: set the following environment variables when compiling ArangoDB:                
+configure:                                                                                 
+configure:   CFLAGS="-fno-delete-null-pointer-checks"                                      
+configure:   CXXFLAGS="-fno-delete-null-pointer-checks"                                    
+configure:                                                                                 
+configure: --------------------------------------------------------------------------------
+</code></p>
+
+<p>Users of g++ 5.x do not need to set these flags, neither need users of clang++. And in the
+ArangoDB 3.0 build the options will be set automatically when compiling V8 if the compiler
+is g++. They will not be set for compiling any other parts of ArangoDB as it&rsquo;s only required
+for building V8.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[C++ Constructors and Memory Leaks]]></title>
@@ -783,233 +1240,6 @@ from within ArangoDB. If there is an updated version of this module, we use npm 
 install it in a subdirectory of ArangoDB. As per npm convention, the node.js modules
 shipped with ArangoDB reside in a directory named <code>node_modules</code>. Probably this is
 what caused some of the confusion.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Less Intrusive Linking]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking/"/>
-    <updated>2015-05-07T19:52:53+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking</id>
-    <content type="html"><![CDATA[<p>A while ago our continuous integration builds on <a href="http://travis-ci.org">TravisCI</a>
-began to fail seemingly randomly because the build worker was killed without
-an apparent reason. Obviously the build process reached some resource limits
-though we couldn&rsquo;t find any documented limit that the build obviously violated.</p>
-
-<p>Some builds still succeeded without issues, but those builds that were killed
-had one thing in common: they were all stuck waiting the linker to finish.</p>
-
-<p>The default linker used on TravisCI is <em>GNU ld</em>. After some research, it turned
-out that replacing <em>GNU ld</em> with <em>GNU gold</em> not only made the linking much
-faster, but also less resource-intensive. Linking ArangoDB on my local machine
-is almost twice as fast with <em>gold</em> as with <em>ld</em>. Even better, after reconfiguring
-our TravisCI builds to also use <em>gold</em>, our builds weren&rsquo;t killed anymore by
-TravisCI&rsquo;s build scheduling system.</p>
-
-<p>To make TravisCI use <em>gold</em> instead of <em>ld</em>, add the following to your project&rsquo;s
-<code>.travis.yml</code> in the <code>install</code> section (so it gets execute before the actual build
-steps):</p>
-
-<p><code>bash commands for wrapping gold
-sudo apt-get -y install binutils-gold
-mkdir -p ~/bin/gold
-echo '#!/bin/bash' &gt; ~/bin/gold/ld
-echo 'gold "$@"' &gt;&gt; ~/bin/gold/ld
-chmod a+x ~/bin/gold/ld
-export CFLAGS="-B$HOME/bin/gold $CFLAGS"
-export CXXFLAGS="-B$HOME/bin/gold $CXXFLAGS"
-</code></p>
-
-<p>The script downloads and installs <em>gold</em> and creates a tiny wrapper script in a
-file named <code>ld</code> in the user&rsquo;s home directory. The wrapper simply calls <em>gold</em>
-with all the arguments passed to the wrapper. Finally, the script modifies the
-environments <code>CFLAGS</code> and <code>CXXFLAGS</code> by setting the <code>-B</code> parameter to the
-wrapper script&rsquo;s directory.</p>
-
-<p><code>-B</code> is the option for the compiler&rsquo;s search path. The compiler (g++) at least
-will look in this path for any helper tools it invokes. As we have a file named
-<code>ld</code> in this directory, g++ will use our wrapper script instead of the original
-<code>ld</code> binary. This way we can keep the original version of <code>ld</code> in <code>/usr/bin</code>,
-and only override it using environment variables. This is also helpful in
-other contexts, e.g. when <code>ld</code> shall remain as the system&rsquo;s default linker but
-<code>gold</code>shall only be used for linking a few selected components.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Using Ccache When Working With Different Branches]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/02/07/using-ccache-when-working-with-different-branches/"/>
-    <updated>2015-02-07T17:00:15+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/02/07/using-ccache-when-working-with-different-branches</id>
-    <content type="html"><![CDATA[<p>Git makes working with many different branches in the same local repository easy and efficient.</p>
-
-<p>In a C/C++ project, the code must be re-compiled after switching into another branch.
-If the branches only differ minimally, running <code>make</code> will only re-compile the parts that are
-actually different, and after that re-link them. That won&rsquo;t take too long, though especially
-link times can be annoying.</p>
-
-<p>However, if there are differences in central header files that are included from every file,
-then <code>make</code> has no option but to <strong>re-compile everything</strong>. This can take significant amounts of
-time (and coffee).</p>
-
-<p>I just realized that there is a solution to speed up re-compilation in this situation:
-<a href="http://linux.die.net/man/1/ccache">ccache</a>!</p>
-
-<!-- more -->
-
-
-<h2>Why ccache can help</h2>
-
-<p>ccache is a wrapper for the actual compiler command. It will call the compiler with the specified
-arguments, and capture the compiler output. When called again with the same arguments, it will
-look in its internal cache for a ready-to-serve result. If one is present, it will return it
-without invoking the compiler again. Otherwise, or if it detects some changes that forbid serving
-outdated results from the cache, it will transparently invoke the compiler.</p>
-
-<p>When switching back to another branch that you had already compiled before, running <code>make</code>
-may re-build <em>everything</em> due to changes in headers. But it is not unlikely that you had built
-the branch before already. If so, and ccache was involved in the previous build, it may still
-have all the info required for re-compilation in its cache.</p>
-
-<p>And everyone will be happy: <code>make</code> will run its full rebuild, but most operations won&rsquo;t be handed
-to the compiler because ccache is sitting in between, serving results from its cache.
-And you as a developer won&rsquo;t lose that much time.</p>
-
-<h2>Some figures</h2>
-
-<p>Following are some figures demonstrating its potential when running a <code>make</code> in the devel branch
-after having returned from a different branch with significant changes.</p>
-
-<h3>With ccache, but cache empty</h3>
-
-<p><code>plain time make
-real  12m43.501s
-user  11m52.550s
-sys 0m44.110s
-</code></p>
-
-<h3>With ccache, everything in cache</h3>
-
-<p><code>plain time make
-real  0m55.572s
-user  0m26.346s
-sys 0m7.551s
-</code></p>
-
-<p>That&rsquo;s a <strong>build time reduction of more than 90 %</strong>!</p>
-
-<p>This is already the optimal result, as everything was already present in the cache.
-However, the situation was not unrealistic. I often switch into another branch, try something
-out or commit a small change, and the return to the original branch. I already started having
-many separate directories for the different branches to avoid frequent recompilation.
-ccache can be relief here.</p>
-
-<p>By the way, timing results are from my laptop. I did not bother to run <code>make</code> with parallel
-jobs as this has limited effect on my laptop, though on more decent hardware it may be beneficial
-both with and without ccache, though I guess, with many parallel jobs and a full cache, linking
-will become the most expensive part.</p>
-
-<h2>How to use ccache</h2>
-
-<p>For Ubuntu, ccache is available in package <code>ccache</code>. You can easily install it with:
-<code>bash Installing ccache on Ubuntu
-sudo apt-get install ccache
-</code></p>
-
-<p>The most convenient way to use ccache in your build is to change your <code>CC</code> and <code>CXX</code>
-environment variables as follows:
-<code>bash setting compilers environment variables
-export CC="ccache gcc"
-export CXX="ccache g++"
-</code></p>
-
-<p>I suggest putting that into <code>.bashrc</code> so the variables will be set in every session and not
-just once. After that, running <code>configure</code> will write a <code>Makefile</code> that will use ccache for
-building object files.</p>
-
-<p>Note: that will change these environment variables globally, so ccache may be used for other
-projects, too.</p>
-
-<h3>What ccache cannot do</h3>
-
-<p>I already forgot about ccache because when working in a single branch it does not provide that
-many benefits. When making changes to your code, you can be pretty sure the new code won&rsquo;t be
-in the cache yet. Running <code>make</code> then will invoke ccache, but this will result in a cache miss.
-It cannot help here, because the new code was never compiled before and thus in no cache.</p>
-
-<p>Additionally, <code>make</code> is smart enough on its own to only re-build the parts of the program that
-have actually changed or depend on the changes you made.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Getting Core Dumps of Failed TravisCI Builds]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/"/>
-    <updated>2014-10-30T23:05:48+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds</id>
-    <content type="html"><![CDATA[<p>I recently wrote about <a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">using TravisCI for continuously testing C++11 projects</a>.</p>
-
-<p><strong>Now, what if a build fails?</strong></p>
-
-<p>Especially for C and C++ projects, build failures may mean crashed
-programs. In a local setup, the usual way to analyze program crashes
-is to manually inspect the core files that are written on crash.</p>
-
-<p>With TravisCI, there is no way to log in to a build machine and
-inspect a core dump interactively. There is no SSH access to
-the build machines. TravisCI does not even persist any state of
-builds but the result and the log output.</p>
-
-<p>There is a way to get to the core dumps, but it was fiddly to find
-out and set up.</p>
-
-<!-- more -->
-
-
-<p>The basic idea is to run <code>gdb</code> on the TravisCI build machine
-automatically when a build fails. <code>gdb</code> can be scripted, so all
-we need to do is to make it print a backtrace in all threads at
-the time of the crash.</p>
-
-<p>By default, no core dumps will be produced on TravisCI. To turn them
-on, an appropriate ulimit value must be set. We also need to install
-<code>gdb</code> so we can actually run it. Here is the <code>.travis.yml</code> adjustment
-for these prerequisites:</p>
-
-<p>```yaml adjustments for install and before_script hooks
-install:
-&ndash; sudo apt-get install -y gdb  # install gdb</p>
-
-<p>before_script:
-&ndash; ulimit -c unlimited -S       # enable core dumps
-```</p>
-
-<p>To get an idea of where the program crashed, we can finally install
-an <code>after_failure</code> hook. This hook can check for a core file and use
-<code>gdb</code> to print a nice backtrace.</p>
-
-<p>The core file pattern on TravisCI seems to be <code>core-%p</code>, so core
-filenames will include the executable&rsquo;s process id and change on
-every run. We can use <code>find</code> to look for files named <code>core*</code> in the
-cwd and pick the first one as there should only be at most one core
-file per build:</p>
-
-<p><code>yaml adjustments for after_failure hook
-after_failure:
-- COREFILE=$(find . -maxdepth 1 -name "core*" | head -n 1) # find core file
-- if [[ -f "$COREFILE" ]]; then gdb -c "$COREFILE" example -ex "thread apply all bt" -ex "set pagination 0" -batch; fi
-</code></p>
-
-<p>A failed build might produce output like this:</p>
-
-<p><img src="/downloads/screenshots/travis-ci-gdb.png"></p>
-
-<p>I recommend compiling the executable to test with debug symbols on and
-with all optimizations turned off (i.e. compiler options <code>-g -O0</code>).
-Otherwise backtraces might reveal less useful information for debugging.</p>
-
-<p>On a side note: the <a href="http://lint.travis-ci.org/">Travis WebLint</a> is a
-handy tool for validating <code>.travis.yml</code> files <em>before</em> pushing them.</p>
 ]]></content>
   </entry>
   
