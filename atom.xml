@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-06-03T00:48:00+02:00</updated>
+  <updated>2016-06-09T22:14:13+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,432 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling an Optimized Version of ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/09/compiling-an-optimized-version-of-arangodb/"/>
+    <updated>2016-06-09T20:31:31+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/09/compiling-an-optimized-version-of-arangodb</id>
+    <content type="html"><![CDATA[<p>Why should you care about compiling ArangoDB on your own when there are
+official release packages that are ready to use?</p>
+
+<!--more -->
+
+
+<p>There are three main reasons for compiling on your own:</p>
+
+<ul>
+<li><p>as a developer you want to <em>make changes to the ArangoDB C++ source code</em>.
+Then your only option obviously is to compile on your own. Please consult
+the <a href="http://jsteemann.github.io/blog/2016/06/09/compiling-a-debug-version-of-arangodb/">compiling a debug version of ArangoDB</a>
+page for more information.</p></li>
+<li><p>you are trying to <em>get meaningful stack traces from core dumps</em> produced
+by ArangoDB and need an ArangoDB binary that comes with enough debug
+information (debug symbols, probably also assertions turned on). In this
+case, please also consult the <a href="http://jsteemann.github.io/blog/2016/06/09/compiling-a-debug-version-of-arangodb/">compiling a debug version of ArangoDB</a>
+blog post for how to get this done.</p></li>
+<li><p>you want to use an ArangoDB binary that is <em>optimized for your specific
+target architecture</em>.</p></li>
+</ul>
+
+
+<p>The latter reason is relevant because the official release packages that
+are provided by ArangoDB cannot make too many assumptions about the environment
+in which they will be used. In the general release packages there is not so
+much room for platform-specific optimizations as there would be if you are
+compiling just for the local machine.</p>
+
+<p>For example, all relevant CPU offer <a href="https://en.wikipedia.org/wiki/SIMD">SIMD</a>
+instructions that a compiler can exploit when generating code. But different
+generations of CPUs offer different levels of SIMD instructions. Not every CPU
+in use today provides SSE4, not to talk about AVX.</p>
+
+<p>To make our release packages compatible with most environments, we have had
+to make some conservative assumptions about the CPU abilities, which effectively
+disables many optimizations that would have been possible when creating a
+build that only needs to run on a specific architecture.</p>
+
+<p>To fully exploit the capabilities of a specific target environment, it&rsquo;s required
+to build executables for that specific architecture. Most compilers offer an option
+<code>-march</code> for that. You normally want to set this to <code>native</code> when compiling an
+optimized version. There are also lots of compiler options for enabling or disabling
+specific CPU features such as <code>-msse</code>, <code>-msse2</code>, <code>-msse3</code>, <code>-mssse3</code>,
+<code>-msse4.1</code>, <code>-msse4.2</code>, <code>-msse4</code>, <code>-mavx</code>, <code>-mavx2</code>, to name just a few.</p>
+
+<p>The good news is that there is no need to deal with such compiler-specific optimization
+options in order to get an optimized build. The cmake-based ArangoDB 3.0 builds will
+automatically test the local environment&rsquo;s capabilities and set the compiler options
+based on which CPU abilities were detected.</p>
+
+<p>For example, a mere <code>(cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=Release ..)</code> will run the
+CPU ability detection and configure the build to use the features supported by the
+local architecture:</p>
+
+<figure class='code'><figcaption><span>configuring a release build</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="o">(</span>mkdir -p build; <span class="nb">cd </span>build <span class="o">&amp;&amp;</span> cmake -DCMAKE_BUILD_TYPE<span class="o">=</span>Release ..<span class="o">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>For example, on my laptop this prints:</p>
+
+<figure class='code'><figcaption><span>cmake output</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+<span class='line-number'>29</span>
+<span class='line-number'>30</span>
+<span class='line-number'>31</span>
+<span class='line-number'>32</span>
+<span class='line-number'>33</span>
+<span class='line-number'>34</span>
+<span class='line-number'>35</span>
+<span class='line-number'>36</span>
+<span class='line-number'>37</span>
+<span class='line-number'>38</span>
+</pre></td><td class='code'><pre><code class=''><span class='line'>-- The CXX compiler identification is GNU 5.3.1
+</span><span class='line'>-- The C compiler identification is GNU 5.3.1
+</span><span class='line'>...
+</span><span class='line'>-- target changed from "" to "auto"
+</span><span class='line'>-- Detected CPU: haswell
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__march_core_avx2
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__march_core_avx2 - Success
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__msse2
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__msse2 - Success
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__msse3
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__msse3 - Success
+</span><span class='line'>-- Looking for pmmintrin.h
+</span><span class='line'>-- Looking for pmmintrin.h - found
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__mssse3
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__mssse3 - Success
+</span><span class='line'>-- Looking for tmmintrin.h
+</span><span class='line'>-- Looking for tmmintrin.h - found
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__msse4_1
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__msse4_1 - Success
+</span><span class='line'>-- Looking for smmintrin.h
+</span><span class='line'>-- Looking for smmintrin.h - found
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__msse4_2
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__msse4_2 - Success
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__mavx
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__mavx - Success
+</span><span class='line'>-- Looking for immintrin.h
+</span><span class='line'>-- Looking for immintrin.h - found
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__msse2avx
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__msse2avx - Success
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__mavx2
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__mavx2 - Success
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__mno_sse4a
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__mno_sse4a - Success
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__mno_xop
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__mno_xop - Success
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__mno_fma4
+</span><span class='line'>-- Performing Test check_cxx_compiler_flag__mno_fma4 - Success
+</span><span class='line'>...</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The detected options will end up in the CMakeCache.txt file in the build
+directory. The Makefile generated by cmake will automatically make use of
+these options when invoking the C++ compiler.</p>
+
+<p>The compiler options are not shown by default, but they can be made visible
+by compiling with the option <code>VERBOSE=1</code>, e.g.</p>
+
+<figure class='code'><figcaption><span>configuring and compiling a build</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="o">(</span>mkdir -p build; <span class="nb">cd </span>build <span class="o">&amp;&amp;</span> cmake -DCMAKE_BUILD_TYPE<span class="o">=</span>Release ..<span class="o">)</span>
+</span><span class='line'><span class="o">(</span><span class="nb">cd </span>build <span class="o">&amp;&amp;</span> make -j4 <span class="nv">VERBOSE</span><span class="o">=</span>1<span class="o">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Note that this will be <em>very verbose</em>, so you only want to set the <code>VERBOSE=1</code>
+option to check that the compiler options were picked correctly.</p>
+
+<p>On my local laptop, the architecture-specific compiler options that were automatically
+detected and used were</p>
+
+<figure class='code'><figcaption><span>compiler architecture options used </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>-march<span class="o">=</span>core-avx2 -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mavx -msse2avx -mavx2 -mno-sse4a -mno-xop -mno-fma4
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The build has detected <code>core-avx2</code>, which in my case is good &ndash; and a lot more
+specific than the official packages which for example cannot assume the presence
+of either SSE4 or AVX instructions.</p>
+
+<p>And now that we can rely on the presence of specific CPU instructions, some code
+parts such as JSON parsing can make use of SSE4.2 instructions, or the compiler
+can use some optimized SIMD variants for operations such as memcpy, strlen etc.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Using the Address Sanitizer (ASAN) in ArangoDB Development]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/09/using-the-address-sanitizer-asan-in-arangodb-development/"/>
+    <updated>2016-06-09T20:07:29+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/09/using-the-address-sanitizer-asan-in-arangodb-development</id>
+    <content type="html"><![CDATA[<p>Once you have set up a <a href="http://jsteemann.github.io/blog/2016/06/09/compiling-a-debug-version-of-arangodb/">debug version of ArangoDB</a>,
+it is quite helpful to also enable the <a href="https://en.wikipedia.org/wiki/AddressSanitizer">Address Sanitizer</a>
+and its companion tools.</p>
+
+<p>These sanitizers provide runtime instrumentation for executables and check
+for common C++ programming errors such as buffer overflows, use-after-free
+bugs and memory leaks. The sanitizers supported natively by recent versions
+of g++ and clang++.</p>
+
+<p>The general runtime overhead of the sanitizers is neglectable compared to
+other instrumentation tools such as Valgrind, so it can well be used in the
+day-to-day development process.</p>
+
+<!-- more -->
+
+
+<h2>Configuring the build to use ASAN</h2>
+
+<p>To build with ASAN (Address Sanitizer) and UBSAN (Undefined Behavior Sanitizer),
+the following environment variables need to be set when invoking cmake:</p>
+
+<figure class='code'><figcaption><span>environment variables for ASAN and UBSAN</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">CXXFLAGS</span><span class="o">=</span><span class="s2">&quot;-fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fno-sanitize=vptr&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>The full command to configure a debug build with ASAN and UBSAN support is:</p>
+
+<figure class='code'><figcaption><span>configuring the build to use the sanitizers</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="o">(</span><span class="nb">cd </span>build <span class="o">&amp;&amp;</span> <span class="nv">CXXFLAGS</span><span class="o">=</span><span class="err">&quot;</span>-fsanitize<span class="o">=</span>address -fsanitize<span class="o">=</span>undefined -fno-sanitize<span class="o">=</span>alignment -fno-sanitize<span class="o">=</span>vptr cmake -DCMAKE_BUILD_TYPE<span class="o">=</span>Debug -DUSE_MAINTAINER_MODE<span class="o">=</span>On ..<span class="o">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>This will configure the build so it will pass the sanitizer options to the C++
+compiler. Note that you&rsquo;ll need a recent version of g++ or clang++ for this
+to work.</p>
+
+<p>After that, build arangod normally. The binaries produced will be instrumented
+by the sanitizers, allowing many nasty memory errors to be detected very early.</p>
+
+<h2>Checking if an arangod binary is using ASAN</h2>
+
+<p>Whether or not an ArangoDB binary is instrumented can be found out at any
+time by calling the binary with the <code>--version</code> option. This will print some
+version information for ArangoDB itself and the other required libraries,
+and it will also print in the line starting with <code>asan</code> whether the binary
+was compiled with ASAN support or not:</p>
+
+<figure class='code'><figcaption><span>checking the ASAN support of an arangod binary</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+<span class='line-number'>6</span>
+<span class='line-number'>7</span>
+<span class='line-number'>8</span>
+<span class='line-number'>9</span>
+<span class='line-number'>10</span>
+<span class='line-number'>11</span>
+<span class='line-number'>12</span>
+<span class='line-number'>13</span>
+<span class='line-number'>14</span>
+<span class='line-number'>15</span>
+<span class='line-number'>16</span>
+<span class='line-number'>17</span>
+<span class='line-number'>18</span>
+<span class='line-number'>19</span>
+<span class='line-number'>20</span>
+<span class='line-number'>21</span>
+<span class='line-number'>22</span>
+<span class='line-number'>23</span>
+<span class='line-number'>24</span>
+<span class='line-number'>25</span>
+<span class='line-number'>26</span>
+<span class='line-number'>27</span>
+<span class='line-number'>28</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>&gt; build/bin/arangod --version
+</span><span class='line'>
+</span><span class='line'>3.0.x-devel
+</span><span class='line'>
+</span><span class='line'>architecture: 64bit
+</span><span class='line'>asan: <span class="nb">true</span>                       <span class="c"># !!!!</span>
+</span><span class='line'>asm-crc32: <span class="nb">true</span>
+</span><span class='line'>boost-version: 1.61.0b1
+</span><span class='line'>build-date: 2016-06-09 12:07:07
+</span><span class='line'>compiler: gcc
+</span><span class='line'>cplusplus: 201103
+</span><span class='line'>endianness: little
+</span><span class='line'>fd-client-event-handler: poll
+</span><span class='line'>fd-setsize: 1024
+</span><span class='line'>icu-version: 54.1
+</span><span class='line'>jemalloc: <span class="nb">false</span>
+</span><span class='line'>libev-version: 4.22
+</span><span class='line'>maintainer-mode: <span class="nb">true</span>
+</span><span class='line'>openssl-version: OpenSSL 1.0.2g-fips  1 Mar 2016
+</span><span class='line'>rocksdb-version: 4.8.0
+</span><span class='line'>server-version: 3.0.x-devel
+</span><span class='line'>sizeof int: 4
+</span><span class='line'>sizeof void*: 8
+</span><span class='line'>sse42: <span class="nb">true</span>
+</span><span class='line'>tcmalloc: <span class="nb">false</span>
+</span><span class='line'>v8-version: 5.0.71.39
+</span><span class='line'>vpack-version: 0.1.30
+</span><span class='line'>zlib-version: 1.2.8
+</span></code></pre></td></tr></table></div></figure>
+
+
+<h2>Controlling ASAN runtime behavior</h2>
+
+<p>ASAN behavior can also be controlled at runtime, after the binaries have
+been produced, by adjusting the environment variable <code>ASAN_OPTIONS</code>.
+The setting I use for this is:</p>
+
+<figure class='code'><figcaption><span>adjusting ASAN options</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nv">ASAN_OPTIONS</span><span class="o">=</span><span class="s2">&quot;handle_ioctl=true:check_initialization_order=true:detect_container_overflow=1:detect_stack_use_after_return=false:detect_odr_violation=1:allow_addr2line=true:strict_init_order=true&quot;</span>
+</span></code></pre></td></tr></table></div></figure>
+
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling a Debug Version of ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/09/compiling-a-debug-version-of-arangodb/"/>
+    <updated>2016-06-09T20:07:29+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/09/compiling-a-debug-version-of-arangodb</id>
+    <content type="html"><![CDATA[<p>Compiling a debug version of ArangoDB is a must for everyone that
+wants to modify the C++ ArangoDB source code and test their changes
+locally.</p>
+
+<p>How to do this is different in the 2.8 and 3.0 branches of ArangoDB,
+but luckily it&rsquo;s really easy to achieve in both branches.</p>
+
+<!-- more -->
+
+
+<h2>ArangoDB 2.8</h2>
+
+<p>For the 2.8 branch of ArangoDB, clone the 2.8 version of the ArangoDB
+repository first:</p>
+
+<figure class='code'><figcaption><span>cloning the 2.8 repository</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>git clone -b 2.8 https://github.com/arangodb/arangodb
+</span><span class='line'><span class="nb">cd </span>ArangoDB
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>And in that directory execute the following commands:</p>
+
+<figure class='code'><figcaption><span>compiling a debug version of 2.8</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+<span class='line-number'>4</span>
+<span class='line-number'>5</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>make setup
+</span><span class='line'><span class="nb">export </span><span class="nv">CFLAGS</span><span class="o">=</span><span class="s2">&quot;-g -Og&quot;</span>
+</span><span class='line'><span class="nb">export </span><span class="nv">CXXFLAGS</span><span class="o">=</span><span class="s2">&quot;-g -Og&quot;</span>
+</span><span class='line'>./configure --enable-relative --enable-maintainer-mode
+</span><span class='line'>make -j4
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>(note that you&rsquo;ll need a working C++11 compiler and some prerequisites
+such as the OpenSSL library, GNU Bison and Flex installed for this to work).</p>
+
+<p>This will compile ArangoDB and all of its dependencies, and finally
+make them available in the <code>bin</code> subdirectory of the current directory.
+There is no need to install ArangoDB using <code>make install</code>. arangod and
+the client tools can be run locally using the following commands:</p>
+
+<figure class='code'><figcaption><span>running arangod and arangosh</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>bin/arangod --console mydb <span class="c"># start arangod in console mode</span>
+</span><span class='line'>bin/arangosh <span class="c"># starts an ArangoShell</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>Now, after any modification to the ArangoDB C++ source code you can re-compile
+using <code>make</code>. This will only rebuild the things that need to be rebuilt. If the
+build is successful, the changes you have made should be visible when restarting
+the binaries.</p>
+
+<p>As the <code>-g</code> option used above will have configured a build with debug
+symbols, it&rsquo;s also possible to use a debugger such as gdb for stepping
+through the executables, attach to the while they are running, or to
+obtain stack traces in case any of the executables crashed.</p>
+
+<h2>ArangoDB 3.0</h2>
+
+<p>For the 3.0 branch of ArangoDB, it&rsquo;s required to once clone that version
+of the ArangoDB repository into a local directory:</p>
+
+<figure class='code'><figcaption><span>cloning the 3.0 repository</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>git clone -b 3.0 https://github.com/arangodb/arangodb
+</span><span class='line'><span class="nb">cd </span>ArangoDB
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>In that directory execute the following commands to configure the build
+for debugging:</p>
+
+<figure class='code'><figcaption><span>configuring a debug version of 3.0</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="o">(</span>mkdir -p build; <span class="nb">cd </span>build <span class="o">&amp;&amp;</span> cmake -DCMAKE_BUILD_TYPE<span class="o">=</span>Debug -DUSE_MAINTAINER_MODE<span class="o">=</span>On ..<span class="o">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>(again you&rsquo;ll need a working C++11 compiler and some prerequisites
+such as the OpenSSL library installed for this to work).</p>
+
+<p>This will configure the build to be a debug build, with debug symbols
+but most optimizations disabled. To build ArangoDB, just execute:</p>
+
+<figure class='code'><figcaption><span>compiling a debug version of 3.0</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="o">(</span><span class="nb">cd </span>build <span class="o">&amp;&amp;</span> make -j4<span class="o">)</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To execute one of the binaries, run them from the checkout directory
+as follows:</p>
+
+<figure class='code'><figcaption><span>running arangod and arangosh</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>build/bin/arangod --console mydb <span class="c"># start arangod in console mode</span>
+</span><span class='line'>build/bin/arangosh <span class="c"># starts an ArangoShell</span>
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>After any modification to the ArangoDB C++ source code, build again
+using <code>(cd build &amp;&amp; make -j4)</code> to see the changes in effect.
+The build is a debug build, meaning you can use a debugger and get
+meaningful stack traces for core dumps produced by the binaries.</p>
+
+<p>If you got, then I strongly recommend to also enable the
+<a href="https://en.wikipedia.org/wiki/AddressSanitizer">Address Sanitizer</a>
+(ASAN) for your debug build. This can greatly help finding common memory usage
+errors during development. There is another<br/>
+<a href="http://jsteemann.github.io/blog/2016/06/09/using-the-address-sanitizer-asan-in-arangodb-development/">blog post about using ASAN in ArangoDB development</a>.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Fastest String-to-uint64 Conversion Method?]]></title>
@@ -2751,292 +3177,6 @@ from within ArangoDB. If there is an updated version of this module, we use npm 
 install it in a subdirectory of ArangoDB. As per npm convention, the node.js modules
 shipped with ArangoDB reside in a directory named <code>node_modules</code>. Probably this is
 what caused some of the confusion.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Throughput Enhancements]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/30/throughput-enhancements/"/>
-    <updated>2015-07-30T12:54:12+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/30/throughput-enhancements</id>
-    <content type="html"><![CDATA[<p>We&rsquo;ve recently been working on improving ArangoDB&rsquo;s throughput,
-especially when using the ArangoDB&rsquo;s interface.</p>
-
-<p>In this post, I will show some of the improvements already achieved,
-though the work is not yet finished. Therefore, the results shown here
-are still somewhat preliminary.</p>
-
-<!-- more -->
-
-
-<p>We wanted to measure improvements for ArangoDB&rsquo;s HTTP interface, and so we used
-<a href="https://github.com/wg/wrk"><em>wrk</em></a> as an external HTTP load generator.</p>
-
-<p>During the tests, <em>wrk</em> called some specific URLs on a local ArangoDB instance on
-an otherwise idle machine. The test was run with ArangoDB 2.6 and <code>devel</code>. The
-ArangoDB instances were started with their default configuration.</p>
-
-<p><em>wrk</em> was invoked with varying amounts of client connections and threads, so the
-tests cover serial and concurrent/parallel requests:</p>
-
-<figure class='code'><figcaption><span>invoking wrk</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>wrk -c <span class="nv">$CONNECTIONS</span> -t <span class="nv">$THREADS</span> -d 10 <span class="nv">$URL</span>
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>The number of connections (<code>$CONNECTIONS</code>) and theads (<code>$THREADS</code>) were both varied
-from 1 to 8. <em>wrk</em> requires at least as many connections as threads.</p>
-
-<p>The first URL tested was a route in a simple Foxx application that inserts the data
-shipped in the HTTP request into a collection on the server. The internals of the
-route should not matter here, as this post focuses on the throughput improvements.</p>
-
-<p>Following are the results for calling the route with <em>wrk</em>, comparing the stable
-ArangoDB version (2.6.3) with the current development version (head of <code>devel</code> branch
-as of today). The table shows the number of documents that were inserted during the
-10 seconds the <em>wrk</em> client ran:</p>
-
-<figure class='code'><figcaption><span>test results for 1 thread</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Threads      Connections        2.6       devel
-</span><span class='line'>-----------------------------------------------
-</span><span class='line'>      1                1      12569       20157 
-</span><span class='line'>      1                2      28094       36031   
-</span><span class='line'>      1                4      46310       66524 
-</span><span class='line'>      1                8      46798       80667</span></code></pre></td></tr></table></div></figure>
-
-
-<p>As can be seen above, <code>devel</code> was able to handle much more requests than 2.6 even
-with a single connection (i.e. serial client requests). Throughput was about 60 %
-higher for this case.</p>
-
-<p>When increasing the number of client connections, the number of requests handled by
-<code>devel</code> ws also higher than that of 2.6, with improvements between around 25 and 70 %.</p>
-
-<p>When increasing the number of client load generation threads, the picture doesn&rsquo;t
-change much. Here&rsquo;s the full table of results:</p>
-
-<figure class='code'><figcaption><span>full test results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Threads      Connections        2.6       devel
-</span><span class='line'>-----------------------------------------------
-</span><span class='line'>      1                1      12569       20157 
-</span><span class='line'>      1                2      28094       36031   
-</span><span class='line'>      1                4      46310       66524 
-</span><span class='line'>      1                8      46798       80667
-</span><span class='line'>
-</span><span class='line'>      2                2      28931       36326    
-</span><span class='line'>      2                4      47181       67654    
-</span><span class='line'>      2                8      47594       88617 
-</span><span class='line'>
-</span><span class='line'>      4                4      46553       67585   
-</span><span class='line'>      4                8      47531       86935 
-</span><span class='line'>
-</span><span class='line'>      8                8      46431       91953 </span></code></pre></td></tr></table></div></figure>
-
-
-<p>The next test consisted of inserting documents into a collection again, but using the
-built-in HTTP API for creating documents instead of a user-defined Foxx application.
-Throughput is expected to be higher than in the Foxx case because the built-in method
-is hard-wired and only serves a single purpose, whereas the Foxx route is user-definable
-and capable of doing fancy things, such as validating data, restricting access etc.</p>
-
-<p>Here are the results for calling the hard-wired insertion route, again for 2.6 and <code>devel</code>:</p>
-
-<figure class='code'><figcaption><span>full test results</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-<span class='line-number'>4</span>
-<span class='line-number'>5</span>
-<span class='line-number'>6</span>
-<span class='line-number'>7</span>
-<span class='line-number'>8</span>
-<span class='line-number'>9</span>
-<span class='line-number'>10</span>
-<span class='line-number'>11</span>
-<span class='line-number'>12</span>
-<span class='line-number'>13</span>
-<span class='line-number'>14</span>
-<span class='line-number'>15</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>Threads      Connections        2.6       devel
-</span><span class='line'>-----------------------------------------------
-</span><span class='line'>      1                1     102133      112843 
-</span><span class='line'>      1                2     185529      210795 
-</span><span class='line'>      1                4     335607      373070
-</span><span class='line'>      1                8     518354      576034
-</span><span class='line'>
-</span><span class='line'>      2                2     181237      196482 
-</span><span class='line'>      2                4     345455      363255
-</span><span class='line'>      2                8     474558      550835
-</span><span class='line'>      
-</span><span class='line'>      4                4     318331      355328
-</span><span class='line'>      4                8     483388      516100
-</span><span class='line'>      
-</span><span class='line'>      8                8     482369      527395</span></code></pre></td></tr></table></div></figure>
-
-
-<p><code>devel</code> provides higher throughput than 2.6 for this route as well. Improvements fell
-into the range of between 5 and 15 %. That&rsquo;s not as impressive as in the Foxx route
-case above, but still a welcome improvement.</p>
-
-<p>And of course we&rsquo;ll try to improve the throughput further.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[How to Set Up Fish Completion for ArangoDB]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/"/>
-    <updated>2015-07-28T23:10:32+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb</id>
-    <content type="html"><![CDATA[<p>While experimenting with the <a href="http://fishshell.com/">fish shell</a> on my laptop
-I found <em>fish</em> has a slightly different (but much fancier) tab-completion mechanism
-than <em>bash</em>.</p>
-
-<p>Re-using the <a href="http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/">existing completer for bash</a>
-wouldn&rsquo;t work, so I put together some dedicated completions files for <em>fish</em>.</p>
-
-<!-- more -->
-
-
-<p>The files can be downloaded here:
-<a href="http://jsteemann.github.io/downloads/code/completions-fish-2.5">2.5</a> <a href="http://jsteemann.github.io/downloads/code/completions-fish-2.6">2.6</a>
-<a href="http://jsteemann.github.io/downloads/code/completions-fish-2.7">2.7</a> <a href="http://jsteemann.github.io/downloads/code/completions-fish-2.8">2.8</a></p>
-
-<p>To activate these completions, copy the appropriate file into <code>~/.arangodb-completions</code>
-and source it from <em>fish</em>:</p>
-
-<figure class='code'><figcaption><span></span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'><span class="nb">source</span> ~/.arangodb-completions
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>In order to permanently activate these completions, you may source the completions file
-from your <code>config.fish</code> file, which is normally located in directory <code>~/.config/fish</code>.</p>
-
-<h2>Full setup</h2>
-
-<p>The following command, executed in <em>fish</em>, should install the completions for 2.7 and
-activate them:</p>
-
-<figure class='code'><figcaption><span>activate completions for ArangoDB 2.7 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.7
-</span><span class='line'><span class="nb">echo</span> <span class="s2">&quot;source ~/.arangodb-completions&quot;</span> &gt;&gt; ~/.config/fish/config.fish
-</span><span class='line'><span class="nb">source</span> ~/.arangodb-completions
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>To install fish completions for ArangoDB 2.6, the command is:</p>
-
-<figure class='code'><figcaption><span>activate completions for ArangoDB 2.6 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.6
-</span><span class='line'><span class="nb">echo</span> <span class="s2">&quot;source ~/.arangodb-completions&quot;</span> &gt;&gt; ~/.config/fish/config.fish
-</span><span class='line'><span class="nb">source</span> ~/.arangodb-completions
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>For 2.5 the command is:</p>
-
-<figure class='code'><figcaption><span>activate completions for ArangoDB 2.5 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.5
-</span><span class='line'><span class="nb">echo</span> <span class="s2">&quot;source ~/.arangodb-completions&quot;</span> &gt;&gt; ~/.config/fish/config.fish
-</span><span class='line'><span class="nb">source</span> ~/.arangodb-completions
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>To see it in action, type <code>arangosh --</code> in <em>fish</em> and then press <strong>TAB</strong>:</p>
-
-<p><img src="http://jsteemann.github.io/downloads/screenshots/fish-completion.png"></p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Introducing RETURN DISTINCT]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/27/introducing-return-distinct/"/>
-    <updated>2015-07-27T11:48:41+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/27/introducing-return-distinct</id>
-    <content type="html"><![CDATA[<p>Last week saw the addition of the <code>RETURN DISTINCT</code> for AQL queries.
-This is a new shortcut syntax for making result sets unique.</p>
-
-<p>For this purpose it can be used as an easier-to-memorize alternative for
-the already existing <code>COLLECT</code> statement. <code>COLLECT</code> is very flexible and
-can be used for multiple purposes, but it is syntactic overkill for making
-a result set unique.</p>
-
-<p>The new <code>RETURN DISTINCT</code> syntax makes queries easier to write and understand.</p>
-
-<!-- more -->
-
-
-<p>Here&rsquo;s a non-scientific proof for this claim:</p>
-
-<p>Compare the following queries, which both return each distinct <code>age</code> attribute
-value from the collection:</p>
-
-<figure class='code'><figcaption><span>making result set unique using COLLECT</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  COLLECT age = doc.age
-</span><span class='line'>  RETURN age</span></code></pre></td></tr></table></div></figure>
-
-
-
-
-<figure class='code'><figcaption><span>making result set unique using RETURN DISTINCT</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  RETURN DISTINCT doc.age</span></code></pre></td></tr></table></div></figure>
-
-
-<p>Clearly, the query using <code>RETURN DISTINCT</code> is more intuitive, especially for
-AQL beginners. Apart from that, using <code>RETURN DISTINCT</code> will save a bit of typing
-compared to the longer <code>COLLECT</code>-based query.</p>
-
-<p>Internally both <code>COLLECT</code> and <code>RETURN DISTINCT</code> will work by creating an
-<code>AggregateNode</code>. The optimizer will try the <em>sorted</em> and the <em>hashed</em> variants
-for both, so they should perform about the same.</p>
-
-<p>However, the result of a <code>RETURN DISTINCT</code> does not have any guaranteed order,
-so the optimizer will not insert a post-<code>SORT</code> for it. It may do so for a regular
-<code>COLLECT</code>.</p>
-
-<p>As mentioned before, <code>COLLECT</code> is more flexible than <code>RETURN DISTINCT</code>.
-Notably, <code>COLLECT</code> is superior to <code>RETURN DISTINCT</code> when the result set should
-be made unique using more than one criterion, e.g.</p>
-
-<figure class='code'><figcaption><span>using more than one criterion for uniqueness</span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class=''><span class='line'>FOR doc IN collection
-</span><span class='line'>  COLLECT status = doc.status, age = doc.age, 
-</span><span class='line'>  RETURN { status, age }</span></code></pre></td></tr></table></div></figure>
-
-
-<p>This is currently not achievable via <code>RETURN DISTINCT</code>, as it only works
-with a single criterion.</p>
 ]]></content>
   </entry>
   

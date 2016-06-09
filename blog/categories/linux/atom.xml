@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Linux | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/linux/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-06-03T00:48:00+02:00</updated>
+  <updated>2016-06-09T22:14:13+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,344 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling an Optimized Version of ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/09/compiling-an-optimized-version-of-arangodb/"/>
+    <updated>2016-06-09T20:31:31+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/09/compiling-an-optimized-version-of-arangodb</id>
+    <content type="html"><![CDATA[<p>Why should you care about compiling ArangoDB on your own when there are
+official release packages that are ready to use?</p>
+
+<!--more -->
+
+
+<p>There are three main reasons for compiling on your own:</p>
+
+<ul>
+<li><p>as a developer you want to <em>make changes to the ArangoDB C++ source code</em>.
+Then your only option obviously is to compile on your own. Please consult
+the <a href="/blog/2016/06/09/compiling-a-debug-version-of-arangodb/">compiling a debug version of ArangoDB</a>
+page for more information.</p></li>
+<li><p>you are trying to <em>get meaningful stack traces from core dumps</em> produced
+by ArangoDB and need an ArangoDB binary that comes with enough debug
+information (debug symbols, probably also assertions turned on). In this
+case, please also consult the <a href="/blog/2016/06/09/compiling-a-debug-version-of-arangodb/">compiling a debug version of ArangoDB</a>
+blog post for how to get this done.</p></li>
+<li><p>you want to use an ArangoDB binary that is <em>optimized for your specific
+target architecture</em>.</p></li>
+</ul>
+
+
+<p>The latter reason is relevant because the official release packages that
+are provided by ArangoDB cannot make too many assumptions about the environment
+in which they will be used. In the general release packages there is not so
+much room for platform-specific optimizations as there would be if you are
+compiling just for the local machine.</p>
+
+<p>For example, all relevant CPU offer <a href="https://en.wikipedia.org/wiki/SIMD">SIMD</a>
+instructions that a compiler can exploit when generating code. But different
+generations of CPUs offer different levels of SIMD instructions. Not every CPU
+in use today provides SSE4, not to talk about AVX.</p>
+
+<p>To make our release packages compatible with most environments, we have had
+to make some conservative assumptions about the CPU abilities, which effectively
+disables many optimizations that would have been possible when creating a
+build that only needs to run on a specific architecture.</p>
+
+<p>To fully exploit the capabilities of a specific target environment, it&rsquo;s required
+to build executables for that specific architecture. Most compilers offer an option
+<code>-march</code> for that. You normally want to set this to <code>native</code> when compiling an
+optimized version. There are also lots of compiler options for enabling or disabling
+specific CPU features such as <code>-msse</code>, <code>-msse2</code>, <code>-msse3</code>, <code>-mssse3</code>,
+<code>-msse4.1</code>, <code>-msse4.2</code>, <code>-msse4</code>, <code>-mavx</code>, <code>-mavx2</code>, to name just a few.</p>
+
+<p>The good news is that there is no need to deal with such compiler-specific optimization
+options in order to get an optimized build. The cmake-based ArangoDB 3.0 builds will
+automatically test the local environment&rsquo;s capabilities and set the compiler options
+based on which CPU abilities were detected.</p>
+
+<p>For example, a mere <code>(cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=Release ..)</code> will run the
+CPU ability detection and configure the build to use the features supported by the
+local architecture:</p>
+
+<p><code>bash configuring a release build
+(mkdir -p build; cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=Release ..)
+</code></p>
+
+<p>For example, on my laptop this prints:
+<code>plain cmake output
+-- The CXX compiler identification is GNU 5.3.1
+-- The C compiler identification is GNU 5.3.1
+...
+-- target changed from "" to "auto"
+-- Detected CPU: haswell
+-- Performing Test check_cxx_compiler_flag__march_core_avx2
+-- Performing Test check_cxx_compiler_flag__march_core_avx2 - Success
+-- Performing Test check_cxx_compiler_flag__msse2
+-- Performing Test check_cxx_compiler_flag__msse2 - Success
+-- Performing Test check_cxx_compiler_flag__msse3
+-- Performing Test check_cxx_compiler_flag__msse3 - Success
+-- Looking for pmmintrin.h
+-- Looking for pmmintrin.h - found
+-- Performing Test check_cxx_compiler_flag__mssse3
+-- Performing Test check_cxx_compiler_flag__mssse3 - Success
+-- Looking for tmmintrin.h
+-- Looking for tmmintrin.h - found
+-- Performing Test check_cxx_compiler_flag__msse4_1
+-- Performing Test check_cxx_compiler_flag__msse4_1 - Success
+-- Looking for smmintrin.h
+-- Looking for smmintrin.h - found
+-- Performing Test check_cxx_compiler_flag__msse4_2
+-- Performing Test check_cxx_compiler_flag__msse4_2 - Success
+-- Performing Test check_cxx_compiler_flag__mavx
+-- Performing Test check_cxx_compiler_flag__mavx - Success
+-- Looking for immintrin.h
+-- Looking for immintrin.h - found
+-- Performing Test check_cxx_compiler_flag__msse2avx
+-- Performing Test check_cxx_compiler_flag__msse2avx - Success
+-- Performing Test check_cxx_compiler_flag__mavx2
+-- Performing Test check_cxx_compiler_flag__mavx2 - Success
+-- Performing Test check_cxx_compiler_flag__mno_sse4a
+-- Performing Test check_cxx_compiler_flag__mno_sse4a - Success
+-- Performing Test check_cxx_compiler_flag__mno_xop
+-- Performing Test check_cxx_compiler_flag__mno_xop - Success
+-- Performing Test check_cxx_compiler_flag__mno_fma4
+-- Performing Test check_cxx_compiler_flag__mno_fma4 - Success
+...
+</code>
+The detected options will end up in the CMakeCache.txt file in the build
+directory. The Makefile generated by cmake will automatically make use of
+these options when invoking the C++ compiler.</p>
+
+<p>The compiler options are not shown by default, but they can be made visible
+by compiling with the option <code>VERBOSE=1</code>, e.g.</p>
+
+<p><code>bash configuring and compiling a build
+(mkdir -p build; cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=Release ..)
+(cd build &amp;&amp; make -j4 VERBOSE=1)
+</code></p>
+
+<p>Note that this will be <em>very verbose</em>, so you only want to set the <code>VERBOSE=1</code>
+option to check that the compiler options were picked correctly.</p>
+
+<p>On my local laptop, the architecture-specific compiler options that were automatically
+detected and used were</p>
+
+<p><code>bash compiler architecture options used
+-march=core-avx2 -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mavx -msse2avx -mavx2 -mno-sse4a -mno-xop -mno-fma4
+</code></p>
+
+<p>The build has detected <code>core-avx2</code>, which in my case is good &ndash; and a lot more
+specific than the official packages which for example cannot assume the presence
+of either SSE4 or AVX instructions.</p>
+
+<p>And now that we can rely on the presence of specific CPU instructions, some code
+parts such as JSON parsing can make use of SSE4.2 instructions, or the compiler
+can use some optimized SIMD variants for operations such as memcpy, strlen etc.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Using the Address Sanitizer (ASAN) in ArangoDB Development]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/09/using-the-address-sanitizer-asan-in-arangodb-development/"/>
+    <updated>2016-06-09T20:07:29+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/09/using-the-address-sanitizer-asan-in-arangodb-development</id>
+    <content type="html"><![CDATA[<p>Once you have set up a <a href="/blog/2016/06/09/compiling-a-debug-version-of-arangodb/">debug version of ArangoDB</a>,
+it is quite helpful to also enable the <a href="https://en.wikipedia.org/wiki/AddressSanitizer">Address Sanitizer</a>
+and its companion tools.</p>
+
+<p>These sanitizers provide runtime instrumentation for executables and check
+for common C++ programming errors such as buffer overflows, use-after-free
+bugs and memory leaks. The sanitizers supported natively by recent versions
+of g++ and clang++.</p>
+
+<p>The general runtime overhead of the sanitizers is neglectable compared to
+other instrumentation tools such as Valgrind, so it can well be used in the
+day-to-day development process.</p>
+
+<!-- more -->
+
+
+<h2>Configuring the build to use ASAN</h2>
+
+<p>To build with ASAN (Address Sanitizer) and UBSAN (Undefined Behavior Sanitizer),
+the following environment variables need to be set when invoking cmake:</p>
+
+<p><code>bash environment variables for ASAN and UBSAN
+CXXFLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fno-sanitize=vptr"
+</code></p>
+
+<p>The full command to configure a debug build with ASAN and UBSAN support is:</p>
+
+<p><code>bash configuring the build to use the sanitizers
+(cd build &amp;&amp; CXXFLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fno-sanitize=vptr cmake -DCMAKE_BUILD_TYPE=Debug -DUSE_MAINTAINER_MODE=On ..)
+</code></p>
+
+<p>This will configure the build so it will pass the sanitizer options to the C++
+compiler. Note that you&rsquo;ll need a recent version of g++ or clang++ for this
+to work.</p>
+
+<p>After that, build arangod normally. The binaries produced will be instrumented
+by the sanitizers, allowing many nasty memory errors to be detected very early.</p>
+
+<h2>Checking if an arangod binary is using ASAN</h2>
+
+<p>Whether or not an ArangoDB binary is instrumented can be found out at any
+time by calling the binary with the <code>--version</code> option. This will print some
+version information for ArangoDB itself and the other required libraries,
+and it will also print in the line starting with <code>asan</code> whether the binary
+was compiled with ASAN support or not:</p>
+
+<p>```bash checking the ASAN support of an arangod binary</p>
+
+<blockquote><p>build/bin/arangod &mdash;version</p></blockquote>
+
+<p>3.0.x-devel</p>
+
+<p>architecture: 64bit
+asan: true                       # !!!!
+asm-crc32: true
+boost-version: 1.61.0b1
+build-date: 2016-06-09 12:07:07
+compiler: gcc
+cplusplus: 201103
+endianness: little
+fd-client-event-handler: poll
+fd-setsize: 1024
+icu-version: 54.1
+jemalloc: false
+libev-version: 4.22
+maintainer-mode: true
+openssl-version: OpenSSL 1.0.2g-fips  1 Mar 2016
+rocksdb-version: 4.8.0
+server-version: 3.0.x-devel
+sizeof int: 4
+sizeof void*: 8
+sse42: true
+tcmalloc: false
+v8-version: 5.0.71.39
+vpack-version: 0.1.30
+zlib-version: 1.2.8
+```</p>
+
+<h2>Controlling ASAN runtime behavior</h2>
+
+<p>ASAN behavior can also be controlled at runtime, after the binaries have
+been produced, by adjusting the environment variable <code>ASAN_OPTIONS</code>.
+The setting I use for this is:</p>
+
+<p><code>bash adjusting ASAN options
+ASAN_OPTIONS="handle_ioctl=true:check_initialization_order=true:detect_container_overflow=1:detect_stack_use_after_return=false:detect_odr_violation=1:allow_addr2line=true:strict_init_order=true"
+</code></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling a Debug Version of ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/09/compiling-a-debug-version-of-arangodb/"/>
+    <updated>2016-06-09T20:07:29+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/09/compiling-a-debug-version-of-arangodb</id>
+    <content type="html"><![CDATA[<p>Compiling a debug version of ArangoDB is a must for everyone that
+wants to modify the C++ ArangoDB source code and test their changes
+locally.</p>
+
+<p>How to do this is different in the 2.8 and 3.0 branches of ArangoDB,
+but luckily it&rsquo;s really easy to achieve in both branches.</p>
+
+<!-- more -->
+
+
+<h2>ArangoDB 2.8</h2>
+
+<p>For the 2.8 branch of ArangoDB, clone the 2.8 version of the ArangoDB
+repository first:</p>
+
+<p><code>bash cloning the 2.8 repository
+git clone -b 2.8 https://github.com/arangodb/arangodb
+cd ArangoDB
+</code></p>
+
+<p>And in that directory execute the following commands:</p>
+
+<p><code>bash compiling a debug version of 2.8
+make setup
+export CFLAGS="-g -Og"
+export CXXFLAGS="-g -Og"
+./configure --enable-relative --enable-maintainer-mode
+make -j4
+</code></p>
+
+<p>(note that you&rsquo;ll need a working C++11 compiler and some prerequisites
+such as the OpenSSL library, GNU Bison and Flex installed for this to work).</p>
+
+<p>This will compile ArangoDB and all of its dependencies, and finally
+make them available in the <code>bin</code> subdirectory of the current directory.
+There is no need to install ArangoDB using <code>make install</code>. arangod and
+the client tools can be run locally using the following commands:</p>
+
+<p><code>bash running arangod and arangosh
+bin/arangod --console mydb # start arangod in console mode
+bin/arangosh # starts an ArangoShell
+</code></p>
+
+<p>Now, after any modification to the ArangoDB C++ source code you can re-compile
+using <code>make</code>. This will only rebuild the things that need to be rebuilt. If the
+build is successful, the changes you have made should be visible when restarting
+the binaries.</p>
+
+<p>As the <code>-g</code> option used above will have configured a build with debug
+symbols, it&rsquo;s also possible to use a debugger such as gdb for stepping
+through the executables, attach to the while they are running, or to
+obtain stack traces in case any of the executables crashed.</p>
+
+<h2>ArangoDB 3.0</h2>
+
+<p>For the 3.0 branch of ArangoDB, it&rsquo;s required to once clone that version
+of the ArangoDB repository into a local directory:</p>
+
+<p><code>bash cloning the 3.0 repository
+git clone -b 3.0 https://github.com/arangodb/arangodb
+cd ArangoDB
+</code></p>
+
+<p>In that directory execute the following commands to configure the build
+for debugging:</p>
+
+<p><code>bash configuring a debug version of 3.0
+(mkdir -p build; cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=Debug -DUSE_MAINTAINER_MODE=On ..)
+</code></p>
+
+<p>(again you&rsquo;ll need a working C++11 compiler and some prerequisites
+such as the OpenSSL library installed for this to work).</p>
+
+<p>This will configure the build to be a debug build, with debug symbols
+but most optimizations disabled. To build ArangoDB, just execute:</p>
+
+<p><code>bash compiling a debug version of 3.0
+(cd build &amp;&amp; make -j4)
+</code></p>
+
+<p>To execute one of the binaries, run them from the checkout directory
+as follows:</p>
+
+<p><code>bash running arangod and arangosh
+build/bin/arangod --console mydb # start arangod in console mode
+build/bin/arangosh # starts an ArangoShell
+</code></p>
+
+<p>After any modification to the ArangoDB C++ source code, build again
+using <code>(cd build &amp;&amp; make -j4)</code> to see the changes in effect.
+The build is a debug build, meaning you can use a debugger and get
+meaningful stack traces for core dumps produced by the binaries.</p>
+
+<p>If you got, then I strongly recommend to also enable the
+<a href="https://en.wikipedia.org/wiki/AddressSanitizer">Address Sanitizer</a>
+(ASAN) for your debug build. This can greatly help finding common memory usage
+errors during development. There is another<br/>
+<a href="/blog/2016/06/09/using-the-address-sanitizer-asan-in-arangodb-development/">blog post about using ASAN in ArangoDB development</a>.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Compiling ArangoDB 3.0 on Ubuntu]]></title>
@@ -236,233 +574,6 @@ source ~/.arangodb-completions
 <p>To see it in action, type <code>arangosh --</code> in <em>fish</em> and then press <strong>TAB</strong>:</p>
 
 <p><img src="/downloads/screenshots/fish-completion.png"></p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Less Intrusive Linking]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking/"/>
-    <updated>2015-05-07T19:52:53+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/05/07/less-intrusive-linking</id>
-    <content type="html"><![CDATA[<p>A while ago our continuous integration builds on <a href="http://travis-ci.org">TravisCI</a>
-began to fail seemingly randomly because the build worker was killed without
-an apparent reason. Obviously the build process reached some resource limits
-though we couldn&rsquo;t find any documented limit that the build obviously violated.</p>
-
-<p>Some builds still succeeded without issues, but those builds that were killed
-had one thing in common: they were all stuck waiting the linker to finish.</p>
-
-<p>The default linker used on TravisCI is <em>GNU ld</em>. After some research, it turned
-out that replacing <em>GNU ld</em> with <em>GNU gold</em> not only made the linking much
-faster, but also less resource-intensive. Linking ArangoDB on my local machine
-is almost twice as fast with <em>gold</em> as with <em>ld</em>. Even better, after reconfiguring
-our TravisCI builds to also use <em>gold</em>, our builds weren&rsquo;t killed anymore by
-TravisCI&rsquo;s build scheduling system.</p>
-
-<p>To make TravisCI use <em>gold</em> instead of <em>ld</em>, add the following to your project&rsquo;s
-<code>.travis.yml</code> in the <code>install</code> section (so it gets execute before the actual build
-steps):</p>
-
-<p><code>bash commands for wrapping gold
-sudo apt-get -y install binutils-gold
-mkdir -p ~/bin/gold
-echo '#!/bin/bash' &gt; ~/bin/gold/ld
-echo 'gold "$@"' &gt;&gt; ~/bin/gold/ld
-chmod a+x ~/bin/gold/ld
-export CFLAGS="-B$HOME/bin/gold $CFLAGS"
-export CXXFLAGS="-B$HOME/bin/gold $CXXFLAGS"
-</code></p>
-
-<p>The script downloads and installs <em>gold</em> and creates a tiny wrapper script in a
-file named <code>ld</code> in the user&rsquo;s home directory. The wrapper simply calls <em>gold</em>
-with all the arguments passed to the wrapper. Finally, the script modifies the
-environments <code>CFLAGS</code> and <code>CXXFLAGS</code> by setting the <code>-B</code> parameter to the
-wrapper script&rsquo;s directory.</p>
-
-<p><code>-B</code> is the option for the compiler&rsquo;s search path. The compiler (g++) at least
-will look in this path for any helper tools it invokes. As we have a file named
-<code>ld</code> in this directory, g++ will use our wrapper script instead of the original
-<code>ld</code> binary. This way we can keep the original version of <code>ld</code> in <code>/usr/bin</code>,
-and only override it using environment variables. This is also helpful in
-other contexts, e.g. when <code>ld</code> shall remain as the system&rsquo;s default linker but
-<code>gold</code>shall only be used for linking a few selected components.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Using Ccache When Working With Different Branches]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/02/07/using-ccache-when-working-with-different-branches/"/>
-    <updated>2015-02-07T17:00:15+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/02/07/using-ccache-when-working-with-different-branches</id>
-    <content type="html"><![CDATA[<p>Git makes working with many different branches in the same local repository easy and efficient.</p>
-
-<p>In a C/C++ project, the code must be re-compiled after switching into another branch.
-If the branches only differ minimally, running <code>make</code> will only re-compile the parts that are
-actually different, and after that re-link them. That won&rsquo;t take too long, though especially
-link times can be annoying.</p>
-
-<p>However, if there are differences in central header files that are included from every file,
-then <code>make</code> has no option but to <strong>re-compile everything</strong>. This can take significant amounts of
-time (and coffee).</p>
-
-<p>I just realized that there is a solution to speed up re-compilation in this situation:
-<a href="http://linux.die.net/man/1/ccache">ccache</a>!</p>
-
-<!-- more -->
-
-
-<h2>Why ccache can help</h2>
-
-<p>ccache is a wrapper for the actual compiler command. It will call the compiler with the specified
-arguments, and capture the compiler output. When called again with the same arguments, it will
-look in its internal cache for a ready-to-serve result. If one is present, it will return it
-without invoking the compiler again. Otherwise, or if it detects some changes that forbid serving
-outdated results from the cache, it will transparently invoke the compiler.</p>
-
-<p>When switching back to another branch that you had already compiled before, running <code>make</code>
-may re-build <em>everything</em> due to changes in headers. But it is not unlikely that you had built
-the branch before already. If so, and ccache was involved in the previous build, it may still
-have all the info required for re-compilation in its cache.</p>
-
-<p>And everyone will be happy: <code>make</code> will run its full rebuild, but most operations won&rsquo;t be handed
-to the compiler because ccache is sitting in between, serving results from its cache.
-And you as a developer won&rsquo;t lose that much time.</p>
-
-<h2>Some figures</h2>
-
-<p>Following are some figures demonstrating its potential when running a <code>make</code> in the devel branch
-after having returned from a different branch with significant changes.</p>
-
-<h3>With ccache, but cache empty</h3>
-
-<p><code>plain time make
-real  12m43.501s
-user  11m52.550s
-sys 0m44.110s
-</code></p>
-
-<h3>With ccache, everything in cache</h3>
-
-<p><code>plain time make
-real  0m55.572s
-user  0m26.346s
-sys 0m7.551s
-</code></p>
-
-<p>That&rsquo;s a <strong>build time reduction of more than 90 %</strong>!</p>
-
-<p>This is already the optimal result, as everything was already present in the cache.
-However, the situation was not unrealistic. I often switch into another branch, try something
-out or commit a small change, and the return to the original branch. I already started having
-many separate directories for the different branches to avoid frequent recompilation.
-ccache can be relief here.</p>
-
-<p>By the way, timing results are from my laptop. I did not bother to run <code>make</code> with parallel
-jobs as this has limited effect on my laptop, though on more decent hardware it may be beneficial
-both with and without ccache, though I guess, with many parallel jobs and a full cache, linking
-will become the most expensive part.</p>
-
-<h2>How to use ccache</h2>
-
-<p>For Ubuntu, ccache is available in package <code>ccache</code>. You can easily install it with:
-<code>bash Installing ccache on Ubuntu
-sudo apt-get install ccache
-</code></p>
-
-<p>The most convenient way to use ccache in your build is to change your <code>CC</code> and <code>CXX</code>
-environment variables as follows:
-<code>bash setting compilers environment variables
-export CC="ccache gcc"
-export CXX="ccache g++"
-</code></p>
-
-<p>I suggest putting that into <code>.bashrc</code> so the variables will be set in every session and not
-just once. After that, running <code>configure</code> will write a <code>Makefile</code> that will use ccache for
-building object files.</p>
-
-<p>Note: that will change these environment variables globally, so ccache may be used for other
-projects, too.</p>
-
-<h3>What ccache cannot do</h3>
-
-<p>I already forgot about ccache because when working in a single branch it does not provide that
-many benefits. When making changes to your code, you can be pretty sure the new code won&rsquo;t be
-in the cache yet. Running <code>make</code> then will invoke ccache, but this will result in a cache miss.
-It cannot help here, because the new code was never compiled before and thus in no cache.</p>
-
-<p>Additionally, <code>make</code> is smart enough on its own to only re-build the parts of the program that
-have actually changed or depend on the changes you made.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Getting Core Dumps of Failed TravisCI Builds]]></title>
-    <link href="http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds/"/>
-    <updated>2014-10-30T23:05:48+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2014/10/30/getting-core-dumps-of-failed-travisci-builds</id>
-    <content type="html"><![CDATA[<p>I recently wrote about <a href="/blog/2014/10/17/using-travis-ci-for-a-c-plus-plus-11-project/">using TravisCI for continuously testing C++11 projects</a>.</p>
-
-<p><strong>Now, what if a build fails?</strong></p>
-
-<p>Especially for C and C++ projects, build failures may mean crashed
-programs. In a local setup, the usual way to analyze program crashes
-is to manually inspect the core files that are written on crash.</p>
-
-<p>With TravisCI, there is no way to log in to a build machine and
-inspect a core dump interactively. There is no SSH access to
-the build machines. TravisCI does not even persist any state of
-builds but the result and the log output.</p>
-
-<p>There is a way to get to the core dumps, but it was fiddly to find
-out and set up.</p>
-
-<!-- more -->
-
-
-<p>The basic idea is to run <code>gdb</code> on the TravisCI build machine
-automatically when a build fails. <code>gdb</code> can be scripted, so all
-we need to do is to make it print a backtrace in all threads at
-the time of the crash.</p>
-
-<p>By default, no core dumps will be produced on TravisCI. To turn them
-on, an appropriate ulimit value must be set. We also need to install
-<code>gdb</code> so we can actually run it. Here is the <code>.travis.yml</code> adjustment
-for these prerequisites:</p>
-
-<p>```yaml adjustments for install and before_script hooks
-install:
-&ndash; sudo apt-get install -y gdb  # install gdb</p>
-
-<p>before_script:
-&ndash; ulimit -c unlimited -S       # enable core dumps
-```</p>
-
-<p>To get an idea of where the program crashed, we can finally install
-an <code>after_failure</code> hook. This hook can check for a core file and use
-<code>gdb</code> to print a nice backtrace.</p>
-
-<p>The core file pattern on TravisCI seems to be <code>core-%p</code>, so core
-filenames will include the executable&rsquo;s process id and change on
-every run. We can use <code>find</code> to look for files named <code>core*</code> in the
-cwd and pick the first one as there should only be at most one core
-file per build:</p>
-
-<p><code>yaml adjustments for after_failure hook
-after_failure:
-- COREFILE=$(find . -maxdepth 1 -name "core*" | head -n 1) # find core file
-- if [[ -f "$COREFILE" ]]; then gdb -c "$COREFILE" example -ex "thread apply all bt" -ex "set pagination 0" -batch; fi
-</code></p>
-
-<p>A failed build might produce output like this:</p>
-
-<p><img src="/downloads/screenshots/travis-ci-gdb.png"></p>
-
-<p>I recommend compiling the executable to test with debug symbols on and
-with all optimizations turned off (i.e. compiler options <code>-g -O0</code>).
-Otherwise backtraces might reveal less useful information for debugging.</p>
-
-<p>On a side note: the <a href="http://lint.travis-ci.org/">Travis WebLint</a> is a
-handy tool for validating <code>.travis.yml</code> files <em>before</em> pushing them.</p>
 ]]></content>
   </entry>
   

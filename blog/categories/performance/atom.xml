@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Performance | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/performance/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-06-03T00:48:00+02:00</updated>
+  <updated>2016-06-09T22:14:13+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,143 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling an Optimized Version of ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/09/compiling-an-optimized-version-of-arangodb/"/>
+    <updated>2016-06-09T20:31:31+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/09/compiling-an-optimized-version-of-arangodb</id>
+    <content type="html"><![CDATA[<p>Why should you care about compiling ArangoDB on your own when there are
+official release packages that are ready to use?</p>
+
+<!--more -->
+
+
+<p>There are three main reasons for compiling on your own:</p>
+
+<ul>
+<li><p>as a developer you want to <em>make changes to the ArangoDB C++ source code</em>.
+Then your only option obviously is to compile on your own. Please consult
+the <a href="/blog/2016/06/09/compiling-a-debug-version-of-arangodb/">compiling a debug version of ArangoDB</a>
+page for more information.</p></li>
+<li><p>you are trying to <em>get meaningful stack traces from core dumps</em> produced
+by ArangoDB and need an ArangoDB binary that comes with enough debug
+information (debug symbols, probably also assertions turned on). In this
+case, please also consult the <a href="/blog/2016/06/09/compiling-a-debug-version-of-arangodb/">compiling a debug version of ArangoDB</a>
+blog post for how to get this done.</p></li>
+<li><p>you want to use an ArangoDB binary that is <em>optimized for your specific
+target architecture</em>.</p></li>
+</ul>
+
+
+<p>The latter reason is relevant because the official release packages that
+are provided by ArangoDB cannot make too many assumptions about the environment
+in which they will be used. In the general release packages there is not so
+much room for platform-specific optimizations as there would be if you are
+compiling just for the local machine.</p>
+
+<p>For example, all relevant CPU offer <a href="https://en.wikipedia.org/wiki/SIMD">SIMD</a>
+instructions that a compiler can exploit when generating code. But different
+generations of CPUs offer different levels of SIMD instructions. Not every CPU
+in use today provides SSE4, not to talk about AVX.</p>
+
+<p>To make our release packages compatible with most environments, we have had
+to make some conservative assumptions about the CPU abilities, which effectively
+disables many optimizations that would have been possible when creating a
+build that only needs to run on a specific architecture.</p>
+
+<p>To fully exploit the capabilities of a specific target environment, it&rsquo;s required
+to build executables for that specific architecture. Most compilers offer an option
+<code>-march</code> for that. You normally want to set this to <code>native</code> when compiling an
+optimized version. There are also lots of compiler options for enabling or disabling
+specific CPU features such as <code>-msse</code>, <code>-msse2</code>, <code>-msse3</code>, <code>-mssse3</code>,
+<code>-msse4.1</code>, <code>-msse4.2</code>, <code>-msse4</code>, <code>-mavx</code>, <code>-mavx2</code>, to name just a few.</p>
+
+<p>The good news is that there is no need to deal with such compiler-specific optimization
+options in order to get an optimized build. The cmake-based ArangoDB 3.0 builds will
+automatically test the local environment&rsquo;s capabilities and set the compiler options
+based on which CPU abilities were detected.</p>
+
+<p>For example, a mere <code>(cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=Release ..)</code> will run the
+CPU ability detection and configure the build to use the features supported by the
+local architecture:</p>
+
+<p><code>bash configuring a release build
+(mkdir -p build; cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=Release ..)
+</code></p>
+
+<p>For example, on my laptop this prints:
+<code>plain cmake output
+-- The CXX compiler identification is GNU 5.3.1
+-- The C compiler identification is GNU 5.3.1
+...
+-- target changed from "" to "auto"
+-- Detected CPU: haswell
+-- Performing Test check_cxx_compiler_flag__march_core_avx2
+-- Performing Test check_cxx_compiler_flag__march_core_avx2 - Success
+-- Performing Test check_cxx_compiler_flag__msse2
+-- Performing Test check_cxx_compiler_flag__msse2 - Success
+-- Performing Test check_cxx_compiler_flag__msse3
+-- Performing Test check_cxx_compiler_flag__msse3 - Success
+-- Looking for pmmintrin.h
+-- Looking for pmmintrin.h - found
+-- Performing Test check_cxx_compiler_flag__mssse3
+-- Performing Test check_cxx_compiler_flag__mssse3 - Success
+-- Looking for tmmintrin.h
+-- Looking for tmmintrin.h - found
+-- Performing Test check_cxx_compiler_flag__msse4_1
+-- Performing Test check_cxx_compiler_flag__msse4_1 - Success
+-- Looking for smmintrin.h
+-- Looking for smmintrin.h - found
+-- Performing Test check_cxx_compiler_flag__msse4_2
+-- Performing Test check_cxx_compiler_flag__msse4_2 - Success
+-- Performing Test check_cxx_compiler_flag__mavx
+-- Performing Test check_cxx_compiler_flag__mavx - Success
+-- Looking for immintrin.h
+-- Looking for immintrin.h - found
+-- Performing Test check_cxx_compiler_flag__msse2avx
+-- Performing Test check_cxx_compiler_flag__msse2avx - Success
+-- Performing Test check_cxx_compiler_flag__mavx2
+-- Performing Test check_cxx_compiler_flag__mavx2 - Success
+-- Performing Test check_cxx_compiler_flag__mno_sse4a
+-- Performing Test check_cxx_compiler_flag__mno_sse4a - Success
+-- Performing Test check_cxx_compiler_flag__mno_xop
+-- Performing Test check_cxx_compiler_flag__mno_xop - Success
+-- Performing Test check_cxx_compiler_flag__mno_fma4
+-- Performing Test check_cxx_compiler_flag__mno_fma4 - Success
+...
+</code>
+The detected options will end up in the CMakeCache.txt file in the build
+directory. The Makefile generated by cmake will automatically make use of
+these options when invoking the C++ compiler.</p>
+
+<p>The compiler options are not shown by default, but they can be made visible
+by compiling with the option <code>VERBOSE=1</code>, e.g.</p>
+
+<p><code>bash configuring and compiling a build
+(mkdir -p build; cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=Release ..)
+(cd build &amp;&amp; make -j4 VERBOSE=1)
+</code></p>
+
+<p>Note that this will be <em>very verbose</em>, so you only want to set the <code>VERBOSE=1</code>
+option to check that the compiler options were picked correctly.</p>
+
+<p>On my local laptop, the architecture-specific compiler options that were automatically
+detected and used were</p>
+
+<p><code>bash compiler architecture options used
+-march=core-avx2 -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mavx -msse2avx -mavx2 -mno-sse4a -mno-xop -mno-fma4
+</code></p>
+
+<p>The build has detected <code>core-avx2</code>, which in my case is good &ndash; and a lot more
+specific than the official packages which for example cannot assume the presence
+of either SSE4 or AVX instructions.</p>
+
+<p>And now that we can rely on the presence of specific CPU instructions, some code
+parts such as JSON parsing can make use of SSE4.2 instructions, or the compiler
+can use some optimized SIMD variants for operations such as memcpy, strlen etc.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Fastest String-to-uint64 Conversion Method?]]></title>
@@ -606,117 +743,6 @@ but to do a full collection scan.</p>
 
 <p>For queries that combine multiple FILTER conditions with a logical AND, the optimizer
 will still try to pick the most selective index for the query and use it for the collection.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Index Speedups in 2.8]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28/"/>
-    <updated>2015-11-20T15:11:00+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/11/20/index-speedups-for-28</id>
-    <content type="html"><![CDATA[<p>The upcoming 2.8 version of ArangoDB will provide several improvements in
-the area of index usage and query optimization.</p>
-
-<p>First of all, hash and skiplist indexes can now index individual array values.
-A dedicated post on this will follow shortly. Second, the query optimizer can
-make use multiple indexes per collection for queries with OR-combined filter
-conditions. This again is a subject for <a href="/blog/2015/11/20/using-multiple-indexes-per-collection/">another post</a>.
-Third, there have been some speed improvements due to changes in the general
-index handling code. This is what this post is about.</p>
-
-<!-- more -->
-
-
-<p>In order to assess the speedups in 2.8, I have run some already existing performance
-tests that I initially ran when comparing ArangoDB 2.5 with 2.6. The test cases and
-methodology are detailed in <a href="/blog/2015/05/20/the-great-aql-shootout-arangodb-25-vs-26/">this earlier blog post</a>.</p>
-
-<p>For measuring the index-related performance improvements, I simply re-ran the
-index related tests in 2.7 and in 2.8 / devel. I did not bother re-running all
-tests from the original blog article because only some are index-related. In
-particular, I only ran these tests again:</p>
-
-<ul>
-<li><em>join-key</em>: for each document in the collection, perform a join on the <code>_key</code> attribute on the collection
- itself (i.e. <code>FOR c1 IN @@c FOR c2 IN @@c FILTER c1._key == c2._key RETURN c1</code>)</li>
-<li><em>join-id</em>: ditto, but perform the join using the <code>_id</code> attribute</li>
-<li><em>join-hash-number</em> and <em>join-hash-string</em>: ditto, but join using a hash index on a numeric or string
- attribute</li>
-<li><em>join-skiplist-number</em> and <em>join-skiplist-string</em>: ditto, but join using a skiplist index on a numeric or
- string attribute</li>
-<li><em>lookup-key</em>, <em>lookup-hash-number</em>, <em>lookup-hash-string</em>, <em>lookup-skiplist-number</em>, <em>lookup-skiplist-string</em>:
- compile an IN-list of 10,000 lookup values and search these 10,000 documents in the collection using
- either the primary index (<code>_key</code> attribute), a hash index or a skiplist index. The latter two are tested
- on numeric and string attributes.</li>
-</ul>
-
-
-<p>The test queries were run 5 times each on collections containing 10,000, 100,000 and
-1,000,000 documents.</p>
-
-<p>Here are the query execution times from 2.7 and 2.8 for the individual tests, in
-seconds (less is better):</p>
-
-<p>```plain test results</p>
-
-<h2>test name                collection     avg 2.7 (s)      avg 2.8 (s)</h2>
-
-<p>join-key                 10k                 0.0997           0.0612
-join-key                 100k                1.0611           0.6538
-join-key                 1000k              10.2975           6.2507
-join-id                  10k                 0.1088           0.0606
-join-id                  100k                1.1126           0.6694
-join-id                  1000k              10.8180           6.5336
-join-hash-number         10k                 0.1044           0.0679
-join-hash-number         100k                1.1137           0.7430
-join-hash-number         1000k              10.7923           7.1534
-join-hash-string         10k                 0.1193           0.0712
-join-hash-string         100k                1.2656           0.7915
-join-hash-string         1000k              12.3075           7.6667
-join-skiplist-number     10k                 0.1387           0.1030
-join-skiplist-number     100k                1.6693           1.3062
-join-skiplist-number     1000k              18.0406          15.5203
-join-skiplist-string     10k                 0.1928           0.1469
-join-skiplist-string     100k                2.3166           1.8997
-join-skiplist-string     1000k              27.1513          23.2058
-lookup-key               10k                 1.4996           1.5245
-lookup-key               100k                1.4951           1.5189
-lookup-key               1000k               1.5545           1.5662
-lookup-hash-number       10k                 1.5572           1.5526
-lookup-hash-number       100k                1.5595           1.5435
-lookup-hash-number       1000k               1.5436           1.5648
-lookup-hash-string       10k                 1.6023           1.5623
-lookup-hash-string       100k                1.5892           1.5741
-lookup-hash-string       1000k               1.5841           1.5770
-lookup-skiplist-number   10k                 1.5978           1.6145
-lookup-skiplist-number   100k                1.5782           1.6269
-lookup-skiplist-number   1000k               1.5891           1.6258
-lookup-skiplist-string   10k                 1.6443           1.6840
-lookup-skiplist-string   100k                1.6787           1.6985
-lookup-skiplist-string   1000k               1.7319           1.7562
-in-key                   10k                 0.1076           0.0754
-in-key                   100k                0.1083           0.0775
-in-key                   1000k               0.1104           0.0773
-in-hash-number           10k                 0.0898           0.0696
-in-hash-number           100k                0.0889           0.0674
-in-hash-number           1000k               0.0877           0.0675
-in-hash-string           10k                 0.1174           0.0867
-in-hash-string           100k                0.1188           0.0878
-in-hash-string           1000k               0.1174           0.0853
-in-skiplist-number       10k                 0.1095           0.0849
-in-skiplist-number       100k                0.1110           0.0873
-in-skiplist-number       1000k               0.1106           0.0910
-in-skiplist-string       10k                 0.1744           0.1315
-in-skiplist-string       100k                0.1990           0.1594
-in-skiplist-string       1000k               0.2369           0.1968
-```</p>
-
-<p>It looks like joins and IN list lookups got significantly faster in 2.8, whereas
-the performance for point lookups is more or less the same as in 2.7.</p>
-
-<p>Note that the changes to the index code in 2.8 only affect how indexes are accessed
-from within AQL queries and how filtering works. No changes have been made for other
-index operations such as insert, updates, and removals.</p>
 ]]></content>
   </entry>
   

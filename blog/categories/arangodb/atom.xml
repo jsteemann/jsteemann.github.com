@@ -4,7 +4,7 @@
   <title><![CDATA[Category: ArangoDB | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/arangodb/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-06-03T00:48:00+02:00</updated>
+  <updated>2016-06-09T22:14:13+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,344 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling an Optimized Version of ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/09/compiling-an-optimized-version-of-arangodb/"/>
+    <updated>2016-06-09T20:31:31+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/09/compiling-an-optimized-version-of-arangodb</id>
+    <content type="html"><![CDATA[<p>Why should you care about compiling ArangoDB on your own when there are
+official release packages that are ready to use?</p>
+
+<!--more -->
+
+
+<p>There are three main reasons for compiling on your own:</p>
+
+<ul>
+<li><p>as a developer you want to <em>make changes to the ArangoDB C++ source code</em>.
+Then your only option obviously is to compile on your own. Please consult
+the <a href="/blog/2016/06/09/compiling-a-debug-version-of-arangodb/">compiling a debug version of ArangoDB</a>
+page for more information.</p></li>
+<li><p>you are trying to <em>get meaningful stack traces from core dumps</em> produced
+by ArangoDB and need an ArangoDB binary that comes with enough debug
+information (debug symbols, probably also assertions turned on). In this
+case, please also consult the <a href="/blog/2016/06/09/compiling-a-debug-version-of-arangodb/">compiling a debug version of ArangoDB</a>
+blog post for how to get this done.</p></li>
+<li><p>you want to use an ArangoDB binary that is <em>optimized for your specific
+target architecture</em>.</p></li>
+</ul>
+
+
+<p>The latter reason is relevant because the official release packages that
+are provided by ArangoDB cannot make too many assumptions about the environment
+in which they will be used. In the general release packages there is not so
+much room for platform-specific optimizations as there would be if you are
+compiling just for the local machine.</p>
+
+<p>For example, all relevant CPU offer <a href="https://en.wikipedia.org/wiki/SIMD">SIMD</a>
+instructions that a compiler can exploit when generating code. But different
+generations of CPUs offer different levels of SIMD instructions. Not every CPU
+in use today provides SSE4, not to talk about AVX.</p>
+
+<p>To make our release packages compatible with most environments, we have had
+to make some conservative assumptions about the CPU abilities, which effectively
+disables many optimizations that would have been possible when creating a
+build that only needs to run on a specific architecture.</p>
+
+<p>To fully exploit the capabilities of a specific target environment, it&rsquo;s required
+to build executables for that specific architecture. Most compilers offer an option
+<code>-march</code> for that. You normally want to set this to <code>native</code> when compiling an
+optimized version. There are also lots of compiler options for enabling or disabling
+specific CPU features such as <code>-msse</code>, <code>-msse2</code>, <code>-msse3</code>, <code>-mssse3</code>,
+<code>-msse4.1</code>, <code>-msse4.2</code>, <code>-msse4</code>, <code>-mavx</code>, <code>-mavx2</code>, to name just a few.</p>
+
+<p>The good news is that there is no need to deal with such compiler-specific optimization
+options in order to get an optimized build. The cmake-based ArangoDB 3.0 builds will
+automatically test the local environment&rsquo;s capabilities and set the compiler options
+based on which CPU abilities were detected.</p>
+
+<p>For example, a mere <code>(cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=Release ..)</code> will run the
+CPU ability detection and configure the build to use the features supported by the
+local architecture:</p>
+
+<p><code>bash configuring a release build
+(mkdir -p build; cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=Release ..)
+</code></p>
+
+<p>For example, on my laptop this prints:
+<code>plain cmake output
+-- The CXX compiler identification is GNU 5.3.1
+-- The C compiler identification is GNU 5.3.1
+...
+-- target changed from "" to "auto"
+-- Detected CPU: haswell
+-- Performing Test check_cxx_compiler_flag__march_core_avx2
+-- Performing Test check_cxx_compiler_flag__march_core_avx2 - Success
+-- Performing Test check_cxx_compiler_flag__msse2
+-- Performing Test check_cxx_compiler_flag__msse2 - Success
+-- Performing Test check_cxx_compiler_flag__msse3
+-- Performing Test check_cxx_compiler_flag__msse3 - Success
+-- Looking for pmmintrin.h
+-- Looking for pmmintrin.h - found
+-- Performing Test check_cxx_compiler_flag__mssse3
+-- Performing Test check_cxx_compiler_flag__mssse3 - Success
+-- Looking for tmmintrin.h
+-- Looking for tmmintrin.h - found
+-- Performing Test check_cxx_compiler_flag__msse4_1
+-- Performing Test check_cxx_compiler_flag__msse4_1 - Success
+-- Looking for smmintrin.h
+-- Looking for smmintrin.h - found
+-- Performing Test check_cxx_compiler_flag__msse4_2
+-- Performing Test check_cxx_compiler_flag__msse4_2 - Success
+-- Performing Test check_cxx_compiler_flag__mavx
+-- Performing Test check_cxx_compiler_flag__mavx - Success
+-- Looking for immintrin.h
+-- Looking for immintrin.h - found
+-- Performing Test check_cxx_compiler_flag__msse2avx
+-- Performing Test check_cxx_compiler_flag__msse2avx - Success
+-- Performing Test check_cxx_compiler_flag__mavx2
+-- Performing Test check_cxx_compiler_flag__mavx2 - Success
+-- Performing Test check_cxx_compiler_flag__mno_sse4a
+-- Performing Test check_cxx_compiler_flag__mno_sse4a - Success
+-- Performing Test check_cxx_compiler_flag__mno_xop
+-- Performing Test check_cxx_compiler_flag__mno_xop - Success
+-- Performing Test check_cxx_compiler_flag__mno_fma4
+-- Performing Test check_cxx_compiler_flag__mno_fma4 - Success
+...
+</code>
+The detected options will end up in the CMakeCache.txt file in the build
+directory. The Makefile generated by cmake will automatically make use of
+these options when invoking the C++ compiler.</p>
+
+<p>The compiler options are not shown by default, but they can be made visible
+by compiling with the option <code>VERBOSE=1</code>, e.g.</p>
+
+<p><code>bash configuring and compiling a build
+(mkdir -p build; cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=Release ..)
+(cd build &amp;&amp; make -j4 VERBOSE=1)
+</code></p>
+
+<p>Note that this will be <em>very verbose</em>, so you only want to set the <code>VERBOSE=1</code>
+option to check that the compiler options were picked correctly.</p>
+
+<p>On my local laptop, the architecture-specific compiler options that were automatically
+detected and used were</p>
+
+<p><code>bash compiler architecture options used
+-march=core-avx2 -msse2 -msse3 -mssse3 -msse4.1 -msse4.2 -mavx -msse2avx -mavx2 -mno-sse4a -mno-xop -mno-fma4
+</code></p>
+
+<p>The build has detected <code>core-avx2</code>, which in my case is good &ndash; and a lot more
+specific than the official packages which for example cannot assume the presence
+of either SSE4 or AVX instructions.</p>
+
+<p>And now that we can rely on the presence of specific CPU instructions, some code
+parts such as JSON parsing can make use of SSE4.2 instructions, or the compiler
+can use some optimized SIMD variants for operations such as memcpy, strlen etc.</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Using the Address Sanitizer (ASAN) in ArangoDB Development]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/09/using-the-address-sanitizer-asan-in-arangodb-development/"/>
+    <updated>2016-06-09T20:07:29+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/09/using-the-address-sanitizer-asan-in-arangodb-development</id>
+    <content type="html"><![CDATA[<p>Once you have set up a <a href="/blog/2016/06/09/compiling-a-debug-version-of-arangodb/">debug version of ArangoDB</a>,
+it is quite helpful to also enable the <a href="https://en.wikipedia.org/wiki/AddressSanitizer">Address Sanitizer</a>
+and its companion tools.</p>
+
+<p>These sanitizers provide runtime instrumentation for executables and check
+for common C++ programming errors such as buffer overflows, use-after-free
+bugs and memory leaks. The sanitizers supported natively by recent versions
+of g++ and clang++.</p>
+
+<p>The general runtime overhead of the sanitizers is neglectable compared to
+other instrumentation tools such as Valgrind, so it can well be used in the
+day-to-day development process.</p>
+
+<!-- more -->
+
+
+<h2>Configuring the build to use ASAN</h2>
+
+<p>To build with ASAN (Address Sanitizer) and UBSAN (Undefined Behavior Sanitizer),
+the following environment variables need to be set when invoking cmake:</p>
+
+<p><code>bash environment variables for ASAN and UBSAN
+CXXFLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fno-sanitize=vptr"
+</code></p>
+
+<p>The full command to configure a debug build with ASAN and UBSAN support is:</p>
+
+<p><code>bash configuring the build to use the sanitizers
+(cd build &amp;&amp; CXXFLAGS="-fsanitize=address -fsanitize=undefined -fno-sanitize=alignment -fno-sanitize=vptr cmake -DCMAKE_BUILD_TYPE=Debug -DUSE_MAINTAINER_MODE=On ..)
+</code></p>
+
+<p>This will configure the build so it will pass the sanitizer options to the C++
+compiler. Note that you&rsquo;ll need a recent version of g++ or clang++ for this
+to work.</p>
+
+<p>After that, build arangod normally. The binaries produced will be instrumented
+by the sanitizers, allowing many nasty memory errors to be detected very early.</p>
+
+<h2>Checking if an arangod binary is using ASAN</h2>
+
+<p>Whether or not an ArangoDB binary is instrumented can be found out at any
+time by calling the binary with the <code>--version</code> option. This will print some
+version information for ArangoDB itself and the other required libraries,
+and it will also print in the line starting with <code>asan</code> whether the binary
+was compiled with ASAN support or not:</p>
+
+<p>```bash checking the ASAN support of an arangod binary</p>
+
+<blockquote><p>build/bin/arangod &mdash;version</p></blockquote>
+
+<p>3.0.x-devel</p>
+
+<p>architecture: 64bit
+asan: true                       # !!!!
+asm-crc32: true
+boost-version: 1.61.0b1
+build-date: 2016-06-09 12:07:07
+compiler: gcc
+cplusplus: 201103
+endianness: little
+fd-client-event-handler: poll
+fd-setsize: 1024
+icu-version: 54.1
+jemalloc: false
+libev-version: 4.22
+maintainer-mode: true
+openssl-version: OpenSSL 1.0.2g-fips  1 Mar 2016
+rocksdb-version: 4.8.0
+server-version: 3.0.x-devel
+sizeof int: 4
+sizeof void*: 8
+sse42: true
+tcmalloc: false
+v8-version: 5.0.71.39
+vpack-version: 0.1.30
+zlib-version: 1.2.8
+```</p>
+
+<h2>Controlling ASAN runtime behavior</h2>
+
+<p>ASAN behavior can also be controlled at runtime, after the binaries have
+been produced, by adjusting the environment variable <code>ASAN_OPTIONS</code>.
+The setting I use for this is:</p>
+
+<p><code>bash adjusting ASAN options
+ASAN_OPTIONS="handle_ioctl=true:check_initialization_order=true:detect_container_overflow=1:detect_stack_use_after_return=false:detect_odr_violation=1:allow_addr2line=true:strict_init_order=true"
+</code></p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Compiling a Debug Version of ArangoDB]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/09/compiling-a-debug-version-of-arangodb/"/>
+    <updated>2016-06-09T20:07:29+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/09/compiling-a-debug-version-of-arangodb</id>
+    <content type="html"><![CDATA[<p>Compiling a debug version of ArangoDB is a must for everyone that
+wants to modify the C++ ArangoDB source code and test their changes
+locally.</p>
+
+<p>How to do this is different in the 2.8 and 3.0 branches of ArangoDB,
+but luckily it&rsquo;s really easy to achieve in both branches.</p>
+
+<!-- more -->
+
+
+<h2>ArangoDB 2.8</h2>
+
+<p>For the 2.8 branch of ArangoDB, clone the 2.8 version of the ArangoDB
+repository first:</p>
+
+<p><code>bash cloning the 2.8 repository
+git clone -b 2.8 https://github.com/arangodb/arangodb
+cd ArangoDB
+</code></p>
+
+<p>And in that directory execute the following commands:</p>
+
+<p><code>bash compiling a debug version of 2.8
+make setup
+export CFLAGS="-g -Og"
+export CXXFLAGS="-g -Og"
+./configure --enable-relative --enable-maintainer-mode
+make -j4
+</code></p>
+
+<p>(note that you&rsquo;ll need a working C++11 compiler and some prerequisites
+such as the OpenSSL library, GNU Bison and Flex installed for this to work).</p>
+
+<p>This will compile ArangoDB and all of its dependencies, and finally
+make them available in the <code>bin</code> subdirectory of the current directory.
+There is no need to install ArangoDB using <code>make install</code>. arangod and
+the client tools can be run locally using the following commands:</p>
+
+<p><code>bash running arangod and arangosh
+bin/arangod --console mydb # start arangod in console mode
+bin/arangosh # starts an ArangoShell
+</code></p>
+
+<p>Now, after any modification to the ArangoDB C++ source code you can re-compile
+using <code>make</code>. This will only rebuild the things that need to be rebuilt. If the
+build is successful, the changes you have made should be visible when restarting
+the binaries.</p>
+
+<p>As the <code>-g</code> option used above will have configured a build with debug
+symbols, it&rsquo;s also possible to use a debugger such as gdb for stepping
+through the executables, attach to the while they are running, or to
+obtain stack traces in case any of the executables crashed.</p>
+
+<h2>ArangoDB 3.0</h2>
+
+<p>For the 3.0 branch of ArangoDB, it&rsquo;s required to once clone that version
+of the ArangoDB repository into a local directory:</p>
+
+<p><code>bash cloning the 3.0 repository
+git clone -b 3.0 https://github.com/arangodb/arangodb
+cd ArangoDB
+</code></p>
+
+<p>In that directory execute the following commands to configure the build
+for debugging:</p>
+
+<p><code>bash configuring a debug version of 3.0
+(mkdir -p build; cd build &amp;&amp; cmake -DCMAKE_BUILD_TYPE=Debug -DUSE_MAINTAINER_MODE=On ..)
+</code></p>
+
+<p>(again you&rsquo;ll need a working C++11 compiler and some prerequisites
+such as the OpenSSL library installed for this to work).</p>
+
+<p>This will configure the build to be a debug build, with debug symbols
+but most optimizations disabled. To build ArangoDB, just execute:</p>
+
+<p><code>bash compiling a debug version of 3.0
+(cd build &amp;&amp; make -j4)
+</code></p>
+
+<p>To execute one of the binaries, run them from the checkout directory
+as follows:</p>
+
+<p><code>bash running arangod and arangosh
+build/bin/arangod --console mydb # start arangod in console mode
+build/bin/arangosh # starts an ArangoShell
+</code></p>
+
+<p>After any modification to the ArangoDB C++ source code, build again
+using <code>(cd build &amp;&amp; make -j4)</code> to see the changes in effect.
+The build is a debug build, meaning you can use a debugger and get
+meaningful stack traces for core dumps produced by the binaries.</p>
+
+<p>If you got, then I strongly recommend to also enable the
+<a href="https://en.wikipedia.org/wiki/AddressSanitizer">Address Sanitizer</a>
+(ASAN) for your debug build. This can greatly help finding common memory usage
+errors during development. There is another<br/>
+<a href="/blog/2016/06/09/using-the-address-sanitizer-asan-in-arangodb-development/">blog post about using ASAN in ArangoDB development</a>.</p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Fastest String-to-uint64 Conversion Method?]]></title>
@@ -399,232 +737,6 @@ git pull
 (cd build &amp;&amp; make -j4)
 build/bin/arangod ~/testdata --server.authentication false
 </code></p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Compiling V8 With G++6]]></title>
-    <link href="http://jsteemann.github.io/blog/2016/06/02/compiling-v8-with-g-plus-plus-6/"/>
-    <updated>2016-06-02T20:14:46+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2016/06/02/compiling-v8-with-g-plus-plus-6</id>
-    <content type="html"><![CDATA[<p>With g++ 6 becoming more and more adopted, it&rsquo;s about time to point out an issue
-that hit some of us ArangoDB developers and a few of our users that compile ArangoDB
-from source with g++ 6.</p>
-
-<p>The problem is that when compiling ArangoDB with g++6 with default options, arangod
-starts and almost immediately segfaults.</p>
-
-<!-- more -->
-
-
-<p>A backtrace of the crashed arangod process shows that the segfaults originate from
-the V8 JavaScript engine that ArangoDB uses internally.
-The problem seems to have affected other users of V8 as well, indicated by the following
-error reports:</p>
-
-<ul>
-<li>node.js: <a href="https://github.com/nodejs/node/issues/6724">https://github.com/nodejs/node/issues/6724</a></li>
-<li>chromium: <a href="https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68853">https://gcc.gnu.org/bugzilla/show_bug.cgi?id=68853</a></li>
-</ul>
-
-
-<p>The reason for the error now popping up is a change in the g++ 6 optimizer as stated
-in the <a href="https://gcc.gnu.org/gcc-6/changes.html">gcc6 release notes</a>:</p>
-
-<blockquote><p>Value range propagation now assumes that the this pointer of C++ member functions is non-null.
-This eliminates common null pointer checks but also breaks some non-conforming code-bases (such as Qt-5, Chromium, KDevelop).
-As a temporary work-around -fno-delete-null-pointer-checks can be used. Wrong code can be identified by using -fsanitize=undefined.</p></blockquote>
-
-<p>That means if compiling ArangoDB 2.8 from source with g++ 6 or higher, please be sure to
-set the environment variables <code>CFLAGS="-fno-delete-null-pointer-checks"</code> and<br/>
-<code>CXXFLAGS="-fno-delete-null-pointer-checks"</code> before invoking the <code>configure</code> command:</p>
-
-<p><code>bash
-make setup
-CFLAGS="-fno-delete-null-pointer-checks" CXXFLAGS="-fno-delete-null-pointer-checks" ./configure
-make
-</code></p>
-
-<p>The options will then be passed to the sub-make that builds the V8 engine. If you have
-already built V8 without these options, try removing the file <code>.v8-build-64</code> from the
-build directory and run <code>configure</code> and <code>make</code> again.</p>
-
-<p>As a reminder, ArangoDB 2.8 will also emit this big notice at the end of its <code>configure</code> output:</p>
-
-<p><code>plain
-configure: --------------------------------------------------------------------------------
-configure:                                                                                 
-configure: NOTE: if you are compiling ArangoDB with g++ 6.0 or higher, please make sure to
-configure: set the following environment variables when compiling ArangoDB:                
-configure:                                                                                 
-configure:   CFLAGS="-fno-delete-null-pointer-checks"                                      
-configure:   CXXFLAGS="-fno-delete-null-pointer-checks"                                    
-configure:                                                                                 
-configure: --------------------------------------------------------------------------------
-</code></p>
-
-<p>Users of g++ 5.x do not need to set these flags, neither need users of clang++. And in the
-ArangoDB 3.0 build the options will be set automatically when compiling V8 if the compiler
-is g++. They will not be set for compiling any other parts of ArangoDB as it&rsquo;s only required
-for building V8.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Killing a Long-running Query]]></title>
-    <link href="http://jsteemann.github.io/blog/2016/01/26/killing-a-long-running-query/"/>
-    <updated>2016-01-26T23:13:33+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2016/01/26/killing-a-long-running-query</id>
-    <content type="html"><![CDATA[<p>Suppose there is an AQL query that&rsquo;s executing in the server
-for a long time already and you want to get rid of it. What can
-be done to abort that query?</p>
-
-<p>If a connection to the server can still be established, the easiest
-is to use the ArangoShell to fetch the list of currently executing
-AQL queries and send a <em>kill</em> command to the server for the correct query.</p>
-
-<!-- more -->
-
-
-<p>To start, we can fetch the list of all running queries and print
-their ids, query strings and runtimes. This is only inspection and does
-not abort any query:</p>
-
-<p><code>js printing all currently running queries
-var queries = require("org/arangodb/aql/queries");
-queries.current();
-</code></p>
-
-<p>Here&rsquo;s an example result for the list of running queries:</p>
-
-<p>```json example list of currently running queries
-[
-  {</p>
-
-<pre><code>"id" : "190", 
-"query" : "RETURN SLEEP(1000)", 
-"started" : "2016-01-26T22:41:24Z", 
-"runTime" : 218.49146389961243 
-</code></pre>
-
-<p>  }
-]
-```</p>
-
-<p>To now kill a query from the list, we can pass the query&rsquo;s id to <em>kill</em>:</p>
-
-<p><code>js killing a specific query
-var queries = require("org/arangodb/aql/queries");
-queries.kill("190");  /* insert actual query id here */
-</code></p>
-
-<p>If a query was actually killed on the server, that call should return without
-an error, and the server should have logged a warning in addition.</p>
-
-<p>If we wanted to abort one or many queries from the list solely by
-looking at query string patterns or query runtime, we could iterate
-over the list of current queries and kill each one that matches
-a predicate.</p>
-
-<p>For example, the following snippet will abort all currently running
-queries that contain the string <code>SLEEP</code> anywhere inside their query string:</p>
-
-<p>```js aborting all queries containing the word SLEEP inside the query string
-var queries = require(&ldquo;org/arangodb/aql/queries&rdquo;);</p>
-
-<p>queries.current().filter(function(query) {
-  return query.query.match(/SLEEP/);  /<em> predicate based on query string </em>/
-}).forEach(function(query) {
-  print(&ldquo;killing query: &rdquo;, query);    /<em> print what we&rsquo;re killing </em>/
-  queries.kill(query.id);             /<em> actually kill query </em>/
-});
-```</p>
-
-<p>Filtering based on current query runtime is also simple, by adjusting the
-predicate. To abort all queries that ran longer than 30 seconds use:</p>
-
-<p>```js aborting all queries running at least 30 seconds
-var queries = require(&ldquo;org/arangodb/aql/queries&rdquo;);</p>
-
-<p>queries.current().filter(function(query) {
-  return query.runTime > 30;          /<em> predicate based on query runtime </em>/
-}).forEach(function(query) {
-  print(&ldquo;killing query: &rdquo;, query);    /<em> print what we&rsquo;re killing </em>/
-  queries.kill(query.id);             /<em> actually kill query </em>/
-});
-```</p>
-
-<p>Please make sure the predicates are correct so only the actually intended
-queries get aborted!</p>
-
-<p>To test a predicate without killing a query, use the above code without the
-<code>forEach</code> part that did the killing.</p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[Small Things in 2.8: Explain Improvements]]></title>
-    <link href="http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-explain-improvements/"/>
-    <updated>2016-01-26T22:08:11+01:00</updated>
-    <id>http://jsteemann.github.io/blog/2016/01/26/small-things-in-28-explain-improvements</id>
-    <content type="html"><![CDATA[<p>Explaining AQL queries becomes even easier in ArangoDB 2.8.</p>
-
-<p>While previous versions required writing a hard-to-memoize command like</p>
-
-<p><code>js explaining a query in 2.7
-require("org/arangodb/aql/explainer").explain(query);
-</code></p>
-
-<p>to explain an AQL query from the ArangoShell, 2.8 reduces this task to
-a mere</p>
-
-<p><code>js explaining a query in 2.8
-db._explain(query);
-</code></p>
-
-<p>Apart from that, explain in 2.8 is smarter when confronted with very lengthy
-query strings, and with queries that contain huge hard-coded string, array,
-or object values.</p>
-
-<!-- more -->
-
-
-<p>For example, when creating an array bind variable with 1,000 values and
-using them in an explained query, 2.7 would print the entire 1,000 array values
-in the explain output:</p>
-
-<p>```js explaining a query with 1000 array values
-var keys = [];
-for (var i = 0; i &lt; 1000; ++i) {
-  keys.push(&ldquo;test&rdquo; + i);
-}</p>
-
-<p>var query = &ldquo;FOR i IN @keys RETURN i&rdquo;;
-require(&ldquo;org/arangodb/aql/explainer&rdquo;).explain({
-  query: query,
-  bindVars: {</p>
-
-<pre><code>keys: keys 
-</code></pre>
-
-<p>  }
-});
-```</p>
-
-<p><img src="/downloads/screenshots/explain-27.png"></p>
-
-<p>2.8 will instead truncate longer arrays and objects in the explain output for
-much improved readability:</p>
-
-<p><img src="/downloads/screenshots/explain-28.png"></p>
-
-<p>Automatic value truncation will occur for array and object values with
-more than 20 elements or for string values longer than 1,024 characters. The
-truncation for explain will occur if these values are hard-coded into the
-query or are passed via bind parameters.</p>
-
-<p>Truncation only happens inside the explain results processing and thus
-cannot affect the actual query results.</p>
 ]]></content>
   </entry>
   

@@ -329,12 +329,30 @@
         <lastmod>2016-06-02T22:14:00+02:00</lastmod>
     </url>
     <url>
+        <loc>
+            http://jsteemann.github.io/blog/2016/06/09/compiling-a-debug-version-of-arangodb/
+        </loc>
+        <lastmod>2016-06-09T22:04:15+02:00</lastmod>
+    </url>
+    <url>
+        <loc>
+            http://jsteemann.github.io/blog/2016/06/09/using-the-address-sanitizer-asan-in-arangodb-development/
+        </loc>
+        <lastmod>2016-06-09T22:02:19+02:00</lastmod>
+    </url>
+    <url>
+        <loc>
+            http://jsteemann.github.io/blog/2016/06/09/compiling-an-optimized-version-of-arangodb/
+        </loc>
+        <lastmod>2016-06-09T22:13:23+02:00</lastmod>
+    </url>
+    <url>
         <loc>http://jsteemann.github.io/about/</loc>
-        <lastmod>2016-06-03T00:46:13+02:00</lastmod>
+        <lastmod>2016-06-09T22:13:23+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2016-06-03T00:46:13+02:00</lastmod>
+        <lastmod>2016-06-09T22:13:23+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -342,6 +360,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2016-06-03T00:46:13+02:00</lastmod>
+        <lastmod>2016-06-09T22:13:23+02:00</lastmod>
     </url>
 </urlset>
