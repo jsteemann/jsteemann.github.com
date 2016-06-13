@@ -347,12 +347,18 @@
         <lastmod>2016-06-09T22:13:23+02:00</lastmod>
     </url>
     <url>
+        <loc>
+            http://jsteemann.github.io/blog/2016/06/14/how-much-memory-does-an-stl-container-use/
+        </loc>
+        <lastmod>2016-06-14T01:07:25+02:00</lastmod>
+    </url>
+    <url>
         <loc>http://jsteemann.github.io/about/</loc>
-        <lastmod>2016-06-09T22:13:23+02:00</lastmod>
+        <lastmod>2016-06-14T01:07:25+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2016-06-09T22:13:23+02:00</lastmod>
+        <lastmod>2016-06-14T01:07:25+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -360,6 +366,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2016-06-09T22:13:23+02:00</lastmod>
+        <lastmod>2016-06-14T01:07:25+02:00</lastmod>
     </url>
 </urlset>

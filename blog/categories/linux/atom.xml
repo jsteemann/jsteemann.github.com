@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Linux | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/linux/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-06-09T22:14:13+02:00</updated>
+  <updated>2016-06-14T01:07:34+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -12,6 +12,164 @@
   </author>
   <generator uri="http://octopress.org/">Octopress</generator>
 
+  
+  <entry>
+    <title type="html"><![CDATA[How Much Memory Does an STL Container Use?]]></title>
+    <link href="http://jsteemann.github.io/blog/2016/06/14/how-much-memory-does-an-stl-container-use/"/>
+    <updated>2016-06-14T00:35:29+02:00</updated>
+    <id>http://jsteemann.github.io/blog/2016/06/14/how-much-memory-does-an-stl-container-use</id>
+    <content type="html"><![CDATA[<p>Ever wondered how much heap memory will be used by STL containers, and
+in what chunks they will allocate it?</p>
+
+<p>Here is the answer for some frequently used containers types containing
+uint64_t values (an 8 byte type). For the associative containers I also
+used uint64_t as the key type.</p>
+
+<!-- more -->
+
+
+<p>All results are for the STL implementation I had ready at hand (g++5.3 on
+Ubuntu 16.04, libstdc++.so.6.0.22, with default allocator).
+The results may be completely different for other platforms and/or other
+data types.</p>
+
+<p>The following containers are compared:</p>
+
+<ul>
+<li>std::vector&lt;uint64_t></li>
+<li>std::map&lt;uint64, uint64_t></li>
+<li>std::set&lt;uint64_t></li>
+<li>std::unordered_map&lt;uint64, uint64_t></li>
+<li>std::unordered_set&lt;uint64_t></li>
+<li>std::deque&lt;uint64_t></li>
+</ul>
+
+
+<p>The containers themselves are creared on the stack. To store the elements,
+the containers will need to use heap memory. The number of elements in the
+containers (<em>n</em>) is increased exponentially from 0 (empty) to 512 in the
+tests. The memory usage pattern should be quite clear by then.</p>
+
+<p>Reported are the amount of heap memory allocated by the container after all
+elements have been inserted, the total number of heap memory allocated by
+the container during its whole lifetime (i.e. the sum of all its <code>malloc</code>s),
+plus the number of calls to <code>malloc</code> and <code>free</code> the container issued.</p>
+
+<p>```plain heap allocation results</p>
+
+<h2>n =     0</h2>
+
+<p>vector         =>     0 bytes allocd at end,  total:     0 bytes mallocd,    0 malloc(s), 0 free(s)
+map            =>     0 bytes allocd at end,  total:     0 bytes mallocd,    0 malloc(s), 0 free(s)
+set            =>     0 bytes allocd at end,  total:     0 bytes mallocd,    0 malloc(s), 0 free(s)
+unordered_map  =>     0 bytes allocd at end,  total:     0 bytes mallocd,    0 malloc(s), 0 free(s)
+unordered_set  =>     0 bytes allocd at end,  total:     0 bytes mallocd,    0 malloc(s), 0 free(s)
+deque          =>   576 bytes allocd at end,  total:   576 bytes mallocd,    2 malloc(s), 0 free(s)</p>
+
+<h2>n =     1</h2>
+
+<p>vector         =>     8 bytes allocd at end,  total:     8 bytes mallocd,    1 malloc(s), 0 free(s)
+map            =>    48 bytes allocd at end,  total:    48 bytes mallocd,    1 malloc(s), 0 free(s)
+set            =>    40 bytes allocd at end,  total:    40 bytes mallocd,    1 malloc(s), 0 free(s)
+unordered_map  =>    40 bytes allocd at end,  total:    40 bytes mallocd,    2 malloc(s), 0 free(s)
+unordered_set  =>    32 bytes allocd at end,  total:    32 bytes mallocd,    2 malloc(s), 0 free(s)
+deque          =>   576 bytes allocd at end,  total:   576 bytes mallocd,    2 malloc(s), 0 free(s)</p>
+
+<h2>n =     2</h2>
+
+<p>vector         =>    16 bytes allocd at end,  total:    24 bytes mallocd,    2 malloc(s), 1 free(s)
+map            =>    96 bytes allocd at end,  total:    96 bytes mallocd,    2 malloc(s), 0 free(s)
+set            =>    80 bytes allocd at end,  total:    80 bytes mallocd,    2 malloc(s), 0 free(s)
+unordered_map  =>    88 bytes allocd at end,  total:   104 bytes mallocd,    4 malloc(s), 1 free(s)
+unordered_set  =>    72 bytes allocd at end,  total:    88 bytes mallocd,    4 malloc(s), 1 free(s)
+deque          =>   576 bytes allocd at end,  total:   576 bytes mallocd,    2 malloc(s), 0 free(s)</p>
+
+<h2>n =     4</h2>
+
+<p>vector         =>    32 bytes allocd at end,  total:    56 bytes mallocd,    3 malloc(s), 2 free(s)
+map            =>   192 bytes allocd at end,  total:   192 bytes mallocd,    4 malloc(s), 0 free(s)
+set            =>   160 bytes allocd at end,  total:   160 bytes mallocd,    4 malloc(s), 0 free(s)
+unordered_map  =>   136 bytes allocd at end,  total:   152 bytes mallocd,    6 malloc(s), 1 free(s)
+unordered_set  =>   104 bytes allocd at end,  total:   120 bytes mallocd,    6 malloc(s), 1 free(s)
+deque          =>   576 bytes allocd at end,  total:   576 bytes mallocd,    2 malloc(s), 0 free(s)</p>
+
+<h2>n =     8</h2>
+
+<p>vector         =>    64 bytes allocd at end,  total:   120 bytes mallocd,    4 malloc(s), 3 free(s)
+map            =>   384 bytes allocd at end,  total:   384 bytes mallocd,    8 malloc(s), 0 free(s)
+set            =>   320 bytes allocd at end,  total:   320 bytes mallocd,    8 malloc(s), 0 free(s)
+unordered_map  =>   280 bytes allocd at end,  total:   336 bytes mallocd,   11 malloc(s), 2 free(s)
+unordered_set  =>   216 bytes allocd at end,  total:   272 bytes mallocd,   11 malloc(s), 2 free(s)
+deque          =>   576 bytes allocd at end,  total:   576 bytes mallocd,    2 malloc(s), 0 free(s)</p>
+
+<h2>n =    16</h2>
+
+<p>vector         =>   128 bytes allocd at end,  total:   248 bytes mallocd,    5 malloc(s), 4 free(s)
+map            =>   768 bytes allocd at end,  total:   768 bytes mallocd,   16 malloc(s), 0 free(s)
+set            =>   640 bytes allocd at end,  total:   640 bytes mallocd,   16 malloc(s), 0 free(s)
+unordered_map  =>   568 bytes allocd at end,  total:   712 bytes mallocd,   20 malloc(s), 3 free(s)
+unordered_set  =>   440 bytes allocd at end,  total:   584 bytes mallocd,   20 malloc(s), 3 free(s)
+deque          =>   576 bytes allocd at end,  total:   576 bytes mallocd,    2 malloc(s), 0 free(s)</p>
+
+<h2>n =    32</h2>
+
+<p>vector         =>   256 bytes allocd at end,  total:   504 bytes mallocd,    6 malloc(s), 5 free(s)
+map            =>  1536 bytes allocd at end,  total:  1536 bytes mallocd,   32 malloc(s), 0 free(s)
+set            =>  1280 bytes allocd at end,  total:  1280 bytes mallocd,   32 malloc(s), 0 free(s)
+unordered_map  =>  1144 bytes allocd at end,  total:  1472 bytes mallocd,   37 malloc(s), 4 free(s)
+unordered_set  =>   888 bytes allocd at end,  total:  1216 bytes mallocd,   37 malloc(s), 4 free(s)
+deque          =>   576 bytes allocd at end,  total:   576 bytes mallocd,    2 malloc(s), 0 free(s)</p>
+
+<h2>n =    64</h2>
+
+<p>vector         =>   512 bytes allocd at end,  total:  1016 bytes mallocd,    7 malloc(s), 6 free(s)
+map            =>  3072 bytes allocd at end,  total:  3072 bytes mallocd,   64 malloc(s), 0 free(s)
+set            =>  2560 bytes allocd at end,  total:  2560 bytes mallocd,   64 malloc(s), 0 free(s)
+unordered_map  =>  2312 bytes allocd at end,  total:  3016 bytes mallocd,   70 malloc(s), 5 free(s)
+unordered_set  =>  1800 bytes allocd at end,  total:  2504 bytes mallocd,   70 malloc(s), 5 free(s)
+deque          =>  1088 bytes allocd at end,  total:  1088 bytes mallocd,    3 malloc(s), 0 free(s)</p>
+
+<h2>n =   128</h2>
+
+<p>vector         =>  1024 bytes allocd at end,  total:  2040 bytes mallocd,    8 malloc(s), 7 free(s)
+map            =>  6144 bytes allocd at end,  total:  6144 bytes mallocd,  128 malloc(s), 0 free(s)
+set            =>  5120 bytes allocd at end,  total:  5120 bytes mallocd,  128 malloc(s), 0 free(s)
+unordered_map  =>  4664 bytes allocd at end,  total:  6144 bytes mallocd,  135 malloc(s), 6 free(s)
+unordered_set  =>  3640 bytes allocd at end,  total:  5120 bytes mallocd,  135 malloc(s), 6 free(s)
+deque          =>  1600 bytes allocd at end,  total:  1600 bytes mallocd,    4 malloc(s), 0 free(s)</p>
+
+<h2>n =   256</h2>
+
+<p>vector         =>  2048 bytes allocd at end,  total:  4088 bytes mallocd,    9 malloc(s), 8 free(s)
+map            => 12288 bytes allocd at end,  total: 12288 bytes mallocd,  256 malloc(s), 0 free(s)
+set            => 10240 bytes allocd at end,  total: 10240 bytes mallocd,  256 malloc(s), 0 free(s)
+unordered_map  =>  9416 bytes allocd at end,  total: 12488 bytes mallocd,  264 malloc(s), 7 free(s)
+unordered_set  =>  7368 bytes allocd at end,  total: 10440 bytes mallocd,  264 malloc(s), 7 free(s)
+deque          =>  2624 bytes allocd at end,  total:  2624 bytes mallocd,    6 malloc(s), 0 free(s)</p>
+
+<h2>n =   512</h2>
+
+<p>vector         =>  4096 bytes allocd at end,  total:  8184 bytes mallocd,   10 malloc(s), 9 free(s)
+map            => 24576 bytes allocd at end,  total: 24576 bytes mallocd,  512 malloc(s), 0 free(s)
+set            => 20480 bytes allocd at end,  total: 20480 bytes mallocd,  512 malloc(s), 0 free(s)
+unordered_map  => 18872 bytes allocd at end,  total: 25216 bytes mallocd,  521 malloc(s), 8 free(s)
+unordered_set  => 14776 bytes allocd at end,  total: 21120 bytes mallocd,  521 malloc(s), 8 free(s)
+deque          =>  4752 bytes allocd at end,  total:  4816 bytes mallocd,   11 malloc(s), 1 free(s)
+```</p>
+
+<p>I have intentionally not done any optimizations such as calling <code>reserve()</code>
+on the containers before inserting the individual elements, in order to
+reflect some real-word scenarios in which it is unclear how much elements
+will be added to the containers during program execution.</p>
+
+<p>The test program for reproduction is <a href="/downloads/code/containers.cpp">here</a>. Compile and run it with:</p>
+
+<p><code>bash compiling and executing the test program
+g++ -std=c++11 -O0 containers.cpp -o containers
+for i in 0 1 2 4 8 16 32 64 128 256 512; do ./containers "$i"; done
+</code></p>
+]]></content>
+  </entry>
   
   <entry>
     <title type="html"><![CDATA[Compiling an Optimized Version of ArangoDB]]></title>
@@ -517,63 +675,6 @@ git pull
 (cd build &amp;&amp; make -j4)
 build/bin/arangod ~/testdata --server.authentication false
 </code></p>
-]]></content>
-  </entry>
-  
-  <entry>
-    <title type="html"><![CDATA[How to Set Up Fish Completion for ArangoDB]]></title>
-    <link href="http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/"/>
-    <updated>2015-07-28T23:10:32+02:00</updated>
-    <id>http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb</id>
-    <content type="html"><![CDATA[<p>While experimenting with the <a href="http://fishshell.com/">fish shell</a> on my laptop
-I found <em>fish</em> has a slightly different (but much fancier) tab-completion mechanism
-than <em>bash</em>.</p>
-
-<p>Re-using the <a href="/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/">existing completer for bash</a>
-wouldn&rsquo;t work, so I put together some dedicated completions files for <em>fish</em>.</p>
-
-<!-- more -->
-
-
-<p>The files can be downloaded here:
-<a href="/downloads/code/completions-fish-2.5">2.5</a> <a href="/downloads/code/completions-fish-2.6">2.6</a>
-<a href="/downloads/code/completions-fish-2.7">2.7</a> <a href="/downloads/code/completions-fish-2.8">2.8</a></p>
-
-<p>To activate these completions, copy the appropriate file into <code>~/.arangodb-completions</code>
-and source it from <em>fish</em>:
-<code>bash
-source ~/.arangodb-completions
-</code></p>
-
-<p>In order to permanently activate these completions, you may source the completions file
-from your <code>config.fish</code> file, which is normally located in directory <code>~/.config/fish</code>.</p>
-
-<h2>Full setup</h2>
-
-<p>The following command, executed in <em>fish</em>, should install the completions for 2.7 and
-activate them:
-<code>bash activate completions for ArangoDB 2.7
-wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.7
-echo "source ~/.arangodb-completions" &gt;&gt; ~/.config/fish/config.fish
-source ~/.arangodb-completions
-</code>
-To install fish completions for ArangoDB 2.6, the command is:</p>
-
-<p><code>bash activate completions for ArangoDB 2.6
-wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.6
-echo "source ~/.arangodb-completions" &gt;&gt; ~/.config/fish/config.fish
-source ~/.arangodb-completions
-</code>
-For 2.5 the command is:
-<code>bash activate completions for ArangoDB 2.5
-wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.5
-echo "source ~/.arangodb-completions" &gt;&gt; ~/.config/fish/config.fish
-source ~/.arangodb-completions
-</code></p>
-
-<p>To see it in action, type <code>arangosh --</code> in <em>fish</em> and then press <strong>TAB</strong>:</p>
-
-<p><img src="/downloads/screenshots/fish-completion.png"></p>
 ]]></content>
   </entry>
   
