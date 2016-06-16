@@ -4,7 +4,7 @@
   <title><![CDATA[J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-06-14T01:07:34+02:00</updated>
+  <updated>2016-06-16T19:39:17+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -29,7 +29,7 @@ used uint64_t as the key type.</p>
 
 
 <p>All results are for the STL implementation I had ready at hand (g++5.3 on
-Ubuntu 16.04, libstdc++.so.6.0.22, with default allocator).
+Ubuntu 16.04, x86_64, libstdc++.so.6.0.22, with default allocator).
 The results may be completely different for other platforms and/or other
 data types.</p>
 

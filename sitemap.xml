@@ -2,7 +2,7 @@
 <urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/06/03/schema-handling-in-arangodb/</loc>
-        <lastmod>2015-05-20T22:59:43+02:00</lastmod>
+        <lastmod>2016-06-16T19:10:03+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/08/06/how-arangodbs-write-ahead-log-works/</loc>
@@ -34,7 +34,7 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2014/10/16/how-to-compile-arangodb-from-source/</loc>
-        <lastmod>2015-06-03T17:34:34+02:00</lastmod>
+        <lastmod>2016-06-16T19:10:23+02:00</lastmod>
     </url>
     <url>
         <loc>
@@ -46,7 +46,7 @@
         <loc>
             http://jsteemann.github.io/blog/2014/10/22/how-to-set-up-bash-completion-for-arangodb/
         </loc>
-        <lastmod>2015-12-08T22:31:23+01:00</lastmod>
+        <lastmod>2016-06-16T19:25:27+02:00</lastmod>
     </url>
     <url>
         <loc>
@@ -102,7 +102,7 @@
         <loc>
             http://jsteemann.github.io/blog/2015/01/28/using-custom-visitors-in-aql-graph-traversals/
         </loc>
-        <lastmod>2015-05-20T22:52:25+02:00</lastmod>
+        <lastmod>2016-06-16T19:11:44+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/01/31/yaor-yet-another-optimizer-rule/</loc>
@@ -244,7 +244,7 @@
         <loc>
             http://jsteemann.github.io/blog/2015/07/28/how-to-set-up-fish-completion-for-arangodb/
         </loc>
-        <lastmod>2015-12-08T22:30:37+01:00</lastmod>
+        <lastmod>2016-06-16T19:35:15+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/2015/07/30/throughput-enhancements/</loc>
@@ -350,15 +350,15 @@
         <loc>
             http://jsteemann.github.io/blog/2016/06/14/how-much-memory-does-an-stl-container-use/
         </loc>
-        <lastmod>2016-06-14T01:07:25+02:00</lastmod>
+        <lastmod>2016-06-16T19:08:14+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/about/</loc>
-        <lastmod>2016-06-14T01:07:25+02:00</lastmod>
+        <lastmod>2016-06-16T19:35:15+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/blog/archives/</loc>
-        <lastmod>2016-06-14T01:07:25+02:00</lastmod>
+        <lastmod>2016-06-16T19:35:15+02:00</lastmod>
     </url>
     <url>
         <loc>http://jsteemann.github.io/robots.txt</loc>
@@ -366,6 +366,6 @@
     </url>
     <url>
         <loc>http://jsteemann.github.io/</loc>
-        <lastmod>2016-06-14T01:07:25+02:00</lastmod>
+        <lastmod>2016-06-16T19:35:15+02:00</lastmod>
     </url>
 </urlset>

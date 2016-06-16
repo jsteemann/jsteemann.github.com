@@ -121,7 +121,8 @@ wouldn&rsquo;t work, so I put together some dedicated completions files for <em>
 
 <p>The files can be downloaded here:
 <a href="/downloads/code/completions-fish-2.5">2.5</a> <a href="/downloads/code/completions-fish-2.6">2.6</a>
-<a href="/downloads/code/completions-fish-2.7">2.7</a> <a href="/downloads/code/completions-fish-2.8">2.8</a></p>
+<a href="/downloads/code/completions-fish-2.7">2.7</a> <a href="/downloads/code/completions-fish-2.8">2.8</a>
+<a href="/downloads/code/completions-fish-3.0">3.0</a></p>
 
 <p>To activate these completions, copy the appropriate file into <code>~/.arangodb-completions</code>
 and source it from <em>fish</em>:</p>
@@ -136,35 +137,35 @@ from your <code>config.fish</code> file, which is normally located in directory 
 
 <h2>Full setup</h2>
 
-<p>The following command, executed in <em>fish</em>, should install the completions for 2.7 and
+<p>The following command, executed in <em>fish</em>, should install the completions for 3.0 and
 activate them:</p>
+
+<figure class='code'><figcaption><span>activate completions for ArangoDB 3.0 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-3.0
+</span><span class='line'><span class="nb">echo</span> <span class="s2">&quot;source ~/.arangodb-completions&quot;</span> &gt;&gt; ~/.config/fish/config.fish
+</span><span class='line'><span class="nb">source</span> ~/.arangodb-completions
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To install fish completions for ArangoDB 2.8, the command is:</p>
+
+<figure class='code'><figcaption><span>activate completions for ArangoDB 2.8 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
+<span class='line-number'>2</span>
+<span class='line-number'>3</span>
+</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.8
+</span><span class='line'><span class="nb">echo</span> <span class="s2">&quot;source ~/.arangodb-completions&quot;</span> &gt;&gt; ~/.config/fish/config.fish
+</span><span class='line'><span class="nb">source</span> ~/.arangodb-completions
+</span></code></pre></td></tr></table></div></figure>
+
+
+<p>To install fish completions for ArangoDB 2.7, the command is:</p>
 
 <figure class='code'><figcaption><span>activate completions for ArangoDB 2.7 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
 <span class='line-number'>2</span>
 <span class='line-number'>3</span>
 </pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.7
-</span><span class='line'><span class="nb">echo</span> <span class="s2">&quot;source ~/.arangodb-completions&quot;</span> &gt;&gt; ~/.config/fish/config.fish
-</span><span class='line'><span class="nb">source</span> ~/.arangodb-completions
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>To install fish completions for ArangoDB 2.6, the command is:</p>
-
-<figure class='code'><figcaption><span>activate completions for ArangoDB 2.6 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.6
-</span><span class='line'><span class="nb">echo</span> <span class="s2">&quot;source ~/.arangodb-completions&quot;</span> &gt;&gt; ~/.config/fish/config.fish
-</span><span class='line'><span class="nb">source</span> ~/.arangodb-completions
-</span></code></pre></td></tr></table></div></figure>
-
-
-<p>For 2.5 the command is:</p>
-
-<figure class='code'><figcaption><span>activate completions for ArangoDB 2.5 </span></figcaption><div class="highlight"><table><tr><td class="gutter"><pre class="line-numbers"><span class='line-number'>1</span>
-<span class='line-number'>2</span>
-<span class='line-number'>3</span>
-</pre></td><td class='code'><pre><code class='bash'><span class='line'>wget -O ~/.arangodb-completions https://jsteemann.github.io/downloads/code/completions-fish-2.5
 </span><span class='line'><span class="nb">echo</span> <span class="s2">&quot;source ~/.arangodb-completions&quot;</span> &gt;&gt; ~/.config/fish/config.fish
 </span><span class='line'><span class="nb">source</span> ~/.arangodb-completions
 </span></code></pre></td></tr></table></div></figure>

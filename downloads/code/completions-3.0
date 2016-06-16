@@ -1,0 +1,97 @@
+
+_arangobench()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--async --batch-size --check-configuration --collection --complexity --concurrency --configuration --delay --keep-alive --progress --quiet --requests --test-case --verbose --version --log.level --log.output --log.use-local-time --server.authentication --server.connection-timeout --server.database --server.endpoint --server.max-packet-size --server.password --server.request-timeout --server.username --ssl.protocol --temp.path"
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -o default -F _arangobench arangobench
+
+_arangosh()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--check-configuration --configuration --jslint --quiet --version --console.audit-file --console.auto-complete --console.colors --console.pager --console.pretty-print --console.prompt --javascript.check-syntax --javascript.current-module-directory --javascript.execute --javascript.execute-string --javascript.gc-interval --javascript.unit-tests --log.level --log.output --log.use-local-time --server.authentication --server.connection-timeout --server.database --server.endpoint --server.max-packet-size --server.password --server.request-timeout --server.username --ssl.protocol --temp.path"
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -o default -F _arangosh arangosh
+
+_arangoimp()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--backslash-escape --batch-size --check-configuration --collection --configuration --create-collection --create-collection-type --file --from-collection-prefix --on-duplicate --overwrite --progress --quote --separator --to-collection-prefix --type --version --log.level --log.output --log.use-local-time --server.authentication --server.connection-timeout --server.database --server.endpoint --server.max-packet-size --server.password --server.request-timeout --server.username --ssl.protocol --temp.path"
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -o default -F _arangoimp arangoimp
+
+_arangodump()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--batch-size --check-configuration --collection --compat --configuration --dump-data --force --include-system-collections --initial-batch-size --output-directory --overwrite --progress --tick-end --tick-start --version --log.level --log.output --log.use-local-time --server.authentication --server.connection-timeout --server.database --server.endpoint --server.max-packet-size --server.password --server.request-timeout --server.username --ssl.protocol"
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -o default -F _arangodump arangodump
+
+_arangorestore()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--batch-size --check-configuration --collection --configuration --create-collection --create-database --default-number-of-shards --force --import-data --include-system-collections --input-directory --overwrite --progress --recycle-ids --version --log.level --log.output --log.use-local-time --server.authentication --server.connection-timeout --server.database --server.endpoint --server.max-packet-size --server.password --server.request-timeout --server.username --ssl.protocol --temp.path"
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -o default -F _arangorestore arangorestore
+
+_arangod()
+{
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="--check-configuration --configuration --console --version --agency.compaction-step-size --agency.election-timeout-max --agency.election-timeout-min --agency.endpoint --agency.id --agency.notify --agency.size --agency.supervision --agency.supervision-frequency --cluster.agency-endpoint --cluster.agency-prefix --cluster.arangod-path --cluster.coordinator-config --cluster.data-path --cluster.dbserver-config --cluster.log-path --cluster.my-address --cluster.my-id --cluster.my-local-info --cluster.my-role --cluster.password --cluster.username --database.auto-upgrade --database.directory --database.maximal-journal-size --foxx.queues --foxx.queues-poll-interval --frontend.proxy-request-check --frontend.trusted-proxy --http.hide-product-header --http.keep-alive-timeout --http.trusted-origin --javascript.app-path --javascript.gc-frequency --javascript.gc-interval --javascript.script --javascript.script-parameter --javascript.startup-directory --javascript.v8-contexts --log.level --log.output --log.use-local-time --nonce.size --query.cache-entries --query.cache-mode --query.slow-threshold --query.tracking --rocksdb.base-background-compactions --rocksdb.compaction-read-ahead-size --rocksdb.enabled --rocksdb.keep-log-file-num --rocksdb.log-file-time-to-roll --rocksdb.max-background-compactions --rocksdb.max-bytes-for-level-multiplier --rocksdb.max-log-file-size --rocksdb.max-write-buffer-number --rocksdb.min-write-buffer-number-to-merge --rocksdb.num-levels --rocksdb.optimize-filters-for-hits --rocksdb.verify-checksums-in-compation --rocksdb.write-buffer-size --scheduler.threads --server.authentication --server.authentication-system-only --server.authentication-unix-sockets --server.descriptors-minimum --server.endpoint --server.jwt-secret --server.session-timeout --server.threads --ssl.cafile --ssl.cipher-list --ssl.ecdh-curve --ssl.keyfile --ssl.protocol --ssl.session-cache --temp.path --wal.directory --wal.logfile-size --wal.open-logfiles --wal.reserve-logfiles --wal.sync-interval"
+
+    if [[ ${cur} == -* ]] ; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+}
+
+complete -o default -F _arangod arangod
+

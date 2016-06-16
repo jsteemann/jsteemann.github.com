@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Traversals | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/traversals/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-06-14T01:07:34+02:00</updated>
+  <updated>2016-06-16T19:39:17+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -18,7 +18,9 @@
     <link href="http://jsteemann.github.io/blog/2015/01/28/using-custom-visitors-in-aql-graph-traversals/"/>
     <updated>2015-01-28T22:21:35+01:00</updated>
     <id>http://jsteemann.github.io/blog/2015/01/28/using-custom-visitors-in-aql-graph-traversals</id>
-    <content type="html"><![CDATA[<p>This post is about some recent extensions for the AQL graph traversal functionality
+    <content type="html"><![CDATA[<p><em>Note: this post is about the ArangoDB 2.x series</em></p>
+
+<p>This post is about some recent extensions for the AQL graph traversal functionality
 in ArangoDB.</p>
 
 <p>These extensions allow invoking user-defined JavaScript code for filtering
