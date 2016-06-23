@@ -4,7 +4,7 @@
   <title><![CDATA[Category: Foxx | J@ArangoDB]]></title>
   <link href="http://jsteemann.github.io/blog/categories/foxx/atom.xml" rel="self"/>
   <link href="http://jsteemann.github.io/"/>
-  <updated>2016-06-22T18:19:35+02:00</updated>
+  <updated>2016-06-23T17:57:39+02:00</updated>
   <id>http://jsteemann.github.io/</id>
   <author>
     <name><![CDATA[jsteemann]]></name>
@@ -32,7 +32,7 @@ blog post provides the source code for the 3.0 version of the Foxx application.<
 
 
 <p>The <code>rawBodyBuffer()</code> function of the <code>request</code> object is gone in 3.0, and to
-retrieve the body as a blob we now need to use <code>internal.rawRequestBody()</code>.
+retrieve the body as a blob we now need to use <code>req.rawBody</code>.
 And as there are no controllers and applicationContexts in Foxx 3.0 anymore,
 the original route code needs to be changed from</p>
 
@@ -51,8 +51,8 @@ controller.post(&lsquo;/receive-binary&rsquo;, function (req, res) {
 
 <p>```js 3.0 Foxx action that can handle binary input
 router.post(&lsquo;/receive-binary&rsquo;, function (req, res) {
-  // fetch request body into the buffer
-  var body = require(&lsquo;internal&rsquo;).rawRequestBody(req._raw);
+  // fetch request body into a Buffer
+  var body = req.rawBody;
   // create an absolute filename, local to the Foxx application directory
   var filename = module.context.filename(&ldquo;body&rdquo;);</p>
 
